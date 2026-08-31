@@ -41,6 +41,7 @@ button,input,select,textarea{font:inherit}.shell{min-height:100vh;display:grid;g
 .clouddot.red{background:var(--red);box-shadow:0 0 0 4px rgba(194,77,77,.12)}
 .cloudurl{font-family:Consolas,monospace;font-size:12px}
 .cloudactions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.installbtn{display:none}.installbtn.show{display:inline-flex}
+.netstatus{display:inline-flex;align-items:center;gap:7px;padding:7px 10px;border-radius:999px;border:1px solid var(--line);background:#fff;font-size:11px;font-weight:800;color:#516176}.netstatus .netdot{width:8px;height:8px;border-radius:50%;background:#9aa6b5}.netstatus.online .netdot{background:var(--green)}.netstatus.offline{background:var(--amberbg);border-color:#f3dfb5;color:#8c5c12}.netstatus.offline .netdot{background:var(--amber)}.netstatus.pending{background:var(--soft);border-color:#d4e4ff;color:#315c98}.netstatus.pending .netdot{background:var(--blue)}
 @media(max-width:950px){.cloudgrid{grid-template-columns:1fr}}
 @media(max-width:950px){.kpigrid,.eventgrid{grid-template-columns:1fr}.brandrow{grid-template-columns:110px 1fr 45px}}
 @media(max-width:1100px){.stats{grid-template-columns:repeat(3,1fr)}}
@@ -67,7 +68,7 @@ button,input,select,textarea{font:inherit}.shell{min-height:100vh;display:grid;g
   </aside>
 
   <main class="main">
-    <div class="top"><div><div class="eyebrow">SERVICIO TÉCNICO</div><h1 id="pageTitle">Panel principal</h1></div><div class="muted" id="today"></div></div>
+    <div class="top"><div><div class="eyebrow">SERVICIO TÉCNICO</div><h1 id="pageTitle">Panel principal</h1></div><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end"><div id="netStatus" class="netstatus"><span class="netdot"></span><span>Iniciando</span></div><div class="muted" id="today"></div></div></div>
     <div id="view"></div>
   </main>
 </div>
@@ -93,7 +94,33 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredIns
 window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;updateInstallButton();toast('NQN Service instalada')});
 function updateInstallButton(){let b=document.getElementById('installPwaBtn');if(b)b.classList.toggle('show',!!deferredInstallPrompt)}
 async function installPwa(){if(!deferredInstallPrompt){alert('Si Chrome no muestra la instalación todavía, recargá la página una vez y volvé a intentar.');return}deferredInstallPrompt.prompt();try{await deferredInstallPrompt.userChoice}catch(e){}deferredInstallPrompt=null;updateInstallButton()}
-if('serviceWorker' in navigator && location.protocol.startsWith('http')){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}))}
+const OFFLINE_CACHE='nqn-service-v8-offline';
+const OFFLINE_ASSETS=['./','./index.html','./NQN_SERVICE_ESTABLE.html','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png'];
+let swReloading=false;
+async function ensureOfflineReady(){
+  if(!('serviceWorker' in navigator)||!location.protocol.startsWith('http'))return false;
+  try{
+    navigator.serviceWorker.addEventListener('controllerchange',()=>{
+      if(swReloading)return;
+      if(sessionStorage.getItem('nqn_sw_v8_reload')==='1')return;
+      swReloading=true;sessionStorage.setItem('nqn_sw_v8_reload','1');location.reload();
+    });
+    const reg=await navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'});
+    try{await reg.update()}catch(e){}
+    await navigator.serviceWorker.ready;
+    // Calienta el caché explícitamente. Si la red falla, el service worker conserva lo ya cacheado.
+    if('caches' in window && navigator.onLine){
+      const cache=await caches.open(OFFLINE_CACHE);
+      await Promise.all(OFFLINE_ASSETS.map(async u=>{
+        try{const r=await fetch(u,{cache:'reload'});if(r&&r.ok)await cache.put(u,r.clone())}catch(e){}
+      }));
+    }
+    try{localStorage.setItem('nqn_offline_ready_v8','1')}catch(e){}
+    updateNetworkStatus();
+    return true;
+  }catch(e){console.warn('Modo offline no preparado',e);return false}
+}
+window.addEventListener('load',()=>ensureOfflineReady());
 
 function cloudQueue(){
   let q=safeJSON(localStorage.getItem(KEY_CLOUD_QUEUE)||'[]',[]);
@@ -117,6 +144,7 @@ function queueCloudOp(type,id,data=null,at=nowISO()){
   let q=cloudQueue().filter(op=>!(op.entity===entity&&String(op.id)===String(id)));
   q.push({opId:(crypto.randomUUID?crypto.randomUUID():Date.now()+'-'+Math.random()),type,entity,id:String(id),at,data});
   setCloudQueue(q);
+  updateNetworkStatus();
   cloudAutoSyncSoon();
 }
 function bootstrapCloudQueue(){
@@ -192,6 +220,7 @@ async function cloudSync(silent=false){
     if(!state||state.ok===false)throw new Error(state?.error||'Respuesta de nube inválida');
     let remaining=q.filter(op=>!opReflected(op,state));
     setCloudQueue(remaining);
+    updateNetworkStatus();
     applyCloudState(state,remaining);
     let s=getSettings();s.cloudEverSynced=true;s.lastCloudSync=nowISO();s.lastCloudError='';s.cloudSheetUrl=state.meta?.spreadsheetUrl||s.cloudSheetUrl||'';s.cloudBackupFolderUrl=state.meta?.backupFolderUrl||s.cloudBackupFolderUrl||'';setSettings(s);
     if(!silent)toast(remaining.length?'Sincronización parcial: quedan cambios pendientes':'Google Drive sincronizado');
@@ -211,6 +240,13 @@ function refreshViewAfterCloudSync(){
   if(typeof fn==='function')fn();
 }
 
+function updateNetworkStatus(){
+  const el=document.getElementById('netStatus');if(!el)return;
+  const pending=cloudQueue().length;
+  if(!navigator.onLine){el.className='netstatus offline';el.innerHTML='<span class="netdot"></span><span>Sin conexión · guardado local</span>';return}
+  if(pending){el.className='netstatus pending';el.innerHTML='<span class="netdot"></span><span>En línea · '+pending+' pendiente'+(pending===1?'':'s')+'</span>';return}
+  el.className='netstatus online';el.innerHTML='<span class="netdot"></span><span>En línea</span>';
+}
 function cloudStatus(){
   let c=cloudConfig(),pending=cloudQueue().length;
   if(!c.enabled)return {cls:'',label:'Nube desactivada',detail:'Los datos se guardan solo en este dispositivo.',pending};
@@ -663,11 +699,13 @@ function boot(){
   migrateIfNeeded();
   let ev=loadEvents();try{saveEvents(ev)}catch(e){}
   renderDashboard();
+  updateNetworkStatus();
   if(cloudConfigured()&&navigator.onLine)setTimeout(()=>cloudSync(true),700);
 }
-window.addEventListener('online',()=>{toast('Internet disponible · sincronizando');cloudSync(true)});
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&cloudConfigured()&&navigator.onLine)cloudSync(true)});
-setInterval(()=>{if(document.visibilityState==='visible'&&cloudConfigured()&&navigator.onLine)cloudSync(true)},30000);
+window.addEventListener('offline',()=>{updateNetworkStatus();toast('Modo sin conexión · podés seguir cargando y buscando')});
+window.addEventListener('online',()=>{updateNetworkStatus();toast('Internet disponible · sincronizando');if(cloudConfigured())cloudSync(true)});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){updateNetworkStatus();if(cloudConfigured()&&navigator.onLine)cloudSync(true)}});
+setInterval(()=>{updateNetworkStatus();if(document.visibilityState==='visible'&&cloudConfigured()&&navigator.onLine)cloudSync(true)},30000);
 boot();
 </script>
 </body>
