@@ -1,0 +1,674 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NQN Service</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#10243e">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+:root{--blue:#0d5bd8;--blue2:#0848ad;--navy:#10243e;--bg:#f4f7fb;--card:#fff;--line:#e3e9f1;--text:#17263a;--muted:#758398;--soft:#eef5ff;--green:#16875a;--greenbg:#eaf7f1;--red:#c24d4d;--redbg:#fff0f0;--amber:#c78318;--amberbg:#fff7e8}
+*{box-sizing:border-box}body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text)}
+button,input,select,textarea{font:inherit}.shell{min-height:100vh;display:grid;grid-template-columns:245px 1fr}
+.sidebar{background:var(--navy);color:white;padding:22px 17px;display:flex;flex-direction:column;height:100vh;position:sticky;top:0}
+.brand{display:flex;align-items:center;gap:11px;margin:0 5px 26px}.brandmark{font-weight:900;background:var(--blue);border-radius:11px;padding:10px 9px}.brandname{font-size:18px;font-weight:850}.brandsub{font-size:11px;color:#a8b7c9;margin-top:2px}
+.nav{display:flex;flex-direction:column;gap:7px}.nav button{border:0;background:transparent;color:#dbe4ee;text-align:left;border-radius:10px;padding:11px 12px;cursor:pointer;font-weight:650}.nav button:hover{background:#173452}.nav button.active{background:var(--blue);color:#fff}
+.foot{margin-top:auto;color:#8192a7;font-size:11px;padding:10px 6px;line-height:1.5}.main{padding:28px 32px 50px;max-width:1500px;width:100%;margin:auto}
+.top{display:flex;justify-content:space-between;align-items:end;margin-bottom:22px}.eyebrow{font-size:10px;color:var(--blue);font-weight:850;letter-spacing:1.4px}.top h1{font-size:30px;margin:3px 0 0}
+.hero{background:linear-gradient(135deg,#10243e,#183e6b);color:#fff;border-radius:19px;padding:27px 28px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 10px 28px rgba(16,36,62,.12)}.hero h2{margin:5px 0 8px;font-size:27px}.hero p{margin:0;color:#c8d5e4;max-width:760px}
+.btn{border:0;border-radius:10px;padding:10px 14px;font-weight:750;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:6px}.btn.primary{background:var(--blue);color:white}.btn.primary:hover{background:var(--blue2)}.btn.secondary{background:#edf1f6;color:#2a3b51}.btn.danger{background:#fff0f0;color:#b33e3e}.btn.success{background:var(--greenbg);color:var(--green)}.btn.small{padding:7px 10px;font-size:12px}.btn:disabled{opacity:.5;cursor:not-allowed}
+.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:15px;margin:18px 0}.stat{background:#fff;border:1px solid var(--line);border-radius:15px;padding:18px}.stat.soft{background:var(--soft);border-color:#d4e4ff}.stat.warn{background:var(--amberbg);border-color:#f3dfb5}.stat.bad{background:var(--redbg);border-color:#f1cccc}.statlabel{font-size:12px;color:var(--muted);font-weight:700}.statvalue{font-size:28px;font-weight:850;margin:6px 0 2px}.stathelp{font-size:11px;color:#95a1b1}
+.alerts{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:18px 0}.alert{border-radius:14px;padding:15px 16px;border:1px solid var(--line);background:#fff}.alert strong{display:block;font-size:14px;margin-bottom:4px}.alert span{font-size:12px;color:var(--muted)}.alert.red{background:var(--redbg);border-color:#f1cccc}.alert.amber{background:var(--amberbg);border-color:#f3dfb5}.alert.green{background:var(--greenbg);border-color:#caeadc}
+.panel{background:#fff;border:1px solid var(--line);border-radius:16px;padding:19px;margin-top:17px}.panelhead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}.panelhead h3{font-size:19px;margin:3px 0 0}
+.tablewrap{overflow:auto}table{width:100%;border-collapse:collapse;min-width:760px}th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:#7d8999;padding:10px;border-bottom:1px solid var(--line)}td{padding:12px 10px;border-bottom:1px solid #eef1f5;font-size:13px}tbody tr.clickable{cursor:pointer}tbody tr.clickable:hover{background:#f8faff}.mono{font-family:Consolas,monospace;font-weight:850;color:var(--blue)}.muted{color:var(--muted);font-size:11px;margin-top:2px}.badge{display:inline-flex;padding:5px 8px;border-radius:999px;background:#eef4ff;color:#225cac;font-weight:750;font-size:11px}.badge.red{background:var(--redbg);color:var(--red)}.badge.green{background:var(--greenbg);color:var(--green)}.badge.amber{background:var(--amberbg);color:var(--amber)}.empty{text-align:center;padding:34px;color:var(--muted)}
+.formlayout{display:grid;grid-template-columns:minmax(0,1fr) 315px;gap:17px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}.field{display:flex;flex-direction:column;gap:6px}.full{grid-column:1/-1}.short{max-width:220px}label{font-size:11px;color:#58677b;font-weight:750}input,select,textarea{border:1px solid #d8e0ea;border-radius:10px;background:#fff;padding:10px 11px;color:var(--text);outline:none;width:100%}input:focus,select:focus,textarea:focus{border-color:#8eb8ff;box-shadow:0 0 0 3px rgba(13,91,216,.08)}input[readonly]{background:#f5f7fa;color:#788497}textarea{resize:vertical}.actions{display:flex;justify-content:flex-end;gap:9px;margin-top:3px;flex-wrap:wrap}.hint{font-size:11px;color:var(--muted)}
+.sidecard{background:var(--navy);color:#fff;border-radius:16px;padding:21px;height:max-content}.sidecard h3{margin:7px 0 8px}.sidecard p{color:#c2cedc;line-height:1.5;font-size:13px}.flow{display:flex;flex-direction:column;gap:6px;margin-top:14px}.flow span{background:#193652;padding:8px 9px;border-radius:8px;font-size:11px}.flow span.done{background:#164869}.flow span.current{background:var(--blue)}.flow b{text-align:center;color:#70a5f9}.summaryrow{display:flex;justify-content:space-between;padding:9px 0;color:#cad6e4;gap:12px}.summaryrow strong{color:white;text-align:right}.summaryrow.total{font-size:18px;border-top:1px solid #2a4765;margin-top:5px;padding-top:14px}
+.searchbar{display:grid;grid-template-columns:1fr 220px auto;gap:9px}.toast{position:fixed;right:22px;bottom:22px;z-index:20;background:#10243e;color:#fff;padding:12px 15px;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.18);opacity:0;transform:translateY(15px);pointer-events:none;transition:.2s}.toast.show{opacity:1;transform:translateY(0)}
+.backupbox{display:grid;grid-template-columns:1fr 1fr;gap:15px}.info{background:#f7f9fc;border:1px solid var(--line);border-radius:13px;padding:16px}.info h4{margin:0 0 7px}.info p{font-size:12px;color:var(--muted);line-height:1.5}.backupstatus{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 15px;border-radius:12px;margin-bottom:15px;background:var(--greenbg);border:1px solid #caeadc}.backupstatus.warn,.backupstatus.amber{background:var(--amberbg);border-color:#f3dfb5}.backupstatus.bad,.backupstatus.red{background:var(--redbg);border-color:#f1cccc}.backupstatus div:last-child{font-size:12px;color:var(--muted)}
+.clientmatch{display:none;background:#eef5ff;border:1px solid #d4e4ff;border-radius:10px;padding:11px 12px;font-size:12px}.clientmatch.show{display:block}.timeline{display:flex;flex-direction:column;gap:8px;margin-top:12px}.timelineitem{display:flex;justify-content:space-between;gap:12px;background:#f7f9fc;border-radius:9px;padding:9px 10px;font-size:11px}.timelineitem strong{font-size:11px}.right{text-align:right}.nowrap{white-space:nowrap}
+
+.kpigrid{display:grid;grid-template-columns:repeat(3,1fr);gap:15px}.brandlist{display:flex;flex-direction:column;gap:11px}.brandrow{display:grid;grid-template-columns:150px 1fr 55px;align-items:center;gap:12px}.bartrack{height:10px;background:#edf1f6;border-radius:999px;overflow:hidden}.barfill{height:100%;background:var(--blue);border-radius:999px}.eventgrid{display:grid;grid-template-columns:1fr 1fr;gap:15px}.sectionnote{font-size:12px;color:var(--muted);line-height:1.5}.statushint{padding:10px 12px;border-radius:10px;background:var(--soft);border:1px solid #d4e4ff;font-size:12px;color:#3e5f8e}.statvalue.smallmoney{font-size:22px}
+.cloudgrid{display:grid;grid-template-columns:1.35fr .65fr;gap:15px}
+.cloudstatus{display:flex;align-items:center;gap:9px;font-size:12px;font-weight:750}
+.clouddot{width:10px;height:10px;border-radius:50%;background:#9aa6b5;box-shadow:0 0 0 4px rgba(154,166,181,.12)}
+.clouddot.green{background:var(--green);box-shadow:0 0 0 4px rgba(22,135,90,.12)}
+.clouddot.amber{background:var(--amber);box-shadow:0 0 0 4px rgba(199,131,24,.12)}
+.clouddot.red{background:var(--red);box-shadow:0 0 0 4px rgba(194,77,77,.12)}
+.cloudurl{font-family:Consolas,monospace;font-size:12px}
+.cloudactions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.installbtn{display:none}.installbtn.show{display:inline-flex}
+@media(max-width:950px){.cloudgrid{grid-template-columns:1fr}}
+@media(max-width:950px){.kpigrid,.eventgrid{grid-template-columns:1fr}.brandrow{grid-template-columns:110px 1fr 45px}}
+@media(max-width:1100px){.stats{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:950px){.shell{grid-template-columns:1fr}.sidebar{height:auto;position:relative;flex-direction:row;align-items:center;overflow:auto}.brand{margin:0 12px 0 0}.brandname,.brandsub,.foot{display:none}.nav{flex-direction:row}.main{padding:20px}.formlayout{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}.alerts{grid-template-columns:1fr}.sidecard{order:-1}}
+@media(max-width:620px){.stats{grid-template-columns:1fr}.grid,.searchbar,.backupbox{grid-template-columns:1fr}.full{grid-column:1}.hero{flex-direction:column;align-items:flex-start;gap:18px}.top h1{font-size:25px}.nav button{white-space:nowrap}.actions .btn{width:100%}}
+@media print{.sidebar,.top,.no-print,.actions{display:none!important}.shell{display:block}.main{padding:0}.panel{border:0}.sidecard{background:#fff;color:#000;border:1px solid #ddd}.sidecard *{color:#000!important}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand"><div class="brandmark">NQN</div><div><div class="brandname">NQN Service</div><div class="brandsub">Gestión técnica · Nube</div></div></div>
+    <div class="nav">
+      <button id="nav-dashboard" class="active" onclick="showView('dashboard')">⌂ Dashboard</button>
+      <button id="nav-nuevo" onclick="newOrder()">＋ Nuevo ingreso</button>
+      <button id="nav-ordenes" onclick="showView('ordenes')">⌕ Buscar órdenes</button>
+      <button id="nav-clientes" onclick="showView('clientes')">◎ Clientes</button>
+      <button id="nav-kpis" onclick="showView('kpis')">▥ KPIs</button>
+      <button id="nav-cleris" onclick="showView('cleris')">★ Cleris Eventos</button>
+      <button id="nav-backup" onclick="showView('backup')">⇩ Copias</button>
+      <button id="installPwaBtn" class="installbtn" onclick="installPwa()">⬇ Instalar app</button>
+    </div>
+    <div class="foot">Funciona sin internet.<br>Sincronizada · Instalable en Android.</div>
+  </aside>
+
+  <main class="main">
+    <div class="top"><div><div class="eyebrow">SERVICIO TÉCNICO</div><h1 id="pageTitle">Panel principal</h1></div><div class="muted" id="today"></div></div>
+    <div id="view"></div>
+  </main>
+</div>
+<div id="toast" class="toast"></div>
+
+<script>
+const KEY_V1='nqn_service_orders_v1';
+const KEY='nqn_service_orders_v2';
+const KEY_MIRROR='nqn_service_orders_v2_mirror';
+const KEY_SETTINGS='nqn_service_settings_v2';
+const KEY_SNAPSHOTS='nqn_service_snapshots_v2';
+const KEY_EVENTS='nqn_service_cleris_events_v1';
+const KEY_EVENTS_MIRROR='nqn_service_cleris_events_v1_mirror';
+const ESTADOS=['En taller','Entregado'];
+const TIPOS=['Lavarropas','Lavavajillas','Microondas','Otro'];
+const PAGOS=['Pendiente','Efectivo','Mercado Pago','Transferencia','Mixto'];
+const KEY_MODELS='nqn_service_custom_models_v1';
+const KEY_CLOUD_QUEUE='nqn_service_cloud_queue_v1';
+let cloudTimer=null;
+let cloudSyncRunning=false;
+let deferredInstallPrompt=null;
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstallPrompt=e;updateInstallButton()});
+window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;updateInstallButton();toast('NQN Service instalada')});
+function updateInstallButton(){let b=document.getElementById('installPwaBtn');if(b)b.classList.toggle('show',!!deferredInstallPrompt)}
+async function installPwa(){if(!deferredInstallPrompt){alert('Si Chrome no muestra la instalación todavía, recargá la página una vez y volvé a intentar.');return}deferredInstallPrompt.prompt();try{await deferredInstallPrompt.userChoice}catch(e){}deferredInstallPrompt=null;updateInstallButton()}
+if('serviceWorker' in navigator && location.protocol.startsWith('http')){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}))}
+
+function cloudQueue(){
+  let q=safeJSON(localStorage.getItem(KEY_CLOUD_QUEUE)||'[]',[]);
+  return Array.isArray(q)?q:[];
+}
+function setCloudQueue(q){
+  try{localStorage.setItem(KEY_CLOUD_QUEUE,JSON.stringify(Array.isArray(q)?q:[]))}catch(e){}
+}
+function cloudDeviceId(){
+  let s=getSettings();
+  if(!s.cloudDeviceId){s.cloudDeviceId=(crypto.randomUUID?crypto.randomUUID():'dev-'+Date.now()+'-'+Math.random().toString(36).slice(2));setSettings(s)}
+  return s.cloudDeviceId;
+}
+function cloudConfig(){
+  let s=getSettings();
+  return {enabled:!!s.cloudEnabled,url:String(s.cloudUrl||'').trim(),token:String(s.cloudToken||'').trim(),everSynced:!!s.cloudEverSynced,lastSync:s.lastCloudSync||'',lastError:s.lastCloudError||'',sheetUrl:s.cloudSheetUrl||'',backupFolderUrl:s.cloudBackupFolderUrl||''};
+}
+function cloudConfigured(){let c=cloudConfig();return c.enabled&&!!c.token&&/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec(?:\?.*)?$/i.test(c.url)}
+function queueCloudOp(type,id,data=null,at=nowISO()){
+  let entity=type.toLowerCase().includes('event')?'event':'order';
+  let q=cloudQueue().filter(op=>!(op.entity===entity&&String(op.id)===String(id)));
+  q.push({opId:(crypto.randomUUID?crypto.randomUUID():Date.now()+'-'+Math.random()),type,entity,id:String(id),at,data});
+  setCloudQueue(q);
+  cloudAutoSyncSoon();
+}
+function bootstrapCloudQueue(){
+  let s=getSettings();
+  if(s.cloudEverSynced)return;
+  let q=cloudQueue(),seen=new Set(q.map(x=>x.entity+':'+x.id));
+  load().forEach(r=>{let k='order:'+r.id;if(!seen.has(k)){q.push({opId:'boot-o-'+r.id,type:'upsertOrder',entity:'order',id:String(r.id),at:r.actualizado||r.creado||nowISO(),data:r});seen.add(k)}});
+  loadEvents().forEach(e=>{let k='event:'+e.id;if(!seen.has(k)){q.push({opId:'boot-e-'+e.id,type:'upsertEvent',entity:'event',id:String(e.id),at:e.actualizado||e.creado||nowISO(),data:e});seen.add(k)}});
+  setCloudQueue(q);
+}
+function cloudAutoSyncSoon(){
+  if(!cloudConfigured()||!navigator.onLine)return;
+  clearTimeout(cloudTimer);
+  cloudTimer=setTimeout(()=>cloudSync(true),1200);
+}
+function jsonpPull(url,token){
+  return new Promise((resolve,reject)=>{
+    let cb='__nqnCloudCb_'+Date.now()+'_'+Math.random().toString(36).slice(2),script=document.createElement('script'),done=false;
+    let timer=setTimeout(()=>finish(new Error('La nube no respondió a tiempo')),12000);
+    function finish(err,data){
+      if(done)return;done=true;clearTimeout(timer);
+      try{delete window[cb]}catch(e){window[cb]=undefined}
+      script.remove();
+      err?reject(err):resolve(data);
+    }
+    window[cb]=(data)=>finish(null,data);
+    let sep=url.includes('?')?'&':'?';
+    script.src=url+sep+'action=pull&token='+encodeURIComponent(token)+'&callback='+encodeURIComponent(cb)+'&_='+Date.now();
+    script.onerror=()=>finish(new Error('No se pudo consultar la base de Google Drive'));
+    document.head.appendChild(script);
+  });
+}
+function opReflected(op,state){
+  let rows=op.entity==='order'?(state.ordenes||[]):(state.cleriseventos||[]);
+  let hit=rows.find(x=>String(x.id)===String(op.id));
+  if(op.type.startsWith('delete'))return !hit;
+  if(!hit)return false;
+  let remoteAt=new Date(hit.actualizado||hit.creado||0).getTime(),localAt=new Date(op.at||op.data?.actualizado||op.data?.creado||0).getTime();
+  return !localAt||remoteAt>=localAt;
+}
+function applyCloudState(state,pending=[]){
+  let pendingOrders=new Set(pending.filter(x=>x.entity==='order').map(x=>String(x.id)));
+  let pendingEvents=new Set(pending.filter(x=>x.entity==='event').map(x=>String(x.id)));
+  let remoteOrders=Array.isArray(state.ordenes)?ensureClientNumbers(state.ordenes.map(normalizeOrder)):[];
+  let remoteEvents=Array.isArray(state.cleriseventos)?state.cleriseventos:[];
+  if(pendingOrders.size){
+    let map=new Map(remoteOrders.map(r=>[String(r.id),r]));
+    load().forEach(r=>{if(pendingOrders.has(String(r.id)))map.set(String(r.id),r)});
+    remoteOrders=ensureClientNumbers([...map.values()].map(normalizeOrder));
+  }
+  if(pendingEvents.size){
+    let map=new Map(remoteEvents.map(e=>[String(e.id),e]));
+    loadEvents().forEach(e=>{if(pendingEvents.has(String(e.id)))map.set(String(e.id),e)});
+    remoteEvents=[...map.values()];
+  }
+  writeRowsKey(KEY_MIRROR,remoteOrders);writeRowsKey(KEY,remoteOrders);
+  saveEvents(remoteEvents);
+}
+async function cloudSync(silent=false){
+  if(cloudSyncRunning)return false;
+  let c=cloudConfig();
+  if(!c.enabled){if(!silent)alert('Activá la sincronización en Copias.');return false}
+  if(!cloudConfigured()){if(!silent)alert('Pegá la URL /exec y la clave privada de sincronización.');return false}
+  if(!navigator.onLine){if(!silent)toast('Sin internet: los cambios quedan pendientes');return false}
+  cloudSyncRunning=true;
+  try{
+    bootstrapCloudQueue();
+    let q=cloudQueue();
+    if(q.length){
+      await fetch(c.url,{method:'POST',mode:'no-cors',redirect:'follow',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'apply',token:c.token,device:cloudDeviceId(),ops:q})});
+    }
+    let state=await jsonpPull(c.url,c.token);
+    if(!state||state.ok===false)throw new Error(state?.error||'Respuesta de nube inválida');
+    let remaining=q.filter(op=>!opReflected(op,state));
+    setCloudQueue(remaining);
+    applyCloudState(state,remaining);
+    let s=getSettings();s.cloudEverSynced=true;s.lastCloudSync=nowISO();s.lastCloudError='';s.cloudSheetUrl=state.meta?.spreadsheetUrl||s.cloudSheetUrl||'';s.cloudBackupFolderUrl=state.meta?.backupFolderUrl||s.cloudBackupFolderUrl||'';setSettings(s);
+    if(!silent)toast(remaining.length?'Sincronización parcial: quedan cambios pendientes':'Google Drive sincronizado');
+    refreshViewAfterCloudSync();
+    return remaining.length===0;
+  }catch(e){
+    let s=getSettings();s.lastCloudError=String(e?.message||e);setSettings(s);
+    if(!silent)alert('No se pudo sincronizar con Google Drive.\n\n'+String(e?.message||e)+'\n\nLos datos locales siguen guardados y se reintentará después.');
+    return false;
+  }finally{cloudSyncRunning=false}
+}
+function refreshViewAfterCloudSync(){
+  // No redibujar formularios mientras el usuario carga o edita datos.
+  if(currentView==='nuevo'||currentView==='editar')return;
+  const renderers={dashboard:renderDashboard,ordenes:renderOrders,clientes:renderClients,kpis:renderKPIs,cleris:renderCleris,backup:renderBackup};
+  const fn=renderers[currentView];
+  if(typeof fn==='function')fn();
+}
+
+function cloudStatus(){
+  let c=cloudConfig(),pending=cloudQueue().length;
+  if(!c.enabled)return {cls:'',label:'Nube desactivada',detail:'Los datos se guardan solo en este dispositivo.',pending};
+  if(!cloudConfigured())return {cls:'amber',label:'Falta configurar Drive',detail:'Pegá la URL del Web App y la clave privada.',pending};
+  if(!navigator.onLine)return {cls:'amber',label:'Sin conexión',detail:pending?pending+' cambio(s) pendientes para subir.':'Se sincronizará cuando vuelva internet.',pending};
+  if(c.lastError)return {cls:'red',label:'Error de sincronización',detail:c.lastError,pending};
+  if(pending)return {cls:'amber',label:'Cambios pendientes',detail:pending+' cambio(s) esperando sincronización.',pending};
+  if(c.lastSync)return {cls:'green',label:'Drive sincronizado',detail:'Última sincronización '+prettyDateTime(c.lastSync)+'.',pending};
+  return {cls:'amber',label:'Listo para sincronizar',detail:'Todavía no se hizo la primera sincronización.',pending};
+}
+function saveCloudConfig(){
+  let url=(document.getElementById('cloudUrl')?.value||'').trim(),token=(document.getElementById('cloudToken')?.value||'').trim(),enabled=!!document.getElementById('cloudEnabled')?.checked;
+  if(enabled&&url&&!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec(?:\?.*)?$/i.test(url)){alert('La URL debe terminar en /exec y ser la del Web App de Google Apps Script.');return}if(enabled&&!token){alert('Falta la clave privada de sincronización.');return}
+  let s=getSettings(),changed=(s.cloudUrl&&s.cloudUrl!==url)||(s.cloudToken&&s.cloudToken!==token);
+  s.cloudUrl=url;s.cloudToken=token;s.cloudEnabled=enabled;
+  if(changed){s.cloudEverSynced=false;s.lastCloudSync='';setCloudQueue([])}
+  setSettings(s);toast('Configuración de nube guardada');renderBackup();if(enabled&&url)cloudSync(false);
+}
+function disableCloud(){
+  let s=getSettings();s.cloudEnabled=false;setSettings(s);toast('Sincronización desactivada');renderBackup();
+}
+
+const WASHER_CATALOG={
+  'Aurora':['Carga superior','Carga frontal'],
+  'Beko':['Carga frontal'],
+  'Bosch':['Serie 4','Serie 6'],
+  'Candy':['Smart','RapidÓ','Carga frontal'],
+  'Drean':['Concept','Excellent','Excellent Blue','Next','Gold Blue'],
+  'Electrolux':['Carga superior','Carga frontal'],
+  'Gafa':['Fuzzy','Carga superior','Carga frontal'],
+  'General Electric':['Carga superior','Carga frontal'],
+  'Hisense':['Carga frontal'],
+  'Indesit':['Carga frontal'],
+  'LG':['WFT1205TP','Carga superior','Carga frontal'],
+  'Longvie':['Carga superior','Carga frontal'],
+  'Midea':['Carga superior','Carga frontal'],
+  'Patrick':['LPK-06','Carga superior','Carga frontal'],
+  'Philco':['Carga superior','Carga frontal'],
+  'Samsung':['Carga superior 8 kg','Carga superior','Carga frontal'],
+  'Whirlpool':['WFA-700','WNC95','Carga superior','Carga frontal'],
+  'Ariston':['Carga frontal']
+};
+let currentView='dashboard';
+let editingId=null;
+
+function safeJSON(text,fallback){try{return JSON.parse(text)}catch(e){return fallback}}
+function localISODate(d=new Date()){let y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');return `${y}-${m}-${day}`}
+function nowISO(){return new Date().toISOString()}
+function prettyDate(v){if(!v)return '-';let d=new Date(v.length===10?v+'T12:00:00':v);return isNaN(d)?v:d.toLocaleDateString('es-AR')}
+function prettyDateTime(v){if(!v)return '-';let d=new Date(v);return isNaN(d)?v:d.toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short'})}
+function money(v){return '$'+Number(v||0).toLocaleString('es-AR',{maximumFractionDigits:0})}
+function fmtOrder(n){return String(n||0).padStart(3,'0')}
+function fmtClient(n){return String(n||0).padStart(4,'0')}
+function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function normPhone(s){return String(s||'').replace(/\D/g,'')}
+function loadCustomModels(){let x=safeJSON(localStorage.getItem(KEY_MODELS)||'{}',{});return x&&typeof x==='object'&&!Array.isArray(x)?x:{}}
+function saveCustomModel(brand,model){
+  brand=String(brand||'').trim();model=String(model||'').trim();if(!brand||!model)return;
+  let x=loadCustomModels();if(!Array.isArray(x[brand]))x[brand]=[];
+  if(!x[brand].some(v=>v.toLowerCase()===model.toLowerCase()))x[brand].push(model);
+  x[brand].sort((a,b)=>a.localeCompare(b,'es',{numeric:true,sensitivity:'base'}));
+  try{localStorage.setItem(KEY_MODELS,JSON.stringify(x))}catch(e){}
+}
+function knownBrands(){
+  let set=new Set([...Object.keys(WASHER_CATALOG),...Object.keys(loadCustomModels())]);
+  load().forEach(r=>{let text=String(r.marcaModelo||'').trim();if(!text)return;let hit=[...set].sort((a,b)=>b.length-a.length).find(b=>text.toLowerCase()===b.toLowerCase()||text.toLowerCase().startsWith(b.toLowerCase()+' '));if(hit)set.add(hit)});
+  return [...set].sort((a,b)=>a.localeCompare(b,'es',{sensitivity:'base'}));
+}
+function splitBrandModel(value){
+  let text=String(value||'').trim();if(!text)return {brand:'',model:'',known:true};
+  let brands=knownBrands().sort((a,b)=>b.length-a.length),low=text.toLowerCase();
+  let hit=brands.find(b=>low===b.toLowerCase()||low.startsWith(b.toLowerCase()+' '));
+  if(hit)return {brand:hit,model:text.slice(hit.length).trim(),known:true};
+  let parts=text.split(/\s+/);return {brand:parts.shift()||'',model:parts.join(' '),known:false};
+}
+function modelsForBrand(brand){
+  let vals=[...(WASHER_CATALOG[brand]||[]),...((loadCustomModels()[brand])||[])];
+  let low=String(brand||'').toLowerCase();
+  load().forEach(r=>{let text=String(r.marcaModelo||'').trim();if(!text)return;let parsed=splitBrandModel(text);if(parsed.brand.toLowerCase()===low&&parsed.model)vals.push(parsed.model)});
+  let seen=new Set();return vals.filter(v=>{let k=v.toLowerCase();if(seen.has(k))return false;seen.add(k);return true}).sort((a,b)=>a.localeCompare(b,'es',{numeric:true,sensitivity:'base'}));
+}
+function brandModelFields(value){
+  let parsed=splitBrandModel(value),brands=knownBrands(),brandKnown=parsed.known&&brands.includes(parsed.brand),brandValue=brandKnown?parsed.brand:'__other__';
+  let models=brandKnown?modelsForBrand(parsed.brand):[],modelKnown=parsed.model&&models.some(m=>m.toLowerCase()===parsed.model.toLowerCase()),modelValue=modelKnown?models.find(m=>m.toLowerCase()===parsed.model.toLowerCase()):'__manual__';
+  return `<div class="field"><label>Marca *</label><select id="marcaSelect" required onchange="onBrandChange()"><option value="">Elegir marca...</option>${brands.map(b=>`<option value="${esc(b)}" ${brandValue===b?'selected':''}>${esc(b)}</option>`).join('')}<option value="__other__" ${brandValue==='__other__'?'selected':''}>Otra marca / agregar...</option></select></div>
+    <div class="field"><label>Modelo *</label><select id="modeloSelect" required onchange="onModelChange()">${brandKnown?models.map(m=>`<option value="${esc(m)}" ${modelValue===m?'selected':''}>${esc(m)}</option>`).join(''):''}<option value="__manual__" ${modelValue==='__manual__'?'selected':''}>Otro modelo / escribir...</option></select></div>
+    <div id="marcaOtroWrap" class="field" style="${brandValue==='__other__'?'':'display:none'}"><label>Escribir marca</label><input id="marcaOtro" value="${esc(brandKnown?'':parsed.brand)}" placeholder="Ej. Coventry"></div>
+    <div id="modeloOtroWrap" class="field" style="${modelValue==='__manual__'?'':'display:none'}"><label>Escribir modelo</label><input id="modeloOtro" value="${esc(modelKnown?'':parsed.model)}" placeholder="Ej. código o nombre del modelo"></div>
+    <div class="field full"><div class="hint">Lista rápida de lavarropas. Si una marca o modelo no aparece, elegí <strong>Otra</strong>, escribilo una vez y queda disponible para próximas órdenes.</div></div>`;
+}
+function onBrandChange(){
+  let brand=document.getElementById('marcaSelect')?.value||'',model=document.getElementById('modeloSelect'),brandWrap=document.getElementById('marcaOtroWrap');if(!model)return;
+  if(brandWrap)brandWrap.style.display=brand==='__other__'?'flex':'none';
+  let models=brand&&brand!=='__other__'?modelsForBrand(brand):[];
+  model.innerHTML=models.map(m=>`<option value="${esc(m)}">${esc(m)}</option>`).join('')+'<option value="__manual__">Otro modelo / escribir...</option>';
+  model.value=models.length?models[0]:'__manual__';onModelChange();
+}
+function onModelChange(){let wrap=document.getElementById('modeloOtroWrap'),model=document.getElementById('modeloSelect')?.value||'';if(wrap)wrap.style.display=model==='__manual__'?'flex':'none'}
+function collectBrandModel(){
+  let brand=document.getElementById('marcaSelect')?.value||'',model=document.getElementById('modeloSelect')?.value||'';
+  if(brand==='__other__')brand=(document.getElementById('marcaOtro')?.value||'').trim();
+  if(model==='__manual__')model=(document.getElementById('modeloOtro')?.value||'').trim();
+  if(!brand||!model)return '';
+  saveCustomModel(brand,model);return (brand+' '+model).trim();
+}
+function toast(msg){let el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2000)}
+function getSettings(){return safeJSON(localStorage.getItem(KEY_SETTINGS)||'{}',{})}
+function setSettings(s){localStorage.setItem(KEY_SETTINGS,JSON.stringify(s))}
+function loadEventsKey(key){let x=safeJSON(localStorage.getItem(key)||'[]',[]);return Array.isArray(x)?x:[]}
+function loadEvents(){let a=loadEventsKey(KEY_EVENTS),b=loadEventsKey(KEY_EVENTS_MIRROR);if(a.length||!b.length)return a;try{localStorage.setItem(KEY_EVENTS,JSON.stringify(b))}catch(e){};return b}
+function saveEvents(rows){rows=Array.isArray(rows)?rows:[];try{localStorage.setItem(KEY_EVENTS_MIRROR,JSON.stringify(rows));localStorage.setItem(KEY_EVENTS,JSON.stringify(rows));let check=loadEventsKey(KEY_EVENTS);if(check.length!==rows.length)throw new Error('No se pudo verificar el guardado de Cleris')}catch(e){alert('No se pudieron guardar los eventos de Cleris. Detalle: '+e.message);throw e}}
+function monthKey(v){return String(v||'').slice(0,7)}
+function currentMonthKey(){return localISODate().slice(0,7)}
+function brandOf(r){let text=String(r?.marcaModelo||'').trim();if(!text)return 'Sin marca';let brands=[...new Set([...Object.keys(WASHER_CATALOG),...Object.keys(loadCustomModels())])].sort((a,b)=>b.length-a.length),low=text.toLowerCase();let hit=brands.find(b=>low===b.toLowerCase()||low.startsWith(b.toLowerCase()+' '));return hit||text.split(/\s+/)[0]||'Sin marca'}
+function loadSnapshots(){let x=safeJSON(localStorage.getItem(KEY_SNAPSHOTS)||'[]',[]);return Array.isArray(x)?x:[]}
+function writeSnapshot(rows,reason='Guardado automático'){
+  let snaps=loadSnapshots();
+  snaps.unshift({id:Date.now(),fecha:nowISO(),reason,ordenes:rows});
+  snaps=snaps.slice(0,10);
+  try{localStorage.setItem(KEY_SNAPSHOTS,JSON.stringify(snaps))}catch(e){/* almacenamiento lleno: no bloquea el guardado principal */}
+}
+function normalizeOrder(r,index=0){
+  let fechaIngreso=r.fechaIngreso||r.fecha||localISODate();
+  let creado=r.creado||r.actualizado||nowISO();
+  let fechaEntrega=r.fechaEntrega||'';
+  if(!fechaEntrega&&r.estado==='Entregado')fechaEntrega=localISODate(new Date(r.actualizado||creado));
+  let estado=fechaEntrega?'Entregado':'En taller';
+  let historial=Array.isArray(r.historial)?r.historial:[];
+  if(!historial.length)historial=[{fecha:creado,estado:'En taller'}];
+  if(estado==='Entregado'&&!historial.some(h=>h.estado==='Entregado'))historial.push({fecha:r.actualizado||creado,estado:'Entregado'});
+  return {
+    id:r.id||('migrado-'+Date.now()+'-'+index),numero:Number(r.numero)||index+1,clienteNumero:Number(r.clienteNumero)||0,
+    fechaIngreso,fechaEntrega,cliente:r.cliente||'',telefono:r.telefono||'',marcaModelo:r.marcaModelo||'',tipo:r.tipo||'Lavarropas',
+    falla:r.falla||'',accesorios:r.accesorios||'',observaciones:r.observaciones||'',estado,
+    monto:Number(r.monto||0),pagado:Number(r.pagado||0),medioPago:r.medioPago||'Pendiente',
+    creado,actualizado:r.actualizado||creado,fechasEstado:{'En taller':creado,...(fechaEntrega?{'Entregado':r.actualizado||creado}:{})},historial
+  };
+}
+function ensureClientNumbers(rows){
+  let phoneMap=new Map(),next=1001;
+  rows.forEach(r=>{if(r.clienteNumero>=next)next=r.clienteNumero+1});
+  rows.sort((a,b)=>(a.numero||0)-(b.numero||0)).forEach(r=>{
+    let p=normPhone(r.telefono),key=p||('name:'+r.cliente.toLowerCase().trim());
+    if(phoneMap.has(key))r.clienteNumero=phoneMap.get(key);
+    else{if(!r.clienteNumero)r.clienteNumero=next++;phoneMap.set(key,r.clienteNumero)}
+  });
+  return rows;
+}
+function storageSelfTest(){
+  const k='nqn_service_test_'+Date.now();
+  try{localStorage.setItem(k,'ok');let ok=localStorage.getItem(k)==='ok';localStorage.removeItem(k);return ok}catch(e){return false}
+}
+function validRows(x){return Array.isArray(x)&&x.every(r=>r&&typeof r==='object')}
+function readRowsKey(key){
+  let x=safeJSON(localStorage.getItem(key)||'null',null);
+  if(validRows(x))return x;
+  if(x&&typeof x==='object'&&validRows(x.rows))return x.rows;
+  return null;
+}
+function writeRowsKey(key,rows){localStorage.setItem(key,JSON.stringify({schema:3,guardado:nowISO(),rows}))}
+function migrateIfNeeded(){
+  let current=readRowsKey(KEY);
+  if(validRows(current)){let normalized=ensureClientNumbers(current.map(normalizeOrder));writeRowsKey(KEY,normalized);try{writeRowsKey(KEY_MIRROR,normalized)}catch(e){};return}
+  let mirror=readRowsKey(KEY_MIRROR);
+  if(validRows(mirror)){let normalized=ensureClientNumbers(mirror.map(normalizeOrder));writeRowsKey(KEY,normalized);writeRowsKey(KEY_MIRROR,normalized);return}
+  let old=safeJSON(localStorage.getItem(KEY_V1)||'[]',[]);
+  let rows=ensureClientNumbers((Array.isArray(old)?old:[]).map(normalizeOrder));
+  writeRowsKey(KEY,rows);writeRowsKey(KEY_MIRROR,rows);
+  if(rows.length){writeSnapshot(rows,'Migración desde versión anterior');toast('Datos anteriores recuperados')}
+}
+function load(){
+  let rows=readRowsKey(KEY);
+  if(validRows(rows))return rows;
+  let mirror=readRowsKey(KEY_MIRROR);
+  if(validRows(mirror)){try{writeRowsKey(KEY,mirror)}catch(e){};return mirror}
+  return [];
+}
+function save(rows,reason='Guardado automático'){
+  rows=Array.isArray(rows)?rows:[];
+  let previous=load();
+  if(previous.length)writeSnapshot(previous,reason);
+  try{
+    writeRowsKey(KEY_MIRROR,rows);
+    writeRowsKey(KEY,rows);
+    let verify=readRowsKey(KEY);
+    if(!validRows(verify)||verify.length!==rows.length)throw new Error('No se pudo verificar el guardado');
+    let st=getSettings();st.lastSave=nowISO();setSettings(st);
+  }catch(e){
+    alert('No se pudieron guardar los datos. No cierres la aplicación. Descargá una copia desde Copias. Detalle: '+e.message);
+    throw e;
+  }
+}
+function nextOrder(){let rows=load();return rows.length?Math.max(...rows.map(r=>Number(r.numero)||0))+1:1}
+function nextClient(){let rows=load();return rows.length?Math.max(1000,...rows.map(r=>Number(r.clienteNumero)||0))+1:1001}
+function daysBetween(start,end=localISODate()){
+  if(!start)return 0;let a=new Date(start+'T12:00:00'),b=new Date(end+'T12:00:00');return Math.max(0,Math.floor((b-a)/86400000));
+}
+function daysInShop(r){return daysBetween(r.fechaIngreso,(r.estado==='Entregado'&&r.fechaEntrega)?r.fechaEntrega:localISODate())}
+function balance(r){return Math.max(0,Number(r.monto||0)-Number(r.pagado||0))}
+function badgeClass(r){if(r.estado==='Entregado')return 'green';if(r.estado==='En taller'&&daysInShop(r)>=4)return 'red';return ''}
+function setNav(v){document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));let b=document.getElementById('nav-'+v);if(b)b.classList.add('active')}
+function title(t){document.getElementById('pageTitle').textContent=t}
+function showView(v){currentView=v;editingId=null;setNav(v);({dashboard:renderDashboard,ordenes:renderOrders,clientes:renderClients,kpis:renderKPIs,cleris:renderCleris,backup:renderBackup}[v]||renderDashboard)()}
+document.getElementById('today').textContent=new Date().toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});updateInstallButton();
+
+function orderTable(rows){
+  return `<div class="tablewrap"><table><thead><tr><th>Orden</th><th>Cliente</th><th>Equipo</th><th>Estado</th><th>Días</th><th>Saldo</th></tr></thead><tbody>${rows.map(r=>`<tr class="clickable" onclick="editOrder('${esc(r.id)}')"><td><div class="mono">#${fmtOrder(r.numero)}</div><div class="muted">${prettyDate(r.fechaIngreso)}</div></td><td><strong>${esc(r.cliente)}</strong><div class="muted">C${fmtClient(r.clienteNumero)} · ${esc(r.telefono)}</div></td><td>${esc(r.marcaModelo)}<div class="muted">${esc(r.tipo)}</div></td><td><span class="badge ${badgeClass(r)}">${esc(r.estado)}</span></td><td class="nowrap"><strong>${daysInShop(r)}</strong> d.</td><td><strong>${money(balance(r))}</strong></td></tr>`).join('')}</tbody></table></div>`;
+}
+
+function renderDashboard(){
+  title('Panel principal');setNav('dashboard');
+  let rows=load(),mk=currentMonthKey();
+  let active=rows.filter(r=>r.estado==='En taller').length;
+  let late=rows.filter(r=>r.estado==='En taller'&&daysInShop(r)>=4).length;
+  let entregadosHoy=rows.filter(r=>r.estado==='Entregado'&&r.fechaEntrega===localISODate()).length;
+  let cobrar=rows.reduce((a,r)=>a+balance(r),0);
+  let deliveredMonth=rows.filter(r=>r.estado==='Entregado'&&monthKey(r.fechaEntrega)===mk);
+  let facturacion=deliveredMonth.reduce((a,r)=>a+Number(r.monto||0),0);
+  let recent=[...rows].sort((a,b)=>b.numero-a.numero).slice(0,8);
+  let backupInfo=externalBackupStatus();
+  document.getElementById('view').innerHTML=`
+    <section class="hero"><div><div class="eyebrow" style="color:#8fb9ff">CONTROL DEL TALLER</div><h2>Gestión de órdenes de servicio</h2><p>Los equipos quedan en taller al ingresar y se cierran automáticamente cuando cargás la fecha de entrega.</p></div><button class="btn primary" onclick="newOrder()">＋ Nuevo ingreso</button></section>
+    <section class="stats">
+      <div class="stat"><div class="statlabel">En taller</div><div class="statvalue">${active}</div><div class="stathelp">Órdenes abiertas</div></div>
+      <div class="stat ${late?'bad':''}"><div class="statlabel">4+ días</div><div class="statvalue">${late}</div><div class="stathelp">Equipos demorados</div></div>
+      <div class="stat"><div class="statlabel">Entregados hoy</div><div class="statvalue">${entregadosHoy}</div><div class="stathelp">Cierre por fecha de entrega</div></div>
+      <div class="stat soft"><div class="statlabel">Facturación del mes</div><div class="statvalue smallmoney">${money(facturacion)}</div><div class="stathelp">Órdenes entregadas</div></div>
+      <div class="stat ${cobrar?'warn':''}"><div class="statlabel">Por cobrar</div><div class="statvalue smallmoney">${money(cobrar)}</div><div class="stathelp">Saldos pendientes</div></div>
+    </section>
+    <section class="alerts">
+      <div class="alert red"><strong>${late} equipos con 4 días o más</strong><span>${late?'Conviene revisar cuáles se están demorando.':'No hay equipos demorados.'}</span></div>
+      <div class="alert amber"><strong>${money(cobrar)} pendiente de cobro</strong><span>${cobrar?'Hay saldos abiertos para controlar.':'No hay saldos pendientes.'}</span></div>
+      <div class="alert ${backupInfo.className}"><strong>${esc(backupInfo.title)}</strong><span>${esc(backupInfo.text)}</span></div>
+    </section>
+    <section class="panel"><div class="panelhead"><div><div class="eyebrow">ÚLTIMAS ÓRDENES</div><h3>Actividad reciente</h3></div><button class="btn secondary small" onclick="showView('ordenes')">Ver todas</button></div>${recent.length?orderTable(recent):'<div class="empty">Todavía no hay órdenes. Creá el primer ingreso.</div>'}</section>`;
+}
+
+function newOrder(prefill={}){
+  editingId=null;currentView='nuevo';setNav('nuevo');title('Nuevo ingreso');
+  let r={fechaIngreso:localISODate(),fechaEntrega:'',estado:'En taller',cliente:prefill.cliente||'',telefono:prefill.telefono||'',marcaModelo:'',tipo:'Lavarropas',falla:'',accesorios:'',observaciones:'',monto:0,pagado:0,medioPago:'Pendiente'};
+  document.getElementById('view').innerHTML=`<div class="formlayout" style="grid-template-columns:1fr"><section class="panel" style="margin-top:0"><div class="panelhead"><div><div class="eyebrow">NUEVA ORDEN</div><h3>Orden #${fmtOrder(nextOrder())}</h3></div></div>${orderForm(r,true)}</section></div>`;
+  setTimeout(()=>{checkExistingClient();attachBalancePreview()},0);
+}
+
+function orderForm(r,isNew){
+  return `<form class="grid" onsubmit="submitOrder(event,${isNew})">
+    <div class="field short"><label>Fecha de ingreso</label><input id="fechaIngreso" type="date" value="${esc(r.fechaIngreso)}" readonly></div>
+    ${isNew?'':`<div class="field short"><label>Fecha de entrega</label><input id="fechaEntrega" type="date" value="${esc(r.fechaEntrega||'')}"><div class="hint">Al cargar una fecha, la orden pasa automáticamente a <strong>Entregado</strong>.</div></div>`}
+    <div class="field"><label>Nombre y apellido *</label><input id="cliente" value="${esc(r.cliente)}" required autofocus placeholder="Ej. Paula García"></div>
+    <div class="field"><label>Teléfono *</label><input id="telefono" value="${esc(r.telefono)}" required placeholder="Ej. 299 4000000" oninput="checkExistingClient()"></div>
+    ${brandModelFields(r.marcaModelo)}
+    <div class="field full"><div id="clientMatch" class="clientmatch"></div></div>
+    <div class="field"><label>Tipo de equipo</label><select id="tipo">${TIPOS.map(x=>`<option ${r.tipo===x?'selected':''}>${x}</option>`).join('')}</select></div>
+    ${isNew?'':`<div class="field"><label>Estado</label><input value="${r.fechaEntrega?'Entregado':'En taller'}" readonly></div>`}
+    <div class="field full"><label>Falla / diagnóstico</label><textarea id="falla" rows="3" placeholder="Qué problema presenta el equipo">${esc(r.falla)}</textarea></div>
+    <div class="field full"><label>Accesorios</label><input id="accesorios" value="${esc(r.accesorios)}" placeholder="Mangueras, tapa, cable, etc."></div>
+    <div class="field full"><label>Observaciones</label><textarea id="observaciones" rows="3">${esc(r.observaciones)}</textarea></div>
+    <div class="field"><label>Monto total</label><input id="monto" type="number" min="0" step="1000" value="${Number(r.monto||0)}"></div>
+    <div class="field"><label>Pagado</label><input id="pagado" type="number" min="0" step="1000" value="${Number(r.pagado||0)}"></div>
+    <div class="field"><label>Medio de pago</label><select id="medioPago">${PAGOS.map(x=>`<option ${r.medioPago===x?'selected':''}>${x}</option>`).join('')}</select></div>
+    <div class="field"><label>Saldo</label><input id="saldoPreview" value="${money(balance(r))}" readonly></div>
+    <div class="actions full">
+      ${isNew?`<button type="button" class="btn secondary" onclick="renderDashboard()">Cancelar</button>`:`<button type="button" class="btn secondary" onclick="newOrderSameClient('${esc(r.id)}')">＋ Mismo cliente</button><button type="button" class="btn secondary" onclick="printReceipt('${esc(r.id)}')">Comprobante / PDF</button><button type="button" class="btn danger" onclick="deleteOrder('${esc(r.id)}')">Eliminar</button>`}
+      <button class="btn primary" type="submit">${isNew?'Guardar ingreso':'Guardar cambios'}</button>
+    </div>
+  </form>`;
+}
+
+function checkExistingClient(){
+  let tel=document.getElementById('telefono')?.value||'',p=normPhone(tel),box=document.getElementById('clientMatch');
+  if(!box)return;
+  if(p.length<6){box.classList.remove('show');box.innerHTML='';return}
+  let history=load().filter(r=>normPhone(r.telefono)===p).sort((a,b)=>b.numero-a.numero);
+  if(!history.length){box.classList.remove('show');box.innerHTML='';let side=document.getElementById('clientSide');if(side)side.innerHTML='';return}
+  let c=history[0];
+  box.innerHTML=`Cliente existente: <strong>${esc(c.cliente)}</strong> · C${fmtClient(c.clienteNumero)} · ${history.length} orden${history.length===1?'':'es'} previa${history.length===1?'':'s'}. <button type="button" class="btn secondary small" onclick="useClient('${esc(c.id)}')">Usar datos</button>`;
+  box.classList.add('show');
+  let side=document.getElementById('clientSide');if(side)side.innerHTML=`<div style="margin-top:14px;padding-top:14px;border-top:1px solid #2a4765"><div class="muted" style="color:#91a5ba">CLIENTE DETECTADO</div><div style="font-weight:800;margin-top:4px">${esc(c.cliente)}</div><div style="font-size:12px;color:#c8d5e4;margin-top:4px">C${fmtClient(c.clienteNumero)} · ${history.length} órdenes</div></div>`;
+}
+function useClient(orderId){let r=load().find(x=>x.id===orderId);if(!r)return;document.getElementById('cliente').value=r.cliente;document.getElementById('telefono').value=r.telefono;toast('Datos del cliente cargados')}
+function findClientNumber(phone,name){let p=normPhone(phone);let rows=load();let hit=rows.find(r=>p&&normPhone(r.telefono)===p);if(hit)return hit.clienteNumero;let n=(name||'').toLowerCase().trim();hit=rows.find(r=>!p&&r.cliente.toLowerCase().trim()===n);return hit?hit.clienteNumero:nextClient()}
+
+function submitOrder(ev,isNew){
+  ev.preventDefault();
+  let rows=load(),now=nowISO(),fechaEntrega=isNew?'':(document.getElementById('fechaEntrega')?.value||'');
+  let obj={
+    fechaIngreso:document.getElementById('fechaIngreso').value,fechaEntrega,
+    cliente:document.getElementById('cliente').value.trim(),telefono:document.getElementById('telefono').value.trim(),
+    marcaModelo:collectBrandModel(),tipo:document.getElementById('tipo').value,falla:document.getElementById('falla').value.trim(),
+    accesorios:document.getElementById('accesorios').value.trim(),observaciones:document.getElementById('observaciones').value.trim(),
+    estado:fechaEntrega?'Entregado':'En taller',monto:Number(document.getElementById('monto').value||0),pagado:Number(document.getElementById('pagado').value||0),
+    medioPago:document.getElementById('medioPago').value,actualizado:now
+  };
+  if(!obj.marcaModelo){alert('Elegí la marca y el modelo. Si no aparecen en la lista, usá “Otra marca” / “Otro modelo”.');return}
+  if(obj.pagado>obj.monto&&obj.monto>0){if(!confirm('El monto pagado es mayor al total. ¿Guardar igual?'))return}
+  if(isNew){
+    obj.id=(crypto.randomUUID?crypto.randomUUID():Date.now().toString());obj.numero=nextOrder();obj.clienteNumero=findClientNumber(obj.telefono,obj.cliente);obj.creado=now;
+    obj.fechasEstado={'En taller':now};obj.historial=[{fecha:now,estado:'En taller'}];rows.push(obj);save(rows,'Antes de crear orden');queueCloudOp('upsertOrder',obj.id,obj,obj.actualizado||obj.creado);toast('Orden '+fmtOrder(obj.numero)+' guardada');editOrder(obj.id);
+  }else{
+    let i=rows.findIndex(r=>r.id===editingId);if(i<0)return;let old=rows[i];
+    obj.id=old.id;obj.numero=old.numero;obj.clienteNumero=findClientNumber(obj.telefono,obj.cliente)||old.clienteNumero;obj.creado=old.creado;obj.fechasEstado={...(old.fechasEstado||{})};obj.historial=[...(old.historial||[])];
+    if(obj.estado!==old.estado){obj.fechasEstado[obj.estado]=now;obj.historial.push({fecha:now,estado:obj.estado})}
+    rows[i]=obj;save(rows,'Antes de editar orden #'+fmtOrder(obj.numero));queueCloudOp('upsertOrder',obj.id,obj,obj.actualizado);toast(obj.estado==='Entregado'?'Orden cerrada como entregada':'Orden actualizada');editOrder(obj.id);
+  }
+}
+
+function renderOrders(){
+  title('Buscar órdenes');setNav('ordenes');
+  document.getElementById('view').innerHTML=`<section class="panel" style="margin-top:0"><div class="searchbar"><input id="searchQ" oninput="filterOrders()" placeholder="Orden, cliente, teléfono, equipo o cliente Nº..."><select id="searchEstado" onchange="filterOrders()"><option value="">Todos los estados</option>${ESTADOS.map(e=>`<option>${e}</option>`).join('')}</select><button class="btn primary" onclick="newOrder()">＋ Nueva</button></div></section><section class="panel"><div class="panelhead"><div><div class="eyebrow">RESULTADOS</div><h3 id="countTitle"></h3></div></div><div id="ordersResult"></div></section>`;
+  filterOrders();
+}
+function filterOrders(){
+  let q=(document.getElementById('searchQ')?.value||'').toLowerCase().trim(),e=document.getElementById('searchEstado')?.value||'';
+  let rows=load().filter(r=>{let hay=[fmtOrder(r.numero),fmtClient(r.clienteNumero),r.cliente,r.telefono,r.marcaModelo,r.tipo].join(' ').toLowerCase().includes(q);return hay&&(!e||r.estado===e)}).sort((a,b)=>b.numero-a.numero);
+  document.getElementById('countTitle').textContent=rows.length+' órdenes';document.getElementById('ordersResult').innerHTML=rows.length?orderTable(rows):'<div class="empty">No encontré órdenes con esos filtros.</div>';
+}
+
+function editOrder(id){
+  let r=load().find(x=>x.id===id);if(!r)return;editingId=id;currentView='editar';setNav('ordenes');title('Orden #'+fmtOrder(r.numero));
+  let history=load().filter(x=>x.id!==r.id&&normPhone(x.telefono)&&normPhone(x.telefono)===normPhone(r.telefono)).sort((a,b)=>b.numero-a.numero).slice(0,5);
+  document.getElementById('view').innerHTML=`<div class="formlayout"><section class="panel" style="margin-top:0"><div class="panelhead"><div><div class="eyebrow">INGRESÓ ${prettyDate(r.fechaIngreso)}</div><h3>${esc(r.cliente)} · C${fmtClient(r.clienteNumero)}</h3></div><span class="badge ${badgeClass(r)}">${esc(r.estado)}</span></div>${orderForm(r,false)}</section><aside class="sidecard"><div class="eyebrow" style="color:#8fb9ff">RESUMEN</div><div class="summaryrow"><span>Total</span><strong>${money(r.monto)}</strong></div><div class="summaryrow"><span>Pagado</span><strong>${money(r.pagado)}</strong></div><div class="summaryrow"><span>Medio</span><strong>${esc(r.medioPago)}</strong></div><div class="summaryrow total"><span>Saldo</span><strong>${money(balance(r))}</strong></div><div class="summaryrow"><span>Días en taller</span><strong>${daysInShop(r)}</strong></div><div class="summaryrow"><span>Estado</span><strong>${esc(r.estado)}</strong></div>${r.fechaEntrega?`<div class="summaryrow"><span>Entregado</span><strong>${prettyDate(r.fechaEntrega)}</strong></div>`:''}<div style="margin-top:12px;color:#91a5ba;font-size:11px">TELÉFONO</div><div style="font-size:18px;font-weight:800;margin-top:4px">${esc(r.telefono)}</div>${history.length?`<div style="margin-top:18px;color:#91a5ba;font-size:11px">OTRAS ÓRDENES DEL CLIENTE</div><div class="timeline">${history.map(x=>`<div class="timelineitem" style="background:#193652;color:#dce8f5;cursor:pointer" onclick="editOrder('${esc(x.id)}')"><strong>#${fmtOrder(x.numero)} ${esc(x.marcaModelo)}</strong><span>${prettyDate(x.fechaIngreso)}</span></div>`).join('')}</div>`:''}</aside></div>`;
+  attachBalancePreview();
+}
+function attachBalancePreview(){let m=document.getElementById('monto'),p=document.getElementById('pagado'),s=document.getElementById('saldoPreview');if(!m||!p||!s)return;let f=()=>s.value=money(Math.max(0,Number(m.value||0)-Number(p.value||0)));m.addEventListener('input',f);p.addEventListener('input',f)}
+function newOrderSameClient(id){let r=load().find(x=>x.id===id);if(r)newOrder({cliente:r.cliente,telefono:r.telefono})}
+function deleteOrder(id){if(!confirm('¿Eliminar esta orden? Se guardará una copia automática anterior, pero conviene evitar eliminar si solo querés cambiar el estado.'))return;let rows=load().filter(r=>r.id!==id);save(rows,'Antes de eliminar orden');queueCloudOp('deleteOrder',id,null,nowISO());toast('Orden eliminada');renderOrders()}
+
+function renderClients(){
+  title('Clientes');setNav('clientes');let rows=load(),map=new Map();
+  rows.forEach(r=>{let key=normPhone(r.telefono)||('c'+r.clienteNumero);if(!map.has(key))map.set(key,{cliente:r.cliente,telefono:r.telefono,numero:r.clienteNumero,orders:[]});let c=map.get(key);c.cliente=r.cliente;c.telefono=r.telefono;c.numero=r.clienteNumero;c.orders.push(r)});
+  let clients=[...map.values()].sort((a,b)=>b.numero-a.numero);
+  document.getElementById('view').innerHTML=`<section class="panel" style="margin-top:0"><div class="panelhead"><div><div class="eyebrow">BASE DE CLIENTES</div><h3>${clients.length} clientes</h3></div><button class="btn primary" onclick="newOrder()">＋ Nuevo ingreso</button></div><div class="tablewrap"><table><thead><tr><th>Cliente Nº</th><th>Nombre</th><th>Teléfono</th><th>Órdenes</th><th>Última orden</th><th>Total histórico</th></tr></thead><tbody>${clients.map(c=>{let orders=[...c.orders].sort((a,b)=>b.numero-a.numero),last=orders[0],total=c.orders.reduce((a,r)=>a+Number(r.monto||0),0);return `<tr class="clickable" onclick="showClientOrders('${esc(normPhone(c.telefono))}',${c.numero})"><td class="mono">C${fmtClient(c.numero)}</td><td><strong>${esc(c.cliente)}</strong></td><td>${esc(c.telefono)}</td><td>${c.orders.length}</td><td>#${fmtOrder(last.numero)} · ${prettyDate(last.fechaIngreso)}</td><td><strong>${money(total)}</strong></td></tr>`}).join('')}</tbody></table></div></section>`;
+}
+function showClientOrders(phone,clientNumber){let rows=load().filter(r=>(phone&&normPhone(r.telefono)===phone)||(!phone&&r.clienteNumero===clientNumber)).sort((a,b)=>b.numero-a.numero);if(!rows.length)return;title(rows[0].cliente+' · C'+fmtClient(rows[0].clienteNumero));document.getElementById('view').innerHTML=`<section class="panel" style="margin-top:0"><div class="panelhead"><div><div class="eyebrow">HISTORIAL DEL CLIENTE</div><h3>${rows.length} órdenes</h3></div><button class="btn primary" onclick="newOrderSameClient('${esc(rows[0].id)}')">＋ Nueva orden</button></div>${orderTable(rows)}</section>`}
+
+function renderKPIs(){
+  title('KPIs del taller');setNav('kpis');let rows=load(),mk=currentMonthKey();
+  let ingresos=rows.filter(r=>monthKey(r.fechaIngreso)===mk),entregados=rows.filter(r=>r.estado==='Entregado'&&monthKey(r.fechaEntrega)===mk);
+  let fact=entregados.reduce((a,r)=>a+Number(r.monto||0),0),ticket=entregados.length?fact/entregados.length:0;
+  let avgDays=entregados.length?entregados.reduce((a,r)=>a+daysInShop(r),0)/entregados.length:0,cobrar=rows.reduce((a,r)=>a+balance(r),0);
+  let counts={};ingresos.forEach(r=>{let b=brandOf(r);counts[b]=(counts[b]||0)+1});let ranking=Object.entries(counts).sort((a,b)=>b[1]-a[1]),max=ranking.length?ranking[0][1]:1;
+  document.getElementById('view').innerHTML=`<section class="panel" style="margin-top:0"><div class="panelhead"><div><div class="eyebrow">MES ACTUAL</div><h3>Indicadores que sí sirven</h3></div><span class="badge">${mk}</span></div><div class="kpigrid"><div class="stat soft"><div class="statlabel">Facturación taller</div><div class="statvalue smallmoney">${money(fact)}</div><div class="stathelp">Órdenes entregadas este mes</div></div><div class="stat"><div class="statlabel">Ticket promedio</div><div class="statvalue smallmoney">${money(ticket)}</div><div class="stathelp">Sobre órdenes entregadas</div></div><div class="stat"><div class="statlabel">Ingresos</div><div class="statvalue">${ingresos.length}</div><div class="stathelp">Equipos ingresados este mes</div></div><div class="stat"><div class="statlabel">Entregados</div><div class="statvalue">${entregados.length}</div><div class="stathelp">Equipos cerrados este mes</div></div><div class="stat"><div class="statlabel">Días promedio</div><div class="statvalue">${avgDays.toFixed(1)}</div><div class="stathelp">Ingreso a entrega</div></div><div class="stat ${cobrar?'warn':''}"><div class="statlabel">Por cobrar</div><div class="statvalue smallmoney">${money(cobrar)}</div><div class="stathelp">Saldo abierto total</div></div></div></section><section class="panel"><div class="panelhead"><div><div class="eyebrow">MARCAS</div><h3>Marcas que más ingresaron este mes</h3></div></div>${ranking.length?`<div class="brandlist">${ranking.map(([name,count])=>`<div class="brandrow"><strong>${esc(name)}</strong><div class="bartrack"><div class="barfill" style="width:${Math.round(count/max*100)}%"></div></div><div class="right"><strong>${count}</strong></div></div>`).join('')}</div>`:'<div class="empty">Todavía no hay ingresos este mes.</div>'}</section>`;
+}
+
+function renderCleris(){
+  title('Cleris Eventos');setNav('cleris');let events=loadEvents(),mk=currentMonthKey(),monthEvents=events.filter(e=>monthKey(e.fecha)===mk),monthTotal=monthEvents.reduce((a,e)=>a+Number(e.monto||0),0),avg=monthEvents.length?monthTotal/monthEvents.length:0,year=localISODate().slice(0,4),yearTotal=events.filter(e=>String(e.fecha||'').startsWith(year)).reduce((a,e)=>a+Number(e.monto||0),0);
+  let sorted=[...events].sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha))||Number(b.id)-Number(a.id));
+  document.getElementById('view').innerHTML=`<section class="stats" style="margin-top:0"><div class="stat soft"><div class="statlabel">Ingresos del mes</div><div class="statvalue smallmoney">${money(monthTotal)}</div><div class="stathelp">Solo Cleris Eventos</div></div><div class="stat"><div class="statlabel">Eventos del mes</div><div class="statvalue">${monthEvents.length}</div><div class="stathelp">Cargados en ${mk}</div></div><div class="stat"><div class="statlabel">Promedio por evento</div><div class="statvalue smallmoney">${money(avg)}</div></div><div class="stat"><div class="statlabel">Total ${year}</div><div class="statvalue smallmoney">${money(yearTotal)}</div></div></section><section class="panel"><div class="panelhead"><div><div class="eyebrow">NUEVO INGRESO</div><h3>Registrar evento</h3></div></div><form class="eventgrid" onsubmit="submitEvent(event)"><div class="field short"><label>Fecha *</label><input id="eventFecha" type="date" value="${localISODate()}" required></div><div class="field"><label>Evento / cliente *</label><input id="eventDesc" required placeholder="Ej. Fiesta privada · Cleris"></div><div class="field"><label>Monto *</label><input id="eventMonto" type="number" min="0" step="1000" required></div><div class="field"><label>Medio de pago</label><select id="eventPago">${PAGOS.filter(x=>x!=='Pendiente').map(x=>`<option>${x}</option>`).join('')}</select></div><div class="field full"><label>Observaciones</label><input id="eventObs" placeholder="Opcional"></div><div class="actions full"><button class="btn primary" type="submit">Guardar evento</button></div></form><p class="sectionnote">Cleris queda separado de NQN Service: no modifica ticket promedio, marcas, equipos ni días del taller.</p></section><section class="panel"><div class="panelhead"><div><div class="eyebrow">HISTORIAL</div><h3>${events.length} eventos cargados</h3></div></div>${sorted.length?`<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Evento</th><th>Medio</th><th>Monto</th><th>Observaciones</th><th></th></tr></thead><tbody>${sorted.map(e=>`<tr><td>${prettyDate(e.fecha)}</td><td><strong>${esc(e.descripcion)}</strong></td><td>${esc(e.medioPago||'-')}</td><td><strong>${money(e.monto)}</strong></td><td>${esc(e.observaciones||'-')}</td><td class="right"><button class="btn danger small" onclick="deleteEvent('${esc(e.id)}')">Eliminar</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Todavía no cargaste eventos de Cleris.</div>'}</section>`;
+}
+function submitEvent(ev){ev.preventDefault();let rows=loadEvents(),now=nowISO(),obj={id:String(Date.now()),fecha:document.getElementById('eventFecha').value,descripcion:document.getElementById('eventDesc').value.trim(),monto:Number(document.getElementById('eventMonto').value||0),medioPago:document.getElementById('eventPago').value,observaciones:document.getElementById('eventObs').value.trim(),creado:now,actualizado:now};rows.push(obj);saveEvents(rows);queueCloudOp('upsertEvent',obj.id,obj,obj.actualizado);toast('Evento de Cleris guardado');renderCleris()}
+function deleteEvent(id){if(!confirm('¿Eliminar este evento de Cleris?'))return;saveEvents(loadEvents().filter(e=>String(e.id)!==String(id)));queueCloudOp('deleteEvent',id,null,nowISO());toast('Evento eliminado');renderCleris()}
+
+function externalBackupStatus(){
+  let s=getSettings(),last=s.lastExternalBackup;if(!last)return {className:'red',title:'Sin copia externa',text:'Descargá una copia desde “Copias”.'};
+  let days=Math.floor((Date.now()-new Date(last).getTime())/86400000);if(days>=7)return {className:'red',title:'Backup externo atrasado',text:'Última copia hace '+days+' días.'};if(days>=3)return {className:'amber',title:'Conviene hacer backup',text:'Última copia hace '+days+' días.'};return {className:'green',title:'Backup externo al día',text:'Última copia '+prettyDateTime(last)+'.'}
+}
+function runHealthCheck(){
+  let problems=[];
+  if(!storageSelfTest())problems.push('El navegador no permite almacenamiento local.');
+  let rows=load(),primary=readRowsKey(KEY),mirror=readRowsKey(KEY_MIRROR);
+  if(!validRows(primary))problems.push('La copia principal no es válida.');
+  if(!validRows(mirror))problems.push('La copia espejo no es válida.');
+  if(validRows(primary)&&validRows(mirror)&&primary.length!==mirror.length)problems.push('Principal y espejo tienen distinta cantidad de órdenes.');
+  let evA=loadEventsKey(KEY_EVENTS),evB=loadEventsKey(KEY_EVENTS_MIRROR);if(evA.length!==evB.length)problems.push('Principal y espejo de Cleris tienen distinta cantidad de eventos.');
+  if(problems.length){alert('Revisión del sistema\n\n'+problems.join('\n'));return false}
+  alert('Sistema OK.\n\nAlmacenamiento: OK\nCopia principal: OK\nCopia espejo: OK\nÓrdenes verificadas: '+rows.length+'\nEventos Cleris: '+loadEvents().length);
+  return true;
+}
+function renderBackup(){
+  title('Copias y seguridad');setNav('backup');
+  let rows=load(),events=loadEvents(),snaps=loadSnapshots(),st=externalBackupStatus(),cs=cloudStatus(),cfg=cloudConfig();
+  document.getElementById('view').innerHTML=`
+  <section class="panel" style="margin-top:0">
+    <div class="panelhead"><div><div class="eyebrow">NUBE</div><h3>Google Drive · Base central</h3></div><div class="cloudstatus"><span class="clouddot ${cs.cls}"></span><span>${esc(cs.label)}</span></div></div>
+    <div class="cloudgrid">
+      <div class="info">
+        <h4>Sincronización teléfono + computadora</h4>
+        <p>La app conserva una copia local y, cuando hay internet, sincroniza órdenes y Cleris con una base central en Google Sheets. La hoja queda guardada en tu Google Drive y el sistema genera además un backup JSON automático por día.</p>
+        <label>URL del Web App de Google Apps Script</label>
+        <input id="cloudUrl" class="cloudurl" value="${esc(cfg.url)}" placeholder="https://script.google.com/macros/s/.../exec">
+        <label style="margin-top:10px">Clave privada de sincronización</label>
+        <input id="cloudToken" class="cloudurl" type="password" value="${esc(cfg.token)}" placeholder="Pegá tu clave privada">
+        <div class="hint" style="margin-top:6px">La clave queda guardada solamente en este dispositivo; no forma parte de la app publicada.</div>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:10px"><input id="cloudEnabled" type="checkbox" style="width:auto" ${cfg.enabled?'checked':''}> Activar sincronización automática</label>
+        <div class="cloudactions">
+          <button class="btn primary" onclick="saveCloudConfig()">Guardar y sincronizar</button>
+          <button class="btn secondary" onclick="cloudSync(false)">Sincronizar ahora</button>
+          ${cfg.enabled?'<button class="btn secondary" onclick="disableCloud()">Desactivar nube</button>':''}
+        </div>
+      </div>
+      <div class="info">
+        <h4>Estado</h4>
+        <p><strong>${esc(cs.label)}</strong><br>${esc(cs.detail)}</p>
+        <div class="summaryrow" style="color:#58677b"><span>Cambios pendientes</span><strong style="color:#17263a">${cs.pending}</strong></div>
+        <div class="summaryrow" style="color:#58677b"><span>Última sincronización</span><strong style="color:#17263a">${cfg.lastSync?prettyDateTime(cfg.lastSync):'-'}</strong></div>
+        ${cfg.sheetUrl?`<div class="cloudactions"><a class="btn secondary" href="${esc(cfg.sheetUrl)}" target="_blank" rel="noopener">Abrir base en Drive</a>${cfg.backupFolderUrl?`<a class="btn secondary" href="${esc(cfg.backupFolderUrl)}" target="_blank" rel="noopener">Abrir backups</a>`:''}</div>`:''}
+        <p class="hint">La URL se configura una vez en cada dispositivo. Después, la sincronización es automática.</p>
+      </div>
+    </div>
+  </section>
+  <section class="panel">
+    <div class="panelhead"><div><div class="eyebrow">COPIA MANUAL</div><h3>Backup local</h3></div><span class="badge">${rows.length} órdenes · ${events.length} eventos</span></div>
+    <div class="backupstatus ${st.className}"><div><strong>${esc(st.title)}</strong></div><div>${esc(st.text)}</div></div>
+    <div class="backupbox">
+      <div class="info"><h4>Exportar copia externa</h4><p>Descarga órdenes del taller y eventos de Cleris en un único archivo JSON. Es una segunda seguridad además de Drive.</p><button class="btn primary" onclick="exportData()">Descargar copia</button> <button class="btn secondary" onclick="runHealthCheck()">Revisar sistema</button></div>
+      <div class="info"><h4>Importar copia</h4><p>Restaura una copia exportada previamente. Si la nube está activa, después se vuelve a sincronizar.</p><input id="importFile" type="file" accept=".json" style="margin-bottom:10px"><button class="btn secondary" onclick="importData()">Importar copia</button></div>
+    </div>
+  </section>
+  <section class="panel">
+    <div class="panelhead"><div><div class="eyebrow">AUTOMÁTICO</div><h3>Instantáneas internas del taller</h3></div><span class="badge">Últimas ${snaps.length}/10</span></div>
+    <p class="hint">Las órdenes conservan versiones anteriores dentro del navegador. Esto ayuda ante errores de edición, pero <strong>no reemplaza la base central de Drive</strong>.</p>
+    ${snaps.length?`<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Motivo</th><th>Órdenes</th><th></th></tr></thead><tbody>${snaps.map(s=>`<tr><td>${prettyDateTime(s.fecha)}</td><td>${esc(s.reason||'Automática')}</td><td>${Array.isArray(s.ordenes)?s.ordenes.length:0}</td><td class="right"><button class="btn secondary small" onclick="restoreSnapshot(${Number(s.id)})">Restaurar</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Las instantáneas aparecerán después de los primeros cambios.</div>'}
+  </section>`;
+}
+function exportData(){
+  let payload={app:'NQN Service',version:5,edicion:'nube-drive-sync',exportado:nowISO(),ordenes:load(),cleriseventos:loadEvents(),settings:{lastSave:getSettings().lastSave||null}};
+  let blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='NQN_SERVICE_BACKUP_'+localISODate()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);let s=getSettings();s.lastExternalBackup=nowISO();setSettings(s);toast('Copia externa descargada');setTimeout(renderBackup,300)
+}
+function importData(){
+  let f=document.getElementById('importFile').files[0];if(!f){alert('Elegí un archivo de copia primero.');return}
+  let reader=new FileReader();
+  reader.onload=()=>{try{
+    let x=JSON.parse(reader.result),source=Array.isArray(x)?x:x.ordenes;
+    if(!Array.isArray(source))throw new Error();
+    if(!confirm('¿Reemplazar los datos actuales por esta copia?'))return;
+    let normalized=ensureClientNumbers(source.map(normalizeOrder));
+    save(normalized,'Antes de importar copia');
+    if(x&&Array.isArray(x.cleriseventos))saveEvents(x.cleriseventos);
+    let s=getSettings();s.cloudEverSynced=false;setSettings(s);setCloudQueue([]);
+    toast('Copia restaurada');
+    renderBackup();
+    cloudAutoSyncSoon();
+  }catch(e){alert('El archivo no parece ser una copia válida de NQN Service.')}};
+  reader.readAsText(f)
+}
+function restoreSnapshot(id){let snap=loadSnapshots().find(x=>Number(x.id)===Number(id));if(!snap||!Array.isArray(snap.ordenes))return;if(!confirm('¿Restaurar esta instantánea? Los datos actuales se conservarán como otra instantánea.'))return;save(snap.ordenes,'Antes de restaurar instantánea');let s=getSettings();s.cloudEverSynced=false;setSettings(s);setCloudQueue([]);toast('Instantánea restaurada');renderBackup();cloudAutoSyncSoon()}
+
+function printReceipt(id){
+  let r=load().find(x=>x.id===id);if(!r)return;let w=window.open('','_blank');if(!w){alert('El navegador bloqueó la ventana del comprobante. Permití ventanas emergentes para este archivo.');return}
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Comprobante #${fmtOrder(r.numero)}</title><style>body{font-family:Arial,sans-serif;color:#14243a;padding:32px}.sheet{max-width:760px;margin:auto}.top{display:flex;justify-content:space-between;border-bottom:3px solid #0d5bd8;padding-bottom:18px}.brand{font-size:28px;font-weight:900;color:#0d5bd8}.sub{color:#6f7d90}.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px}.item{padding:12px 0;border-bottom:1px solid #e4e9f0}.full{grid-column:1/-1}.lab{font-size:11px;color:#788598;font-weight:bold;text-transform:uppercase}.val{margin-top:5px}.foot{margin-top:28px;font-size:11px;color:#7c8998}@media print{button{display:none}}</style></head><body><div class="sheet"><div class="top"><div><div class="brand">NQN Service</div><div class="sub">Servicio técnico</div></div><div style="text-align:right"><h2 style="margin:0">Orden #${fmtOrder(r.numero)}</h2><div class="sub">Ingreso ${prettyDate(r.fechaIngreso)}</div><div class="sub">Cliente C${fmtClient(r.clienteNumero)}</div></div></div><div class="grid"><div class="item"><div class="lab">Cliente</div><div class="val">${esc(r.cliente)}</div></div><div class="item"><div class="lab">Teléfono</div><div class="val">${esc(r.telefono)}</div></div><div class="item"><div class="lab">Equipo</div><div class="val">${esc(r.tipo)}</div></div><div class="item"><div class="lab">Marca y modelo</div><div class="val">${esc(r.marcaModelo)}</div></div><div class="item full"><div class="lab">Falla informada</div><div class="val">${esc(r.falla||'-')}</div></div><div class="item full"><div class="lab">Accesorios</div><div class="val">${esc(r.accesorios||'-')}</div></div><div class="item full"><div class="lab">Observaciones</div><div class="val">${esc(r.observaciones||'-')}</div></div></div><div class="foot">Conserve el número de orden para futuras consultas.</div><button onclick="window.print()" style="margin:22px auto;display:block;padding:11px 15px;background:#0d5bd8;color:white;border:0;border-radius:9px;font-weight:bold">Imprimir / Guardar PDF</button></div></body></html>`);w.document.close()
+}
+
+window.addEventListener('error',e=>{console.error(e.error||e.message)});
+window.addEventListener('unhandledrejection',e=>{console.error(e.reason)});
+function boot(){
+  if(!storageSelfTest()){
+    document.getElementById('view').innerHTML='<section class="panel"><h3>No se puede iniciar el almacenamiento local</h3><p>Esta versión necesita Microsoft Edge o Google Chrome. Abrila con <strong>ABRIR_NQN_SERVICE.bat</strong> desde una carpeta local.</p></section>';
+    return;
+  }
+  migrateIfNeeded();
+  let ev=loadEvents();try{saveEvents(ev)}catch(e){}
+  renderDashboard();
+  if(cloudConfigured()&&navigator.onLine)setTimeout(()=>cloudSync(true),700);
+}
+window.addEventListener('online',()=>{toast('Internet disponible · sincronizando');cloudSync(true)});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&cloudConfigured()&&navigator.onLine)cloudSync(true)});
+setInterval(()=>{if(document.visibilityState==='visible'&&cloudConfigured()&&navigator.onLine)cloudSync(true)},30000);
+boot();
+</script>
+</body>
+</html>

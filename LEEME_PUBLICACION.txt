@@ -1,0 +1,17 @@
+NQN SERVICE · V7 APP INSTALABLE
+
+Esta carpeta es segura para publicar: NO contiene la clave privada de Google Drive.
+
+Archivos que deben publicarse juntos:
+- index.html
+- manifest.webmanifest
+- sw.js
+- carpeta icons
+
+Después de abrir la URL publicada por primera vez:
+1. Copias > Google Drive · Base central.
+2. Pegar la URL /exec de Apps Script.
+3. Pegar la clave privada desde NQN_SERVICE_CLAVE_PRIVADA.txt (archivo separado; NO publicarlo).
+4. Activar sincronización automática.
+5. Guardar y sincronizar.
+6. Chrome mostrará Instalar app / Agregar a pantalla principal.
