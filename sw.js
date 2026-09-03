@@ -1,5 +1,5 @@
-const CACHE='nqn-service-v8-offline';
-const APP_SHELL=['./','./index.html','./NQN_SERVICE_ESTABLE.html','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png'];
+const CACHE='nqn-service-v10-turnos-sync';
+const APP_SHELL=['./','./index.html','./NQN_SERVICE_ESTABLE.html','./manifest.webmanifest','./turnos.js','./icons/icon-192.png','./icons/icon-512.png'];
 
 async function precache(){
   const cache=await caches.open(CACHE);
@@ -25,18 +25,33 @@ self.addEventListener('activate',event=>{
   })());
 });
 
+async function injectTurnos(response){
+  if(!response)return response;
+  try{
+    const type=response.headers.get('content-type')||'';
+    if(!type.includes('text/html'))return response;
+    let html=await response.text();
+    if(!html.includes('turnos.js')){
+      html=html.replace('</body>','<script src="./turnos.js"></script>\n</body>');
+    }
+    const headers=new Headers(response.headers);
+    headers.delete('content-length');
+    headers.delete('content-encoding');
+    return new Response(html,{status:response.status,statusText:response.statusText,headers});
+  }catch(e){return response}
+}
+
 async function navigationResponse(request){
   const cache=await caches.open(CACHE);
   const cached=await cache.match('./index.html');
   if(cached){
-    // Actualiza en segundo plano, pero entrega inmediatamente la copia local.
     fetch(request).then(async res=>{if(res&&res.ok){await cache.put('./index.html',res.clone());await cache.put('./',res.clone())}}).catch(()=>{});
-    return cached;
+    return injectTurnos(cached);
   }
   try{
     const res=await fetch(request);
     if(res&&res.ok){await cache.put('./index.html',res.clone());await cache.put('./',res.clone())}
-    return res;
+    return injectTurnos(res);
   }catch(e){
     return new Response('<!doctype html><meta charset="utf-8"><title>NQN Service</title><body style="font-family:Arial;padding:30px"><h2>NQN Service</h2><p>No se pudo cargar la copia local. Conectate una vez a internet y volvé a abrir la app.</p></body>',{headers:{'Content-Type':'text/html;charset=utf-8'}});
   }
@@ -59,9 +74,7 @@ self.addEventListener('fetch',event=>{
       const res=await fetch(req);
       if(res&&res.ok)await cache.put(req,res.clone());
       return res;
-    }catch(e){
-      return cache.match('./index.html');
-    }
+    }catch(e){return cache.match('./index.html')}
   })());
 });
 
