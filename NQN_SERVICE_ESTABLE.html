@@ -95,7 +95,7 @@ window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;updateIns
 function updateInstallButton(){let b=document.getElementById('installPwaBtn');if(b)b.classList.toggle('show',!!deferredInstallPrompt)}
 async function installPwa(){if(!deferredInstallPrompt){alert('Si Chrome no muestra la instalación todavía, recargá la página una vez y volvé a intentar.');return}deferredInstallPrompt.prompt();try{await deferredInstallPrompt.userChoice}catch(e){}deferredInstallPrompt=null;updateInstallButton()}
 const OFFLINE_CACHE='nqn-service-v8-offline';
-const OFFLINE_ASSETS=['./','./index.html','./NQN_SERVICE_ESTABLE.html','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png'];
+const OFFLINE_ASSETS=['./','./index.html','./NQN_SERVICE_ESTABLE.html','./manifest.webmanifest','./caja.js','./icons/icon-192.png','./icons/icon-512.png'];
 let swReloading=false;
 async function ensureOfflineReady(){
   if(!('serviceWorker' in navigator)||!location.protocol.startsWith('http'))return false;
@@ -140,7 +140,7 @@ function cloudConfig(){
 }
 function cloudConfigured(){let c=cloudConfig();return c.enabled&&!!c.token&&/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec(?:\?.*)?$/i.test(c.url)}
 function queueCloudOp(type,id,data=null,at=nowISO()){
-  let entity=type.toLowerCase().includes('event')?'event':'order';
+  let low=type.toLowerCase(),entity=low.includes('cash')?'cash':(low.includes('event')?'event':'order');
   let q=cloudQueue().filter(op=>!(op.entity===entity&&String(op.id)===String(id)));
   q.push({opId:(crypto.randomUUID?crypto.randomUUID():Date.now()+'-'+Math.random()),type,entity,id:String(id),at,data});
   setCloudQueue(q);
@@ -153,6 +153,7 @@ function bootstrapCloudQueue(){
   let q=cloudQueue(),seen=new Set(q.map(x=>x.entity+':'+x.id));
   load().forEach(r=>{let k='order:'+r.id;if(!seen.has(k)){q.push({opId:'boot-o-'+r.id,type:'upsertOrder',entity:'order',id:String(r.id),at:r.actualizado||r.creado||nowISO(),data:r});seen.add(k)}});
   loadEvents().forEach(e=>{let k='event:'+e.id;if(!seen.has(k)){q.push({opId:'boot-e-'+e.id,type:'upsertEvent',entity:'event',id:String(e.id),at:e.actualizado||e.creado||nowISO(),data:e});seen.add(k)}});
+  if(typeof loadCashClosings==='function')loadCashClosings().forEach(c=>{let k='cash:'+c.id;if(!seen.has(k)){q.push({opId:'boot-c-'+c.id,type:'upsertCash',entity:'cash',id:String(c.id),at:c.actualizado||c.creado||nowISO(),data:c});seen.add(k)}});
   setCloudQueue(q);
 }
 function cloudAutoSyncSoon(){
@@ -178,7 +179,7 @@ function jsonpPull(url,token){
   });
 }
 function opReflected(op,state){
-  let rows=op.entity==='order'?(state.ordenes||[]):(state.cleriseventos||[]);
+  let rows=op.entity==='order'?(state.ordenes||[]):(op.entity==='cash'?(state.cierrescaja||[]):(state.cleriseventos||[]));
   let hit=rows.find(x=>String(x.id)===String(op.id));
   if(op.type.startsWith('delete'))return !hit;
   if(!hit)return false;
@@ -188,8 +189,11 @@ function opReflected(op,state){
 function applyCloudState(state,pending=[]){
   let pendingOrders=new Set(pending.filter(x=>x.entity==='order').map(x=>String(x.id)));
   let pendingEvents=new Set(pending.filter(x=>x.entity==='event').map(x=>String(x.id)));
+  let pendingCash=new Set(pending.filter(x=>x.entity==='cash').map(x=>String(x.id)));
+  let deletedCash=new Set(pending.filter(x=>x.entity==='cash'&&x.type==='deleteCash').map(x=>String(x.id)));
   let remoteOrders=Array.isArray(state.ordenes)?ensureClientNumbers(state.ordenes.map(normalizeOrder)):[];
   let remoteEvents=Array.isArray(state.cleriseventos)?state.cleriseventos:[];
+  let remoteCash=Array.isArray(state.cierrescaja)?state.cierrescaja:[];
   if(pendingOrders.size){
     let map=new Map(remoteOrders.map(r=>[String(r.id),r]));
     load().forEach(r=>{if(pendingOrders.has(String(r.id)))map.set(String(r.id),r)});
@@ -199,6 +203,15 @@ function applyCloudState(state,pending=[]){
     let map=new Map(remoteEvents.map(e=>[String(e.id),e]));
     loadEvents().forEach(e=>{if(pendingEvents.has(String(e.id)))map.set(String(e.id),e)});
     remoteEvents=[...map.values()];
+  }
+  if(typeof loadCashClosings==='function'&&typeof saveCashClosings==='function'){
+    if(deletedCash.size)remoteCash=remoteCash.filter(c=>!deletedCash.has(String(c.id)));
+    if(pendingCash.size){
+      let map=new Map(remoteCash.map(c=>[String(c.id),c]));
+      loadCashClosings().forEach(c=>{if(pendingCash.has(String(c.id)))map.set(String(c.id),c)});
+      remoteCash=[...map.values()];
+    }
+    saveCashClosings(remoteCash);
   }
   writeRowsKey(KEY_MIRROR,remoteOrders);writeRowsKey(KEY,remoteOrders);
   saveEvents(remoteEvents);
@@ -235,7 +248,7 @@ async function cloudSync(silent=false){
 function refreshViewAfterCloudSync(){
   // No redibujar formularios mientras el usuario carga o edita datos.
   if(currentView==='nuevo'||currentView==='editar')return;
-  const renderers={dashboard:renderDashboard,ordenes:renderOrders,clientes:renderClients,kpis:renderKPIs,cleris:renderCleris,backup:renderBackup};
+  const renderers={dashboard:renderDashboard,ordenes:renderOrders,clientes:renderClients,kpis:renderKPIs,cleris:renderCleris,caja:(typeof showCashSummary==='function'?showCashSummary:null),backup:renderBackup};
   const fn=renderers[currentView];
   if(typeof fn==='function')fn();
 }
@@ -624,7 +637,7 @@ function renderBackup(){
     <div class="cloudgrid">
       <div class="info">
         <h4>Sincronización teléfono + computadora</h4>
-        <p>La app conserva una copia local y, cuando hay internet, sincroniza órdenes y Cleris con una base central en Google Sheets. La hoja queda guardada en tu Google Drive y el sistema genera además un backup JSON automático por día.</p>
+        <p>La app conserva una copia local y, cuando hay internet, sincroniza órdenes, Cleris y cierres de caja con una base central en Google Sheets. La hoja queda guardada en tu Google Drive y el sistema genera además un backup JSON automático por día.</p>
         <label>URL del Web App de Google Apps Script</label>
         <input id="cloudUrl" class="cloudurl" value="${esc(cfg.url)}" placeholder="https://script.google.com/macros/s/.../exec">
         <label style="margin-top:10px">Clave privada de sincronización</label>
@@ -651,7 +664,7 @@ function renderBackup(){
     <div class="panelhead"><div><div class="eyebrow">COPIA MANUAL</div><h3>Backup local</h3></div><span class="badge">${rows.length} órdenes · ${events.length} eventos</span></div>
     <div class="backupstatus ${st.className}"><div><strong>${esc(st.title)}</strong></div><div>${esc(st.text)}</div></div>
     <div class="backupbox">
-      <div class="info"><h4>Exportar copia externa</h4><p>Descarga órdenes del taller y eventos de Cleris en un único archivo JSON. Es una segunda seguridad además de Drive.</p><button class="btn primary" onclick="exportData()">Descargar copia</button> <button class="btn secondary" onclick="runHealthCheck()">Revisar sistema</button></div>
+      <div class="info"><h4>Exportar copia externa</h4><p>Descarga órdenes del taller, eventos de Cleris y cierres de caja en un único archivo JSON. Es una segunda seguridad además de Drive.</p><button class="btn primary" onclick="exportData()">Descargar copia</button> <button class="btn secondary" onclick="runHealthCheck()">Revisar sistema</button></div>
       <div class="info"><h4>Importar copia</h4><p>Restaura una copia exportada previamente. Si la nube está activa, después se vuelve a sincronizar.</p><input id="importFile" type="file" accept=".json" style="margin-bottom:10px"><button class="btn secondary" onclick="importData()">Importar copia</button></div>
     </div>
   </section>
@@ -662,7 +675,7 @@ function renderBackup(){
   </section>`;
 }
 function exportData(){
-  let payload={app:'NQN Service',version:5,edicion:'nube-drive-sync',exportado:nowISO(),ordenes:load(),cleriseventos:loadEvents(),settings:{lastSave:getSettings().lastSave||null}};
+  let payload={app:'NQN Service',version:5,edicion:'nube-drive-sync',exportado:nowISO(),ordenes:load(),cleriseventos:loadEvents(),cierrescaja:(typeof loadCashClosings==='function'?loadCashClosings():[]),settings:{lastSave:getSettings().lastSave||null}};
   let blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='NQN_SERVICE_BACKUP_'+localISODate()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);let s=getSettings();s.lastExternalBackup=nowISO();setSettings(s);toast('Copia externa descargada');setTimeout(renderBackup,300)
 }
 function importData(){
@@ -675,6 +688,7 @@ function importData(){
     let normalized=ensureClientNumbers(source.map(normalizeOrder));
     save(normalized,'Antes de importar copia');
     if(x&&Array.isArray(x.cleriseventos))saveEvents(x.cleriseventos);
+    if(x&&Array.isArray(x.cierrescaja)&&typeof saveCashClosings==='function')saveCashClosings(x.cierrescaja);
     let s=getSettings();s.cloudEverSynced=false;setSettings(s);setCloudQueue([]);
     toast('Copia restaurada');
     renderBackup();
@@ -709,5 +723,6 @@ setInterval(()=>{updateNetworkStatus();if(document.visibilityState==='visible'&&
 boot();
 </script>
   <script src="turnos.js"></script>
+  <script src="caja.js"></script>
 </body>
 </html>
