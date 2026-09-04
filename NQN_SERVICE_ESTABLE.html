@@ -53,7 +53,7 @@ button,input,select,textarea{font:inherit}.shell{min-height:100vh;display:grid;g
 <body>
 <div class="shell">
   <aside class="sidebar">
-    <div class="brand"><div class="brandmark">NQN</div><div><div class="brandname">NQN Service</div><div class="brandsub">Gestión técnica · Nube</div></div></div>
+    <div class="brand"><div class="brandmark">NQN</div><div><div class="brandname">NQN Service</div><div class="brandsub">Gestión técnica · V9 completa</div></div></div>
     <div class="nav">
       <button id="nav-dashboard" class="active" onclick="showView('dashboard')">⌂ Dashboard</button>
       <button id="nav-nuevo" onclick="newOrder()">＋ Nuevo ingreso</button>
@@ -94,8 +94,8 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredIns
 window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;updateInstallButton();toast('NQN Service instalada')});
 function updateInstallButton(){let b=document.getElementById('installPwaBtn');if(b)b.classList.toggle('show',!!deferredInstallPrompt)}
 async function installPwa(){if(!deferredInstallPrompt){alert('Si Chrome no muestra la instalación todavía, recargá la página una vez y volvé a intentar.');return}deferredInstallPrompt.prompt();try{await deferredInstallPrompt.userChoice}catch(e){}deferredInstallPrompt=null;updateInstallButton()}
-const OFFLINE_CACHE='nqn-service-v8-offline';
-const OFFLINE_ASSETS=['./','./index.html','./NQN_SERVICE_ESTABLE.html','./manifest.webmanifest','./caja.js','./icons/icon-192.png','./icons/icon-512.png'];
+const OFFLINE_CACHE='nqn-service-v9-completa';
+const OFFLINE_ASSETS=['./','./index.html','./NQN_SERVICE_ESTABLE.html','./manifest.webmanifest','./turnos.js','./icons/icon-192.png','./icons/icon-512.png'];
 let swReloading=false;
 async function ensureOfflineReady(){
   if(!('serviceWorker' in navigator)||!location.protocol.startsWith('http'))return false;
@@ -720,9 +720,281 @@ window.addEventListener('offline',()=>{updateNetworkStatus();toast('Modo sin con
 window.addEventListener('online',()=>{updateNetworkStatus();toast('Internet disponible · sincronizando');if(cloudConfigured())cloudSync(true)});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){updateNetworkStatus();if(cloudConfigured()&&navigator.onLine)cloudSync(true)}});
 setInterval(()=>{updateNetworkStatus();if(document.visibilityState==='visible'&&cloudConfigured()&&navigator.onLine)cloudSync(true)},30000);
-boot();
+window.__nqnLegacyBoot=boot;
 </script>
   <script src="turnos.js"></script>
-  <script src="caja.js"></script>
+  <script>
+/* NQN Service V9 Completa
+   Caja diaria + operadores + PIN + roles + sincronización con Drive.
+   No guarda PIN en texto plano: almacena un hash.
+*/
+(() => {
+  const KEY_CASH = 'nqn_service_cash_closings_v2';
+  const KEY_CASH_MIRROR = 'nqn_service_cash_closings_v2_mirror';
+  const KEY_CASH_OLD = 'nqn_service_cash_closings_v1';
+  const KEY_CASH_OLD_MIRROR = 'nqn_service_cash_closings_v1_mirror';
+  const KEY_OPERATORS = 'nqn_service_operators_v1';
+  const KEY_OPERATORS_MIRROR = 'nqn_service_operators_v1_mirror';
+  const KEY_SESSION = 'nqn_service_operator_session_v1';
+  const ADMIN_VIEWS = new Set(['dashboard','kpis','cleris','backup','operadores']);
+
+  const coreShowView = window.showView;
+  const coreRenderDashboard = window.renderDashboard;
+  const coreRenderKPIs = window.renderKPIs;
+  const coreRenderCleris = window.renderCleris;
+  const coreRenderBackup = window.renderBackup;
+
+  function parseJSON(text, fallback){ try{return JSON.parse(text)}catch(e){return fallback} }
+  function readArray(key){ const x=parseJSON(localStorage.getItem(key)||'[]',[]); return Array.isArray(x)?x:[]; }
+  function localDay(){ return typeof localISODate==='function'?localISODate():new Date().toISOString().slice(0,10); }
+  function now(){ return typeof nowISO==='function'?nowISO():new Date().toISOString(); }
+  function e(v){ return typeof esc==='function'?esc(v):String(v??'').replace(/[&<>"']/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s])); }
+  function m(v){ return typeof money==='function'?money(v):'$'+Number(v||0).toLocaleString('es-AR',{maximumFractionDigits:0}); }
+  function dateLabel(v){ return typeof prettyDate==='function'?prettyDate(v):v||'-'; }
+  function dtLabel(v){ return typeof prettyDateTime==='function'?prettyDateTime(v):v||'-'; }
+  function uid(prefix){ return (crypto.randomUUID?crypto.randomUUID():prefix+'-'+Date.now()+'-'+Math.random().toString(36).slice(2)); }
+
+  async function hashPin(pin){
+    const raw='NQN_SERVICE_PIN|'+String(pin||'');
+    if(window.crypto&&crypto.subtle&&window.TextEncoder){
+      const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(raw));
+      return Array.from(new Uint8Array(digest)).map(b=>b.toString(16).padStart(2,'0')).join('');
+    }
+    let h=2166136261;
+    for(let i=0;i<raw.length;i++){h^=raw.charCodeAt(i);h=Math.imul(h,16777619)}
+    return 'fnv1a-'+(h>>>0).toString(16);
+  }
+
+  function normalizeOperator(r,index=0){
+    return {
+      id:String(r?.id||('op-'+Date.now()+'-'+index)),
+      nombre:String(r?.nombre||r?.name||'').trim(),
+      rol:String(r?.rol||'operador').toLowerCase()==='admin'?'admin':'operador',
+      activo:r?.activo!==false,
+      pinHash:String(r?.pinHash||''),
+      creado:r?.creado||now(),
+      actualizado:r?.actualizado||r?.creado||now()
+    };
+  }
+  window.normalizeOperator=normalizeOperator;
+  window.loadOperators=function(){
+    let a=readArray(KEY_OPERATORS),b=readArray(KEY_OPERATORS_MIRROR);
+    const src=a.length?a:b;
+    if(!a.length&&b.length){try{localStorage.setItem(KEY_OPERATORS,JSON.stringify(b))}catch(e){}}
+    return src.map(normalizeOperator).filter(x=>x.nombre);
+  };
+  window.saveOperators=function(rows){
+    rows=(Array.isArray(rows)?rows:[]).map(normalizeOperator).filter(x=>x.nombre);
+    localStorage.setItem(KEY_OPERATORS_MIRROR,JSON.stringify(rows));
+    localStorage.setItem(KEY_OPERATORS,JSON.stringify(rows));
+    if(readArray(KEY_OPERATORS).length!==rows.length)throw new Error('No se pudo verificar el guardado de operadores');
+    return rows;
+  };
+
+  function migrateCashIfNeeded(){
+    if(readArray(KEY_CASH).length||readArray(KEY_CASH_MIRROR).length)return;
+    const old=readArray(KEY_CASH_OLD).length?readArray(KEY_CASH_OLD):readArray(KEY_CASH_OLD_MIRROR);
+    if(old.length)try{window.saveCashClosings(old)}catch(e){}
+  }
+  function normalizeCashClosing(r,index=0){
+    return {
+      id:String(r?.id||('caja-'+Date.now()+'-'+index)),fecha:String(r?.fecha||localDay()),
+      operadorId:String(r?.operadorId||''),operador:String(r?.operador||'').trim(),
+      efectivo:Math.max(0,Number(r?.efectivo||0)),mercadoPago:Math.max(0,Number(r?.mercadoPago||0)),
+      tarjetas:Math.max(0,Number(r?.tarjetas||0)),notaCredito:Math.max(0,Number(r?.notaCredito||0)),
+      gastos:Math.max(0,Number(r?.gastos||0)),observaciones:String(r?.observaciones||'').trim(),
+      creado:r?.creado||now(),actualizado:r?.actualizado||r?.creado||now()
+    };
+  }
+  window.normalizeCashClosing=normalizeCashClosing;
+  window.loadCashClosings=function(){
+    let a=readArray(KEY_CASH),b=readArray(KEY_CASH_MIRROR),src=a.length?a:b;
+    if(!a.length&&b.length){try{localStorage.setItem(KEY_CASH,JSON.stringify(b))}catch(e){}}
+    return src.map(normalizeCashClosing);
+  };
+  window.saveCashClosings=function(rows){
+    rows=(Array.isArray(rows)?rows:[]).map(normalizeCashClosing);
+    localStorage.setItem(KEY_CASH_MIRROR,JSON.stringify(rows));localStorage.setItem(KEY_CASH,JSON.stringify(rows));
+    if(readArray(KEY_CASH).length!==rows.length)throw new Error('No se pudo verificar el guardado de caja');
+    return rows;
+  };
+  function cashTotals(r){const ingresos=Number(r.efectivo||0)+Number(r.mercadoPago||0)+Number(r.tarjetas||0);return {ingresos,neto:ingresos-Number(r.notaCredito||0)-Number(r.gastos||0)}}
+
+  function session(){
+    const s=parseJSON(sessionStorage.getItem(KEY_SESSION)||'null',null);if(!s||!s.id)return null;
+    const op=window.loadOperators().find(x=>String(x.id)===String(s.id)&&x.activo);return op||null;
+  }
+  window.currentOperator=session;
+  window.isAdmin=function(){const op=session();return !!op&&op.rol==='admin'};
+  function setSession(op){sessionStorage.setItem(KEY_SESSION,JSON.stringify({id:op.id,at:now()}));updateAuthBar();applyRoleNav()}
+  function clearSession(){sessionStorage.removeItem(KEY_SESSION);updateAuthBar();applyRoleNav()}
+
+  function ensureNavExtras(){
+    const nav=document.querySelector('.nav');if(!nav)return;
+    if(!document.getElementById('nav-caja')){
+      const b=document.createElement('button');b.id='nav-caja';b.innerHTML='▣ Resumen caja';b.onclick=()=>window.showView('caja');
+      const k=document.getElementById('nav-kpis');k?nav.insertBefore(b,k):nav.appendChild(b);
+    }
+    if(!document.getElementById('nav-operadores')){
+      const b=document.createElement('button');b.id='nav-operadores';b.innerHTML='♙ Operadores';b.onclick=()=>window.showView('operadores');
+      const backup=document.getElementById('nav-backup');backup?nav.insertBefore(b,backup):nav.appendChild(b);
+    }
+    const top=document.querySelector('.top > div:last-child');
+    if(top&&!document.getElementById('authStatus')){
+      const d=document.createElement('div');d.id='authStatus';top.insertBefore(d,top.firstChild);
+    }
+    updateAuthBar();applyRoleNav();
+  }
+  function updateAuthBar(){
+    const el=document.getElementById('authStatus');if(!el)return;const op=session();
+    if(!op){el.innerHTML='<span class="badge">V9 completa</span>';return}
+    el.innerHTML=`<button class="btn secondary small" type="button" onclick="logoutOperator()">👤 ${e(op.nombre)} · Salir</button>`;
+  }
+  function applyRoleNav(){
+    const op=session(),admin=!!op&&op.rol==='admin';
+    ['nav-dashboard','nav-kpis','nav-cleris','nav-backup','nav-operadores'].forEach(id=>{const x=document.getElementById(id);if(x)x.style.display=admin?'':'none'});
+    ['nav-nuevo','nav-ordenes','nav-clientes','nav-caja'].forEach(id=>{const x=document.getElementById(id);if(x)x.style.display=op?'':'none'});
+    const t=document.getElementById('nav-turnos');if(t)t.style.display=op?'':'none';
+  }
+  window.logoutOperator=function(){clearSession();renderLoginOrSetup()};
+
+  function renderLoginOrSetup(){
+    ensureNavExtras();document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));
+    const ops=window.loadOperators();
+    if(!ops.length)return renderFirstAdmin();
+    const active=ops.filter(x=>x.activo);
+    title('Ingreso de operador');
+    document.getElementById('view').innerHTML=`<section class="panel" style="max-width:560px;margin:40px auto 0"><div class="panelhead"><div><div class="eyebrow">ACCESO</div><h3>Ingresar a NQN Service</h3></div><span class="badge">V9 completa</span></div>${active.length?`<form class="grid" style="grid-template-columns:1fr" onsubmit="loginOperator(event)"><div class="field"><label>Operador</label><select id="loginOperator" required>${active.map(o=>`<option value="${e(o.id)}">${e(o.nombre)}</option>`).join('')}</select></div><div class="field"><label>PIN</label><input id="loginPin" type="password" inputmode="numeric" autocomplete="current-password" required autofocus></div><div class="actions"><button class="btn primary" type="submit">Ingresar</button></div></form>`:'<div class="alert red"><strong>No hay operadores activos</strong><span>Se necesita un administrador activo para continuar.</span></div>'}</section>`;
+    applyRoleNav();
+  }
+  function renderFirstAdmin(){
+    title('Configuración inicial');
+    document.getElementById('view').innerHTML=`<section class="panel" style="max-width:620px;margin:40px auto 0"><div class="panelhead"><div><div class="eyebrow">PRIMER INGRESO</div><h3>Crear administrador</h3></div><span class="badge">Se hace una sola vez</span></div><p class="sectionnote">Creá el primer usuario administrador. Después vas a poder agregar, editar, desactivar o eliminar operadores desde la aplicación.</p><form class="grid" style="grid-template-columns:1fr" onsubmit="createFirstAdmin(event)"><div class="field"><label>Nombre *</label><input id="firstAdminName" required autofocus placeholder="Nombre del administrador"></div><div class="field"><label>PIN *</label><input id="firstAdminPin" type="password" inputmode="numeric" minlength="4" required></div><div class="field"><label>Repetir PIN *</label><input id="firstAdminPin2" type="password" inputmode="numeric" minlength="4" required></div><div class="actions"><button class="btn primary" type="submit">Crear administrador</button></div></form></section>`;
+    applyRoleNav();
+  }
+  window.createFirstAdmin=async function(ev){
+    ev.preventDefault();const nombre=document.getElementById('firstAdminName').value.trim(),p1=document.getElementById('firstAdminPin').value,p2=document.getElementById('firstAdminPin2').value;
+    if(p1!==p2){alert('Los PIN no coinciden.');return}if(p1.length<4){alert('El PIN debe tener al menos 4 caracteres.');return}
+    const ts=now(),op=normalizeOperator({id:uid('op'),nombre,rol:'admin',activo:true,pinHash:await hashPin(p1),creado:ts,actualizado:ts});
+    window.saveOperators([op]);if(typeof queueCloudOp==='function')queueCloudOp('upsertOperator',op.id,op,op.actualizado);setSession(op);toast('Administrador creado');afterLogin();
+  };
+  window.loginOperator=async function(ev){
+    ev.preventDefault();const id=document.getElementById('loginOperator').value,pin=document.getElementById('loginPin').value,op=window.loadOperators().find(x=>String(x.id)===String(id)&&x.activo);
+    if(!op){alert('Operador no disponible.');return}const h=await hashPin(pin);if(h!==op.pinHash){alert('PIN incorrecto.');document.getElementById('loginPin').select();return}
+    setSession(op);afterLogin();
+  };
+  function afterLogin(){
+    ensureNavExtras();applyRoleNav();updateAuthBar();const op=session();
+    if(!op)return renderLoginOrSetup();
+    if(op.rol==='admin')window.renderDashboard();else window.newOrder();
+  }
+
+  window.queueCloudOp=function(type,id,data=null,at=(typeof nowISO==='function'?nowISO():now())){
+    let low=String(type||'').toLowerCase(),entity=low.includes('operator')?'operator':(low.includes('cash')?'cash':(low.includes('event')?'event':'order'));
+    let q=cloudQueue().filter(op=>!(op.entity===entity&&String(op.id)===String(id)));
+    q.push({opId:uid('q'),type,entity,id:String(id),at,data});setCloudQueue(q);updateNetworkStatus();cloudAutoSyncSoon();
+  };
+  window.bootstrapCloudQueue=function(){
+    let s=getSettings();if(s.cloudEverSynced)return;let q=cloudQueue(),seen=new Set(q.map(x=>x.entity+':'+x.id));
+    load().forEach(r=>{let k='order:'+r.id;if(!seen.has(k)){q.push({opId:'boot-o-'+r.id,type:'upsertOrder',entity:'order',id:String(r.id),at:r.actualizado||r.creado||now(),data:r});seen.add(k)}});
+    loadEvents().forEach(r=>{let k='event:'+r.id;if(!seen.has(k)){q.push({opId:'boot-e-'+r.id,type:'upsertEvent',entity:'event',id:String(r.id),at:r.actualizado||r.creado||now(),data:r});seen.add(k)}});
+    window.loadCashClosings().forEach(r=>{let k='cash:'+r.id;if(!seen.has(k)){q.push({opId:'boot-c-'+r.id,type:'upsertCash',entity:'cash',id:String(r.id),at:r.actualizado||r.creado||now(),data:r});seen.add(k)}});
+    window.loadOperators().forEach(r=>{let k='operator:'+r.id;if(!seen.has(k)){q.push({opId:'boot-p-'+r.id,type:'upsertOperator',entity:'operator',id:String(r.id),at:r.actualizado||r.creado||now(),data:r});seen.add(k)}});
+    setCloudQueue(q);
+  };
+  window.opReflected=function(op,state){
+    const rows=op.entity==='order'?(state.ordenes||[]):op.entity==='cash'?(state.cierrescaja||[]):op.entity==='operator'?(state.operadores||[]):(state.cleriseventos||[]);
+    const hit=rows.find(x=>String(x.id)===String(op.id));if(String(op.type||'').startsWith('delete'))return !hit;if(!hit)return false;
+    const remoteAt=new Date(hit.actualizado||hit.creado||0).getTime(),localAt=new Date(op.at||op.data?.actualizado||op.data?.creado||0).getTime();return !localAt||remoteAt>=localAt;
+  };
+  window.applyCloudState=function(state,pending=[]){
+    const pOrders=new Set(pending.filter(x=>x.entity==='order').map(x=>String(x.id))),pEvents=new Set(pending.filter(x=>x.entity==='event').map(x=>String(x.id))),pCash=new Set(pending.filter(x=>x.entity==='cash').map(x=>String(x.id))),pOps=new Set(pending.filter(x=>x.entity==='operator').map(x=>String(x.id)));
+    const dCash=new Set(pending.filter(x=>x.entity==='cash'&&x.type==='deleteCash').map(x=>String(x.id))),dOps=new Set(pending.filter(x=>x.entity==='operator'&&x.type==='deleteOperator').map(x=>String(x.id)));
+    let ro=Array.isArray(state.ordenes)?ensureClientNumbers(state.ordenes.map(normalizeOrder)):[],re=Array.isArray(state.cleriseventos)?state.cleriseventos:[],rc=Array.isArray(state.cierrescaja)?state.cierrescaja.map(normalizeCashClosing):[],rp=Array.isArray(state.operadores)?state.operadores.map(normalizeOperator):[];
+    if(pOrders.size){let map=new Map(ro.map(x=>[String(x.id),x]));load().forEach(x=>{if(pOrders.has(String(x.id)))map.set(String(x.id),x)});ro=ensureClientNumbers([...map.values()].map(normalizeOrder))}
+    if(pEvents.size){let map=new Map(re.map(x=>[String(x.id),x]));loadEvents().forEach(x=>{if(pEvents.has(String(x.id)))map.set(String(x.id),x)});re=[...map.values()]}
+    if(dCash.size)rc=rc.filter(x=>!dCash.has(String(x.id)));if(pCash.size){let map=new Map(rc.map(x=>[String(x.id),x]));window.loadCashClosings().forEach(x=>{if(pCash.has(String(x.id)))map.set(String(x.id),x)});rc=[...map.values()]}
+    if(dOps.size)rp=rp.filter(x=>!dOps.has(String(x.id)));if(pOps.size){let map=new Map(rp.map(x=>[String(x.id),x]));window.loadOperators().forEach(x=>{if(pOps.has(String(x.id)))map.set(String(x.id),x)});rp=[...map.values()]}
+    writeRowsKey(KEY_MIRROR,ro);writeRowsKey(KEY,ro);saveEvents(re);window.saveCashClosings(rc);window.saveOperators(rp);
+  };
+  window.refreshViewAfterCloudSync=function(){
+    const op=session();if(!op){renderLoginOrSetup();return}applyRoleNav();updateAuthBar();
+    if(currentView==='nuevo'||currentView==='editar')return;
+    const renderers={dashboard:window.renderDashboard,ordenes:renderOrders,clientes:renderClients,kpis:window.renderKPIs,cleris:window.renderCleris,caja:window.showCashSummary,operadores:window.renderOperators,backup:window.renderBackup};
+    const fn=renderers[currentView];if(typeof fn==='function')fn();
+  };
+
+  window.showView=function(v){
+    if(!session()){renderLoginOrSetup();return}
+    if(ADMIN_VIEWS.has(v)&&!window.isAdmin()){toast('Esta sección es solo para administrador');window.newOrder();return}
+    if(v==='caja')return window.showCashSummary();if(v==='operadores')return window.renderOperators();return coreShowView(v);
+  };
+  window.renderDashboard=function(){if(!window.isAdmin())return window.newOrder();return coreRenderDashboard()};
+  window.renderKPIs=function(){if(!window.isAdmin())return window.newOrder();return coreRenderKPIs()};
+  window.renderCleris=function(){if(!window.isAdmin())return window.newOrder();return coreRenderCleris()};
+  window.renderBackup=function(){if(!window.isAdmin())return window.newOrder();return coreRenderBackup()};
+
+  function cashValue(id){return document.getElementById(id)?.value??''}function cashNum(id){return Math.max(0,Number(cashValue(id)||0))}
+  function cashPreview(){const t=cashTotals({efectivo:cashNum('cashEfectivo'),mercadoPago:cashNum('cashMP'),tarjetas:cashNum('cashTarjetas'),notaCredito:cashNum('cashNC'),gastos:cashNum('cashGastos')});const a=document.getElementById('cashTotal'),b=document.getElementById('cashNeto');if(a)a.textContent=m(t.ingresos);if(b)b.textContent=m(t.neto)}
+  window.showCashSummary=function(editId=''){
+    const op=session();if(!op)return renderLoginOrSetup();currentView='caja';editingId=null;setNav('caja');title('Resumen de caja diario');
+    const all=window.loadCashClosings(),hit=editId?all.find(x=>String(x.id)===String(editId)):null;
+    if(hit&&!window.isAdmin()&&String(hit.operadorId||'')!==String(op.id)&&String(hit.operador||'').toLowerCase()!==op.nombre.toLowerCase()){toast('No podés editar el cierre de otro operador');return window.showCashSummary()}
+    const r=hit||{fecha:localDay(),operadorId:op.id,operador:op.nombre,efectivo:0,mercadoPago:0,tarjetas:0,notaCredito:0,gastos:0,observaciones:''},tt=cashTotals(r);
+    const visible=window.isAdmin()?all:all.filter(x=>String(x.operadorId||'')===String(op.id)||(!x.operadorId&&String(x.operador||'').toLowerCase()===op.nombre.toLowerCase()));
+    const sorted=[...visible].sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha))||String(b.actualizado).localeCompare(String(a.actualizado)));
+    document.getElementById('view').innerHTML=`<section class="panel" style="margin-top:0"><div class="panelhead"><div><div class="eyebrow">CIERRE DIARIO</div><h3>${hit?'Editar cierre':'Cargar cierre del día'}</h3></div><span class="badge">Operador: ${e(r.operador)}</span></div><form class="grid" onsubmit="submitCashSummary(event,'${e(hit?.id||'')}')"><div class="field short"><label>Fecha *</label><input id="cashFecha" type="date" value="${e(r.fecha)}" required></div><div class="field"><label>Operador</label><input value="${e(r.operador)}" readonly></div><div class="field"><label>Efectivo</label><input id="cashEfectivo" class="cashNumber" type="number" min="0" step="1000" value="${Number(r.efectivo||0)}"></div><div class="field"><label>Mercado Pago / transferencias</label><input id="cashMP" class="cashNumber" type="number" min="0" step="1000" value="${Number(r.mercadoPago||0)}"></div><div class="field"><label>Tarjeta crédito / débito</label><input id="cashTarjetas" class="cashNumber" type="number" min="0" step="1000" value="${Number(r.tarjetas||0)}"></div><div class="field"><label>Nota de crédito</label><input id="cashNC" class="cashNumber" type="number" min="0" step="1000" value="${Number(r.notaCredito||0)}"></div><div class="field"><label>Gastos</label><input id="cashGastos" class="cashNumber" type="number" min="0" step="1000" value="${Number(r.gastos||0)}"></div><div class="field full"><label>Observaciones</label><input id="cashObs" value="${e(r.observaciones)}" placeholder="Opcional"></div><div class="field full"><div class="stats" style="grid-template-columns:1fr 1fr;margin:5px 0"><div class="stat soft"><div class="statlabel">Total cobrado</div><div id="cashTotal" class="statvalue smallmoney">${m(tt.ingresos)}</div></div><div class="stat"><div class="statlabel">Neto del día</div><div id="cashNeto" class="statvalue smallmoney">${m(tt.neto)}</div><div class="stathelp">Cobrado − notas de crédito − gastos</div></div></div></div><div class="actions full">${hit?'<button type="button" class="btn secondary" onclick="showCashSummary()">Cancelar</button>':''}<button class="btn primary" type="submit">${hit?'Guardar cambios':'Guardar cierre'}</button></div></form></section><section class="panel"><div class="panelhead"><div><div class="eyebrow">HISTORIAL</div><h3>${window.isAdmin()?'Todos los cierres':'Mis cierres'}</h3></div><span class="badge">${visible.length}</span></div>${sorted.length?`<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Operador</th><th>Total</th><th>Nota crédito</th><th>Gastos</th><th>Neto</th><th></th></tr></thead><tbody>${sorted.slice(0,100).map(x=>{const t=cashTotals(x);return `<tr><td><strong>${dateLabel(x.fecha)}</strong></td><td>${e(x.operador)}</td><td><strong>${m(t.ingresos)}</strong></td><td>${m(x.notaCredito)}</td><td>${m(x.gastos)}</td><td><strong>${m(t.neto)}</strong></td><td class="right nowrap"><button class="btn secondary small" onclick="showCashSummary('${e(x.id)}')">Editar</button>${window.isAdmin()?` <button class="btn danger small" onclick="deleteCashSummary('${e(x.id)}')">Eliminar</button>`:''}</td></tr>`}).join('')}</tbody></table></div>`:'<div class="empty">Todavía no hay cierres de caja.</div>'}</section>`;
+    document.querySelectorAll('.cashNumber').forEach(x=>x.addEventListener('input',cashPreview));
+  };
+  window.submitCashSummary=function(ev,editId=''){
+    ev.preventDefault();const op=session();if(!op)return renderLoginOrSetup();let rows=window.loadCashClosings(),old=editId?rows.find(x=>String(x.id)===String(editId)):null;
+    if(old&&!window.isAdmin()&&String(old.operadorId||'')!==String(op.id)&&String(old.operador||'').toLowerCase()!==op.nombre.toLowerCase()){alert('No podés modificar el cierre de otro operador.');return}
+    const owner=old||{operadorId:op.id,operador:op.nombre},ts=now(),obj=normalizeCashClosing({id:editId||uid('caja'),fecha:cashValue('cashFecha'),operadorId:owner.operadorId||op.id,operador:owner.operador||op.nombre,efectivo:cashNum('cashEfectivo'),mercadoPago:cashNum('cashMP'),tarjetas:cashNum('cashTarjetas'),notaCredito:cashNum('cashNC'),gastos:cashNum('cashGastos'),observaciones:String(cashValue('cashObs')||'').trim(),creado:old?.creado||ts,actualizado:ts});
+    const dup=rows.find(x=>String(x.id)!==String(editId)&&x.fecha===obj.fecha&&((x.operadorId&&x.operadorId===obj.operadorId)||(!x.operadorId&&String(x.operador).toLowerCase()===obj.operador.toLowerCase())));if(dup&&!confirm('Ya existe un cierre para esta fecha y operador. ¿Guardar otro igualmente?'))return;
+    if(editId){const i=rows.findIndex(x=>String(x.id)===String(editId));i>=0?rows[i]=obj:rows.push(obj)}else rows.push(obj);window.saveCashClosings(rows);queueCloudOp('upsertCash',obj.id,obj,obj.actualizado);toast(editId?'Cierre actualizado':'Cierre guardado');window.showCashSummary();
+  };
+  window.deleteCashSummary=function(id){if(!window.isAdmin()){toast('Solo el administrador puede eliminar cierres');return}const rows=window.loadCashClosings(),x=rows.find(r=>String(r.id)===String(id));if(!x)return;if(!confirm('¿Eliminar el cierre de '+dateLabel(x.fecha)+' de '+x.operador+'?'))return;window.saveCashClosings(rows.filter(r=>String(r.id)!==String(id)));queueCloudOp('deleteCash',id,null,now());toast('Cierre eliminado');window.showCashSummary()};
+
+  window.renderOperators=function(editId=''){
+    if(!window.isAdmin())return window.newOrder();currentView='operadores';editingId=null;setNav('operadores');title('Operadores');
+    const rows=window.loadOperators(),r=editId?rows.find(x=>String(x.id)===String(editId)):null;
+    document.getElementById('view').innerHTML=`<section class="panel" style="margin-top:0"><div class="panelhead"><div><div class="eyebrow">ACCESOS</div><h3>${r?'Editar operador':'Nuevo operador'}</h3></div><span class="badge">${rows.filter(x=>x.activo).length} activos</span></div><form class="grid" onsubmit="saveOperatorForm(event,'${e(r?.id||'')}')"><div class="field"><label>Nombre *</label><input id="opName" value="${e(r?.nombre||'')}" required></div><div class="field"><label>Rol</label><select id="opRole"><option value="operador" ${r?.rol!=='admin'?'selected':''}>Operador</option><option value="admin" ${r?.rol==='admin'?'selected':''}>Administrador</option></select></div><div class="field"><label>${r?'Nuevo PIN (dejar vacío para conservar)':'PIN *'}</label><input id="opPin" type="password" inputmode="numeric" ${r?'':'required'} minlength="4"></div><div class="field"><label>Estado</label><select id="opActive"><option value="1" ${r?.activo!==false?'selected':''}>Activo</option><option value="0" ${r?.activo===false?'selected':''}>Inactivo</option></select></div><div class="actions full">${r?'<button type="button" class="btn secondary" onclick="renderOperators()">Cancelar</button>':''}<button class="btn primary" type="submit">${r?'Guardar cambios':'Agregar operador'}</button></div></form><p class="sectionnote">Si un operador ya tiene cierres de caja, conviene desactivarlo en lugar de eliminarlo para conservar el historial.</p></section><section class="panel"><div class="panelhead"><div><div class="eyebrow">LISTADO</div><h3>Operadores configurados</h3></div></div>${rows.length?`<div class="tablewrap"><table><thead><tr><th>Nombre</th><th>Rol</th><th>Estado</th><th>Última actualización</th><th></th></tr></thead><tbody>${rows.sort((a,b)=>a.nombre.localeCompare(b.nombre,'es')).map(x=>`<tr><td><strong>${e(x.nombre)}</strong></td><td>${x.rol==='admin'?'Administrador':'Operador'}</td><td><span class="badge ${x.activo?'green':'red'}">${x.activo?'Activo':'Inactivo'}</span></td><td>${dtLabel(x.actualizado)}</td><td class="right nowrap"><button class="btn secondary small" onclick="renderOperators('${e(x.id)}')">Editar</button> <button class="btn ${x.activo?'danger':'success'} small" onclick="toggleOperator('${e(x.id)}')">${x.activo?'Desactivar':'Activar'}</button> <button class="btn danger small" onclick="deleteOperator('${e(x.id)}')">Eliminar</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No hay operadores.</div>'}</section>`;
+  };
+  function activeAdmins(rows){return rows.filter(x=>x.activo&&x.rol==='admin')}
+  window.saveOperatorForm=async function(ev,id=''){
+    ev.preventDefault();let rows=window.loadOperators(),old=id?rows.find(x=>String(x.id)===String(id)):null,name=document.getElementById('opName').value.trim(),role=document.getElementById('opRole').value==='admin'?'admin':'operador',active=document.getElementById('opActive').value==='1',pin=document.getElementById('opPin').value;
+    if(!name)return;if(!old&&!pin){alert('Ingresá un PIN.');return}if(pin&&pin.length<4){alert('El PIN debe tener al menos 4 caracteres.');return}
+    const current=session();if(old&&current&&String(old.id)===String(current.id)&&!active){alert('No podés desactivar el usuario con el que estás trabajando.');return}
+    if(old&&old.rol==='admin'&&(role!=='admin'||!active)&&activeAdmins(rows).length<=1){alert('Tiene que quedar al menos un administrador activo.');return}
+    const ts=now(),obj=normalizeOperator({id:id||uid('op'),nombre:name,rol:role,activo:active,pinHash:pin?await hashPin(pin):(old?.pinHash||''),creado:old?.creado||ts,actualizado:ts});
+    const dup=rows.find(x=>String(x.id)!==String(obj.id)&&x.nombre.toLowerCase()===name.toLowerCase());if(dup){alert('Ya existe un operador con ese nombre.');return}
+    if(old){const i=rows.findIndex(x=>String(x.id)===String(id));rows[i]=obj}else rows.push(obj);window.saveOperators(rows);queueCloudOp('upsertOperator',obj.id,obj,obj.actualizado);if(current&&String(current.id)===String(obj.id))setSession(obj);toast(old?'Operador actualizado':'Operador agregado');window.renderOperators();
+  };
+  window.toggleOperator=function(id){let rows=window.loadOperators(),x=rows.find(r=>String(r.id)===String(id));if(!x)return;const current=session();if(current&&String(current.id)===String(id)&&x.activo){alert('No podés desactivar el usuario con el que estás trabajando.');return}if(x.rol==='admin'&&x.activo&&activeAdmins(rows).length<=1){alert('Tiene que quedar al menos un administrador activo.');return}x.activo=!x.activo;x.actualizado=now();window.saveOperators(rows);queueCloudOp('upsertOperator',x.id,x,x.actualizado);toast(x.activo?'Operador activado':'Operador desactivado');window.renderOperators()};
+  window.deleteOperator=function(id){let rows=window.loadOperators(),x=rows.find(r=>String(r.id)===String(id));if(!x)return;const current=session();if(current&&String(current.id)===String(id)){alert('No podés eliminar el usuario con el que estás trabajando.');return}if(x.rol==='admin'&&x.activo&&activeAdmins(rows).length<=1){alert('Tiene que quedar al menos un administrador activo.');return}const used=window.loadCashClosings().some(c=>String(c.operadorId||'')===String(x.id)||(!c.operadorId&&String(c.operador||'').toLowerCase()===x.nombre.toLowerCase()));if(used){alert('Este operador tiene historial de caja. No se elimina: desactivalo para conservar el registro.');return}if(!confirm('¿Eliminar definitivamente a '+x.nombre+'?'))return;window.saveOperators(rows.filter(r=>String(r.id)!==String(id)));queueCloudOp('deleteOperator',id,null,now());toast('Operador eliminado');window.renderOperators()};
+
+  window.exportData=function(){
+    const payload={app:'NQN Service',version:9,edicion:'completa-caja-operadores',exportado:now(),ordenes:load(),cleriseventos:loadEvents(),cierrescaja:window.loadCashClosings(),operadores:window.loadOperators(),settings:{lastSave:getSettings().lastSave||null}};
+    const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='NQN_SERVICE_BACKUP_'+localDay()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);let s=getSettings();s.lastExternalBackup=now();setSettings(s);toast('Copia externa descargada');setTimeout(()=>window.renderBackup(),300)
+  };
+  window.importData=function(){
+    const f=document.getElementById('importFile')?.files?.[0];if(!f){alert('Elegí un archivo de copia primero.');return}const reader=new FileReader();reader.onload=()=>{try{const x=JSON.parse(reader.result),source=Array.isArray(x)?x:x.ordenes;if(!Array.isArray(source))throw new Error();if(!confirm('¿Reemplazar los datos actuales por esta copia?'))return;save(ensureClientNumbers(source.map(normalizeOrder)),'Antes de importar copia');if(Array.isArray(x.cleriseventos))saveEvents(x.cleriseventos);if(Array.isArray(x.cierrescaja))window.saveCashClosings(x.cierrescaja);if(Array.isArray(x.operadores))window.saveOperators(x.operadores);let s=getSettings();s.cloudEverSynced=false;setSettings(s);setCloudQueue([]);clearSession();toast('Copia restaurada');cloudAutoSyncSoon();renderLoginOrSetup()}catch(err){alert('El archivo no parece ser una copia válida de NQN Service.')}};reader.readAsText(f)
+  };
+  window.runHealthCheck=function(){
+    const problems=[];if(!storageSelfTest())problems.push('El navegador no permite almacenamiento local.');const primary=readRowsKey(KEY),mirror=readRowsKey(KEY_MIRROR);if(!validRows(primary))problems.push('La copia principal de órdenes no es válida.');if(!validRows(mirror))problems.push('La copia espejo de órdenes no es válida.');if(validRows(primary)&&validRows(mirror)&&primary.length!==mirror.length)problems.push('Principal y espejo de órdenes tienen distinta cantidad.');if(loadEventsKey(KEY_EVENTS).length!==loadEventsKey(KEY_EVENTS_MIRROR).length)problems.push('Las copias de Cleris no coinciden.');if(readArray(KEY_CASH).length!==readArray(KEY_CASH_MIRROR).length)problems.push('Las copias de caja no coinciden.');if(readArray(KEY_OPERATORS).length!==readArray(KEY_OPERATORS_MIRROR).length)problems.push('Las copias de operadores no coinciden.');if(!activeAdmins(window.loadOperators()).length)problems.push('No hay administrador activo.');if(problems.length){alert('Revisión del sistema\n\n'+problems.join('\n'));return false}alert('Sistema OK.\n\nÓrdenes: '+load().length+'\nCleris: '+loadEvents().length+'\nCierres de caja: '+window.loadCashClosings().length+'\nOperadores: '+window.loadOperators().length+'\nAdministrador activo: OK');return true
+  };
+
+  window.secureBoot=async function(){
+    ensureNavExtras();if(!storageSelfTest()){document.getElementById('view').innerHTML='<section class="panel"><h3>No se puede iniciar el almacenamiento local</h3><p>Esta versión necesita Microsoft Edge o Google Chrome.</p></section>';return}
+    migrateIfNeeded();try{saveEvents(loadEvents())}catch(e){}migrateCashIfNeeded();try{window.saveCashClosings(window.loadCashClosings())}catch(e){}try{window.saveOperators(window.loadOperators())}catch(e){}updateNetworkStatus();
+    if(cloudConfigured()&&navigator.onLine){try{await cloudSync(true)}catch(e){}}
+    if(session())afterLogin();else renderLoginOrSetup();
+  };
+
+  ensureNavExtras();
+  window.secureBoot();
+})();
+
+  </script>
 </body>
 </html>
