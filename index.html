@@ -870,7 +870,7 @@ window.__nqnLegacyBoot=boot;
     if(!ops.length)return renderFirstAdmin();
     const active=ops.filter(x=>x.activo);
     title('Ingreso de operador');
-    document.getElementById('view').innerHTML=`<section class="panel" style="max-width:560px;margin:40px auto 0"><div class="panelhead"><div><div class="eyebrow">ACCESO</div><h3>Ingresar a NQN Service</h3></div><span class="badge">V9 completa</span></div>${active.length?`<form class="grid" style="grid-template-columns:1fr" onsubmit="loginOperator(event)"><div class="field"><label>Operador</label><select id="loginOperator" required>${active.map(o=>`<option value="${e(o.id)}">${e(o.nombre)}</option>`).join('')}</select></div><div class="field"><label>PIN</label><input id="loginPin" type="password" inputmode="numeric" autocomplete="current-password" required autofocus><div class="hint">Si tu PIN anterior tenía guion, también podés ingresar solo los números.</div></div><div class="actions"><button class="btn primary" type="submit">Ingresar</button></div></form>`:'<div class="alert red"><strong>No hay operadores activos</strong><span>Se necesita un administrador activo para continuar.</span></div>'}</section>`;
+    document.getElementById('view').innerHTML=`<section class="panel" style="max-width:560px;margin:40px auto 0"><div class="panelhead"><div><div class="eyebrow">ACCESO</div><h3>Ingresar a NQN Service</h3></div><span class="badge">V9.1 PIN FIX</span></div>${active.length?`<form class="grid" style="grid-template-columns:1fr" onsubmit="window.loginOperator(event)"><div class="field"><label>Operador</label><select id="loginOperatorId" required>${active.map(o=>`<option value="${e(o.id)}">${e(o.nombre)}</option>`).join('')}</select></div><div class="field"><label>PIN</label><input id="loginPin" type="password" inputmode="numeric" autocomplete="current-password" required autofocus><div class="hint">Si tu PIN anterior tenía guion, también podés ingresar solo los números.</div></div><div class="actions"><button class="btn primary" type="submit">Ingresar</button></div></form>`:'<div class="alert red"><strong>No hay operadores activos</strong><span>Se necesita un administrador activo para continuar.</span></div>'}</section>`;
     applyRoleNav();
   }
   function renderFirstAdmin(){
@@ -887,7 +887,7 @@ window.__nqnLegacyBoot=boot;
   window.loginOperator=async function(ev){
     ev.preventDefault();
     try{
-      const id=document.getElementById('loginOperator').value;
+      const id=document.getElementById('loginOperatorId').value;
       const input=document.getElementById('loginPin');
       const pin=String(input.value||'').trim();
       const op=window.loadOperators().find(x=>String(x.id)===String(id)&&x.activo);
