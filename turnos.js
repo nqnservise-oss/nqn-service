@@ -25,6 +25,20 @@
   }
   function nowIso(){return new Date().toISOString()}
   function turnId(date,slot){return `${date}|${slot}`}
+  function toLocalEstado(value){
+    const v=String(value||'').trim().toLowerCase();
+    if(v==='confirmado')return 'confirmado';
+    if(v==='realizado'||v==='completado')return 'realizado';
+    if(v==='cancelado')return 'cancelado';
+    return 'pendiente';
+  }
+  function toCloudEstado(value){
+    const v=String(value||'').trim().toLowerCase();
+    if(v==='confirmado')return 'Confirmado';
+    if(v==='realizado'||v==='completado')return 'Completado';
+    if(v==='cancelado')return 'Cancelado';
+    return 'Pendiente';
+  }
 
   function loadTurnos(){
     try{
@@ -43,21 +57,21 @@
       id:String(t.id||turnId(fecha,hora)),fecha,hora,
       cliente:String(t.cliente||''),telefono:String(t.telefono||''),
       direccion:String(t.direccion||t.barrio||''),tipo:TIPOS.includes(t.tipo)?t.tipo:'Retiro',
-      estado:ESTADOS.includes(t.estado)?t.estado:'pendiente',
+      estado:toLocalEstado(t.estado),
       obs:String(t.obs||t.observaciones||''),
       creado:t.creado||t.updatedAt||t.actualizado||nowIso(),
       actualizado:t.actualizado||t.updatedAt||t.creado||nowIso()
     };
   }
   function localTurnToRemote(date,slot,t){
-    const n=normalizeRemoteTurn({
+    return {
       id:turnId(date,slot),fecha:date,hora:slot,
-      cliente:t?.cliente,telefono:t?.telefono,direccion:t?.direccion,
-      tipo:t?.tipo,estado:t?.estado,obs:t?.obs,
+      cliente:String(t?.cliente||''),telefono:String(t?.telefono||''),direccion:String(t?.direccion||''),
+      tipo:TIPOS.includes(t?.tipo)?t.tipo:'Retiro',motivo:String(t?.tipo||''),
+      estado:toCloudEstado(t?.estado),obs:String(t?.obs||''),observaciones:String(t?.obs||''),
       creado:t?.creado||t?.updatedAt||nowIso(),
       actualizado:t?.actualizado||t?.updatedAt||nowIso()
-    });
-    return n;
+    };
   }
   function writeRemoteTurnsToLocal(rows,pendingIds){
     const all=loadTurnos();
@@ -92,8 +106,8 @@
     saveTurnos(all);
     if(typeof window.queueCloudOp==='function'){
       const id=turnId(date,slot);
-      if(value)window.queueCloudOp('upsertTurn',id,localTurnToRemote(date,slot,value),value.actualizado||value.updatedAt||nowIso());
-      else window.queueCloudOp('deleteTurn',id,null,nowIso());
+      if(value)window.queueCloudOp('upsertTurno',id,localTurnToRemote(date,slot,value),value.actualizado||value.updatedAt||nowIso());
+      else window.queueCloudOp('deleteTurno',id,null,nowIso());
     }
   }
 
@@ -133,6 +147,7 @@
   function setActiveNav(){document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));document.getElementById('nav-turnos')?.classList.add('active')}
 
   function renderTurnos(){
+    try{currentView=editingSlot?'turno-form':'turnos'}catch(e){}
     injectStyles();addNavButton();setActiveNav();
     const title=document.getElementById('pageTitle');if(title)title.textContent='Turnos';
     const view=document.getElementById('view');if(!view)return;
@@ -208,7 +223,15 @@
     }
     if(typeof window.refreshViewAfterCloudSync==='function'&&!window.refreshViewAfterCloudSync.__turnosWrapped){
       const base=window.refreshViewAfterCloudSync;
-      const wrapped=function(){if(window.currentView==='turnos'||document.getElementById('nav-turnos')?.classList.contains('active')){renderTurnos();return}return base.apply(this,arguments)};
+      const wrapped=function(){
+        const turnosActive=document.getElementById('nav-turnos')?.classList.contains('active');
+        if(turnosActive){
+          // Mientras se está escribiendo un turno, la sincronización NO redibuja el formulario.
+          if(editingSlot)return;
+          renderTurnos();return;
+        }
+        return base.apply(this,arguments);
+      };
       wrapped.__turnosWrapped=true;window.refreshViewAfterCloudSync=wrapped;
     }
   }
