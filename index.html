@@ -246,11 +246,9 @@ async function cloudSync(silent=false){
   }finally{cloudSyncRunning=false}
 }
 function refreshViewAfterCloudSync(){
-  // No redibujar formularios mientras el usuario carga o edita datos.
-  if(currentView==='nuevo'||currentView==='editar')return;
-  const renderers={dashboard:renderDashboard,ordenes:renderOrders,clientes:renderClients,kpis:renderKPIs,cleris:renderCleris,caja:(typeof showCashSummary==='function'?showCashSummary:null),backup:renderBackup};
-  const fn=renderers[currentView];
-  if(typeof fn==='function')fn();
+  // La sincronización trabaja en segundo plano y NUNCA redibuja la pantalla.
+  // Así ningún formulario se borra mientras el usuario está escribiendo.
+  updateNetworkStatus();
 }
 
 function updateNetworkStatus(){
@@ -795,7 +793,7 @@ window.__nqnLegacyBoot=boot;
 </script>
   <script src="turnos.js"></script>
   <script>
-/* NQN Service V9 Completa
+/* NQN Service V9.5 Completa
    Caja diaria + operadores + PIN + roles + sincronización con Drive.
    No guarda PIN en texto plano: almacena un hash.
 */
@@ -1054,10 +1052,8 @@ window.__nqnLegacyBoot=boot;
     writeRowsKey(KEY_MIRROR,ro);writeRowsKey(KEY,ro);saveEvents(re);window.saveCashClosings(rc);window.saveOperators(rp);
   };
   window.refreshViewAfterCloudSync=function(){
-    const op=session();if(!op){renderLoginOrSetup();return}applyRoleNav();updateAuthBar();
-    if(currentView==='nuevo'||currentView==='editar')return;
-    const renderers={dashboard:window.renderDashboard,ordenes:renderOrders,clientes:renderClients,kpis:window.renderKPIs,cleris:window.renderCleris,gastos:window.renderExpenses,caja:window.showCashSummary,operadores:window.renderOperators,backup:window.renderBackup};
-    const fn=renderers[currentView];if(typeof fn==='function')fn();
+    // Sincronizar datos sin tocar la vista actual ni reconstruir formularios.
+    updateNetworkStatus();
   };
 
   window.showView=function(v){
