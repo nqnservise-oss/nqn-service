@@ -53,7 +53,7 @@ button,input,select,textarea{font:inherit}.shell{min-height:100vh;display:grid;g
 <body>
 <div class="shell">
   <aside class="sidebar">
-    <div class="brand"><div class="brandmark">NQN</div><div><div class="brandname">NQN Service</div><div class="brandsub">Gestión técnica · V9 completa</div></div></div>
+    <div class="brand"><div class="brandmark">NQN</div><div><div class="brandname">NQN Service</div><div class="brandsub">Gestión técnica · V9.2 gastos</div></div></div>
     <div class="nav">
       <button id="nav-dashboard" class="active" onclick="showView('dashboard')">⌂ Dashboard</button>
       <button id="nav-nuevo" onclick="newOrder()">＋ Nuevo ingreso</button>
@@ -807,6 +807,10 @@ window.__nqnLegacyBoot=boot;
   const KEY_OPERATORS = 'nqn_service_operators_v1';
   const KEY_OPERATORS_MIRROR = 'nqn_service_operators_v1_mirror';
   const KEY_SESSION = 'nqn_service_operator_session_v1';
+  const KEY_EXPENSES = 'nqn_service_expenses_v1';
+  const KEY_EXPENSES_MIRROR = 'nqn_service_expenses_v1_mirror';
+  const EXPENSE_CATEGORIES = ['Repuestos','Combustible','Herramientas','Alquiler','Servicios','Otro'];
+  const EXPENSE_PAYMENTS = ['Efectivo','Mercado Pago'];
   const ADMIN_VIEWS = new Set(['dashboard','kpis','cleris','backup','operadores']);
 
   const coreShowView = window.showView;
@@ -897,6 +901,30 @@ window.__nqnLegacyBoot=boot;
   };
   function cashTotals(r){const ingresos=Number(r.efectivo||0)+Number(r.mercadoPago||0)+Number(r.tarjetas||0);return {ingresos,neto:ingresos-Number(r.notaCredito||0)-Number(r.gastos||0)}}
 
+  function normalizeExpense(r,index=0){
+    return {
+      id:String(r?.id||('gasto-'+Date.now()+'-'+index)),fecha:String(r?.fecha||localDay()),
+      operadorId:String(r?.operadorId||''),operador:String(r?.operador||'').trim(),
+      monto:Math.max(0,Number(r?.monto||0)),medioPago:EXPENSE_PAYMENTS.includes(String(r?.medioPago||''))?String(r.medioPago):'Efectivo',
+      categoria:EXPENSE_CATEGORIES.includes(String(r?.categoria||''))?String(r.categoria):'Otro',
+      observacion:String(r?.observacion||'').trim(),cajaId:String(r?.cajaId||''),
+      creado:r?.creado||now(),actualizado:r?.actualizado||r?.creado||now()
+    };
+  }
+  window.loadExpenses=function(){
+    let a=readArray(KEY_EXPENSES),b=readArray(KEY_EXPENSES_MIRROR),src=a.length?a:b;
+    if(!a.length&&b.length){try{localStorage.setItem(KEY_EXPENSES,JSON.stringify(b))}catch(e){}}
+    return src.map(normalizeExpense);
+  };
+  window.saveExpenses=function(rows){
+    rows=(Array.isArray(rows)?rows:[]).map(normalizeExpense);
+    localStorage.setItem(KEY_EXPENSES_MIRROR,JSON.stringify(rows));localStorage.setItem(KEY_EXPENSES,JSON.stringify(rows));
+    if(readArray(KEY_EXPENSES).length!==rows.length)throw new Error('No se pudo verificar el guardado de gastos');
+    return rows;
+  };
+  function operatorOwns(x,op){return String(x?.operadorId||'')===String(op?.id||'')||(!x?.operadorId&&String(x?.operador||'').toLowerCase()===String(op?.nombre||'').toLowerCase())}
+  function todaysCashForOperator(rows,op,fecha=localDay()){return rows.find(x=>x.fecha===fecha&&operatorOwns(x,op))||null}
+
   function session(){
     const s=parseJSON(sessionStorage.getItem(KEY_SESSION)||'null',null);if(!s||!s.id)return null;
     const op=window.loadOperators().find(x=>String(x.id)===String(s.id)&&x.activo);return op||null;
@@ -908,6 +936,10 @@ window.__nqnLegacyBoot=boot;
 
   function ensureNavExtras(){
     const nav=document.querySelector('.nav');if(!nav)return;
+    if(!document.getElementById('nav-gastos')){
+      const b=document.createElement('button');b.id='nav-gastos';b.innerHTML='＋ Gasto';b.onclick=()=>window.showView('gastos');
+      const k=document.getElementById('nav-kpis');k?nav.insertBefore(b,k):nav.appendChild(b);
+    }
     if(!document.getElementById('nav-caja')){
       const b=document.createElement('button');b.id='nav-caja';b.innerHTML='▣ Resumen caja';b.onclick=()=>window.showView('caja');
       const k=document.getElementById('nav-kpis');k?nav.insertBefore(b,k):nav.appendChild(b);
@@ -924,13 +956,13 @@ window.__nqnLegacyBoot=boot;
   }
   function updateAuthBar(){
     const el=document.getElementById('authStatus');if(!el)return;const op=session();
-    if(!op){el.innerHTML='<span class="badge">V9 completa</span>';return}
+    if(!op){el.innerHTML='<span class="badge">V9.2 gastos</span>';return}
     el.innerHTML=`<button class="btn secondary small" type="button" onclick="logoutOperator()">👤 ${e(op.nombre)} · Salir</button>`;
   }
   function applyRoleNav(){
     const op=session(),admin=!!op&&op.rol==='admin';
     ['nav-dashboard','nav-kpis','nav-cleris','nav-backup','nav-operadores'].forEach(id=>{const x=document.getElementById(id);if(x)x.style.display=admin?'':'none'});
-    ['nav-nuevo','nav-ordenes','nav-clientes','nav-caja'].forEach(id=>{const x=document.getElementById(id);if(x)x.style.display=op?'':'none'});
+    ['nav-nuevo','nav-ordenes','nav-clientes','nav-gastos','nav-caja'].forEach(id=>{const x=document.getElementById(id);if(x)x.style.display=op?'':'none'});
     const t=document.getElementById('nav-turnos');if(t)t.style.display=op?'':'none';
   }
   window.logoutOperator=function(){clearSession();renderLoginOrSetup()};
@@ -941,7 +973,7 @@ window.__nqnLegacyBoot=boot;
     if(!ops.length)return renderFirstAdmin();
     const active=ops.filter(x=>x.activo);
     title('Ingreso de operador');
-    document.getElementById('view').innerHTML=`<section class="panel" style="max-width:560px;margin:40px auto 0"><div class="panelhead"><div><div class="eyebrow">ACCESO</div><h3>Ingresar a NQN Service</h3></div><span class="badge">V9.1 PIN FIX</span></div>${active.length?`<form class="grid" style="grid-template-columns:1fr" onsubmit="window.loginOperator(event)"><div class="field"><label>Operador</label><select id="loginOperatorId" required>${active.map(o=>`<option value="${e(o.id)}">${e(o.nombre)}</option>`).join('')}</select></div><div class="field"><label>PIN</label><input id="loginPin" type="password" inputmode="numeric" autocomplete="current-password" required autofocus><div class="hint">Si tu PIN anterior tenía guion, también podés ingresar solo los números.</div></div><div class="actions"><button class="btn primary" type="submit">Ingresar</button></div></form>`:'<div class="alert red"><strong>No hay operadores activos</strong><span>Se necesita un administrador activo para continuar.</span></div>'}</section>`;
+    document.getElementById('view').innerHTML=`<section class="panel" style="max-width:560px;margin:40px auto 0"><div class="panelhead"><div><div class="eyebrow">ACCESO</div><h3>Ingresar a NQN Service</h3></div><span class="badge">V9.2 GASTOS</span></div>${active.length?`<form class="grid" style="grid-template-columns:1fr" onsubmit="window.loginOperator(event)"><div class="field"><label>Operador</label><select id="loginOperatorId" required>${active.map(o=>`<option value="${e(o.id)}">${e(o.nombre)}</option>`).join('')}</select></div><div class="field"><label>PIN</label><input id="loginPin" type="password" inputmode="numeric" autocomplete="current-password" required autofocus><div class="hint">Si tu PIN anterior tenía guion, también podés ingresar solo los números.</div></div><div class="actions"><button class="btn primary" type="submit">Ingresar</button></div></form>`:'<div class="alert red"><strong>No hay operadores activos</strong><span>Se necesita un administrador activo para continuar.</span></div>'}</section>`;
     applyRoleNav();
   }
   function renderFirstAdmin(){
@@ -1024,14 +1056,14 @@ window.__nqnLegacyBoot=boot;
   window.refreshViewAfterCloudSync=function(){
     const op=session();if(!op){renderLoginOrSetup();return}applyRoleNav();updateAuthBar();
     if(currentView==='nuevo'||currentView==='editar')return;
-    const renderers={dashboard:window.renderDashboard,ordenes:renderOrders,clientes:renderClients,kpis:window.renderKPIs,cleris:window.renderCleris,caja:window.showCashSummary,operadores:window.renderOperators,backup:window.renderBackup};
+    const renderers={dashboard:window.renderDashboard,ordenes:renderOrders,clientes:renderClients,kpis:window.renderKPIs,cleris:window.renderCleris,gastos:window.renderExpenses,caja:window.showCashSummary,operadores:window.renderOperators,backup:window.renderBackup};
     const fn=renderers[currentView];if(typeof fn==='function')fn();
   };
 
   window.showView=function(v){
     if(!session()){renderLoginOrSetup();return}
     if(ADMIN_VIEWS.has(v)&&!window.isAdmin()){toast('Esta sección es solo para administrador');window.newOrder();return}
-    if(v==='caja')return window.showCashSummary();if(v==='operadores')return window.renderOperators();return coreShowView(v);
+    if(v==='gastos')return window.renderExpenses();if(v==='caja')return window.showCashSummary();if(v==='operadores')return window.renderOperators();return coreShowView(v);
   };
   window.renderDashboard=function(){if(!window.isAdmin())return window.newOrder();return coreRenderDashboard()};
   window.renderKPIs=function(){if(!window.isAdmin())return window.newOrder();return coreRenderKPIs()};
@@ -1042,20 +1074,44 @@ window.__nqnLegacyBoot=boot;
   function cashPreview(){const t=cashTotals({efectivo:cashNum('cashEfectivo'),mercadoPago:cashNum('cashMP'),tarjetas:cashNum('cashTarjetas'),notaCredito:cashNum('cashNC'),gastos:cashNum('cashGastos')});const a=document.getElementById('cashTotal'),b=document.getElementById('cashNeto');if(a)a.textContent=m(t.ingresos);if(b)b.textContent=m(t.neto)}
   window.showCashSummary=function(editId=''){
     const op=session();if(!op)return renderLoginOrSetup();currentView='caja';editingId=null;setNav('caja');title('Resumen de caja diario');
-    const all=window.loadCashClosings(),hit=editId?all.find(x=>String(x.id)===String(editId)):null;
-    if(hit&&!window.isAdmin()&&String(hit.operadorId||'')!==String(op.id)&&String(hit.operador||'').toLowerCase()!==op.nombre.toLowerCase()){toast('No podés editar el cierre de otro operador');return window.showCashSummary()}
+    const all=window.loadCashClosings();
+    let hit=editId?all.find(x=>String(x.id)===String(editId)):todaysCashForOperator(all,op);
+    if(hit&&!window.isAdmin()&&!operatorOwns(hit,op)){toast('No podés editar el cierre de otro operador');return window.showCashSummary()}
     const r=hit||{fecha:localDay(),operadorId:op.id,operador:op.nombre,efectivo:0,mercadoPago:0,tarjetas:0,notaCredito:0,gastos:0,observaciones:''},tt=cashTotals(r);
-    const visible=window.isAdmin()?all:all.filter(x=>String(x.operadorId||'')===String(op.id)||(!x.operadorId&&String(x.operador||'').toLowerCase()===op.nombre.toLowerCase()));
+    const visible=window.isAdmin()?all:all.filter(x=>operatorOwns(x,op));
     const sorted=[...visible].sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha))||String(b.actualizado).localeCompare(String(a.actualizado)));
-    document.getElementById('view').innerHTML=`<section class="panel" style="margin-top:0"><div class="panelhead"><div><div class="eyebrow">CIERRE DIARIO</div><h3>${hit?'Editar cierre':'Cargar cierre del día'}</h3></div><span class="badge">Operador: ${e(r.operador)}</span></div><form class="grid" onsubmit="submitCashSummary(event,'${e(hit?.id||'')}')"><div class="field short"><label>Fecha *</label><input id="cashFecha" type="date" value="${e(r.fecha)}" required></div><div class="field"><label>Operador</label><input value="${e(r.operador)}" readonly></div><div class="field"><label>Efectivo</label><input id="cashEfectivo" class="cashNumber" type="number" min="0" step="1000" value="${Number(r.efectivo||0)}"></div><div class="field"><label>Mercado Pago / transferencias</label><input id="cashMP" class="cashNumber" type="number" min="0" step="1000" value="${Number(r.mercadoPago||0)}"></div><div class="field"><label>Tarjeta crédito / débito</label><input id="cashTarjetas" class="cashNumber" type="number" min="0" step="1000" value="${Number(r.tarjetas||0)}"></div><div class="field"><label>Nota de crédito</label><input id="cashNC" class="cashNumber" type="number" min="0" step="1000" value="${Number(r.notaCredito||0)}"></div><div class="field"><label>Gastos</label><input id="cashGastos" class="cashNumber" type="number" min="0" step="1000" value="${Number(r.gastos||0)}"></div><div class="field full"><label>Observaciones</label><input id="cashObs" value="${e(r.observaciones)}" placeholder="Opcional"></div><div class="field full"><div class="stats" style="grid-template-columns:1fr 1fr;margin:5px 0"><div class="stat soft"><div class="statlabel">Total cobrado</div><div id="cashTotal" class="statvalue smallmoney">${m(tt.ingresos)}</div></div><div class="stat"><div class="statlabel">Neto del día</div><div id="cashNeto" class="statvalue smallmoney">${m(tt.neto)}</div><div class="stathelp">Cobrado − notas de crédito − gastos</div></div></div></div><div class="actions full">${hit?'<button type="button" class="btn secondary" onclick="showCashSummary()">Cancelar</button>':''}<button class="btn primary" type="submit">${hit?'Guardar cambios':'Guardar cierre'}</button></div></form></section><section class="panel"><div class="panelhead"><div><div class="eyebrow">HISTORIAL</div><h3>${window.isAdmin()?'Todos los cierres':'Mis cierres'}</h3></div><span class="badge">${visible.length}</span></div>${sorted.length?`<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Operador</th><th>Total</th><th>Nota crédito</th><th>Gastos</th><th>Neto</th><th></th></tr></thead><tbody>${sorted.slice(0,100).map(x=>{const t=cashTotals(x);return `<tr><td><strong>${dateLabel(x.fecha)}</strong></td><td>${e(x.operador)}</td><td><strong>${m(t.ingresos)}</strong></td><td>${m(x.notaCredito)}</td><td>${m(x.gastos)}</td><td><strong>${m(t.neto)}</strong></td><td class="right nowrap"><button class="btn secondary small" onclick="showCashSummary('${e(x.id)}')">Editar</button>${window.isAdmin()?` <button class="btn danger small" onclick="deleteCashSummary('${e(x.id)}')">Eliminar</button>`:''}</td></tr>`}).join('')}</tbody></table></div>`:'<div class="empty">Todavía no hay cierres de caja.</div>'}</section>`;
+    const gastosDia=(window.loadExpenses?window.loadExpenses():[]).filter(x=>x.fecha===r.fecha&&(window.isAdmin()?true:operatorOwns(x,op)));
+    const ge=gastosDia.filter(x=>x.medioPago==='Efectivo').reduce((a,x)=>a+Number(x.monto||0),0),gm=gastosDia.filter(x=>x.medioPago==='Mercado Pago').reduce((a,x)=>a+Number(x.monto||0),0);
+    document.getElementById('view').innerHTML=`<section class="panel" style="margin-top:0"><div class="panelhead"><div><div class="eyebrow">CIERRE DIARIO</div><h3>${hit?'Cierre del día':'Cargar cierre del día'}</h3></div><span class="badge">Operador: ${e(r.operador)}</span></div><form class="grid" onsubmit="submitCashSummary(event,'${e(hit?.id||'')}')"><div class="field short"><label>Fecha *</label><input id="cashFecha" type="date" value="${e(r.fecha)}" required></div><div class="field"><label>Operador</label><input value="${e(r.operador)}" readonly></div><div class="field"><label>Efectivo</label><input id="cashEfectivo" class="cashNumber" type="number" min="0" step="1000" value="${Number(r.efectivo||0)}"></div><div class="field"><label>Mercado Pago / transferencias</label><input id="cashMP" class="cashNumber" type="number" min="0" step="1000" value="${Number(r.mercadoPago||0)}"></div><div class="field"><label>Tarjeta crédito / débito</label><input id="cashTarjetas" class="cashNumber" type="number" min="0" step="1000" value="${Number(r.tarjetas||0)}"></div><div class="field"><label>Nota de crédito</label><input id="cashNC" class="cashNumber" type="number" min="0" step="1000" value="${Number(r.notaCredito||0)}"></div><div class="field"><label>Gastos del día</label><input id="cashGastos" type="number" value="${Number(r.gastos||0)}" readonly><div class="hint">Se carga desde el botón <strong>＋ Gasto</strong>. Efectivo: ${m(ge)} · Mercado Pago: ${m(gm)}</div></div><div class="field full"><label>Observaciones</label><input id="cashObs" value="${e(r.observaciones)}" placeholder="Opcional"></div><div class="field full"><div class="stats" style="grid-template-columns:1fr 1fr;margin:5px 0"><div class="stat soft"><div class="statlabel">Total cobrado</div><div id="cashTotal" class="statvalue smallmoney">${m(tt.ingresos)}</div></div><div class="stat"><div class="statlabel">Neto del día</div><div id="cashNeto" class="statvalue smallmoney">${m(tt.neto)}</div><div class="stathelp">Cobrado − notas de crédito − gastos</div></div></div></div><div class="actions full"><button type="button" class="btn secondary" onclick="renderExpenses()">＋ Cargar gasto</button><button class="btn primary" type="submit">${hit?'Guardar cambios':'Guardar cierre'}</button></div></form></section><section class="panel"><div class="panelhead"><div><div class="eyebrow">HISTORIAL</div><h3>${window.isAdmin()?'Todos los cierres':'Mis cierres'}</h3></div><span class="badge">${visible.length}</span></div>${sorted.length?`<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Operador</th><th>Total</th><th>Nota crédito</th><th>Gastos</th><th>Neto</th><th></th></tr></thead><tbody>${sorted.slice(0,100).map(x=>{const t=cashTotals(x);return `<tr><td><strong>${dateLabel(x.fecha)}</strong></td><td>${e(x.operador)}</td><td><strong>${m(t.ingresos)}</strong></td><td>${m(x.notaCredito)}</td><td>${m(x.gastos)}</td><td><strong>${m(t.neto)}</strong></td><td class="right nowrap"><button class="btn secondary small" onclick="showCashSummary('${e(x.id)}')">Editar</button>${window.isAdmin()?` <button class="btn danger small" onclick="deleteCashSummary('${e(x.id)}')">Eliminar</button>`:''}</td></tr>`}).join('')}</tbody></table></div>`:'<div class="empty">Todavía no hay cierres de caja.</div>'}</section>`;
     document.querySelectorAll('.cashNumber').forEach(x=>x.addEventListener('input',cashPreview));
   };
   window.submitCashSummary=function(ev,editId=''){
     ev.preventDefault();const op=session();if(!op)return renderLoginOrSetup();let rows=window.loadCashClosings(),old=editId?rows.find(x=>String(x.id)===String(editId)):null;
-    if(old&&!window.isAdmin()&&String(old.operadorId||'')!==String(op.id)&&String(old.operador||'').toLowerCase()!==op.nombre.toLowerCase()){alert('No podés modificar el cierre de otro operador.');return}
-    const owner=old||{operadorId:op.id,operador:op.nombre},ts=now(),obj=normalizeCashClosing({id:editId||uid('caja'),fecha:cashValue('cashFecha'),operadorId:owner.operadorId||op.id,operador:owner.operador||op.nombre,efectivo:cashNum('cashEfectivo'),mercadoPago:cashNum('cashMP'),tarjetas:cashNum('cashTarjetas'),notaCredito:cashNum('cashNC'),gastos:cashNum('cashGastos'),observaciones:String(cashValue('cashObs')||'').trim(),creado:old?.creado||ts,actualizado:ts});
-    const dup=rows.find(x=>String(x.id)!==String(editId)&&x.fecha===obj.fecha&&((x.operadorId&&x.operadorId===obj.operadorId)||(!x.operadorId&&String(x.operador).toLowerCase()===obj.operador.toLowerCase())));if(dup&&!confirm('Ya existe un cierre para esta fecha y operador. ¿Guardar otro igualmente?'))return;
+    if(old&&!window.isAdmin()&&!operatorOwns(old,op)){alert('No podés modificar el cierre de otro operador.');return}
+    const owner=old||{operadorId:op.id,operador:op.nombre},ts=now(),obj=normalizeCashClosing({id:editId||uid('caja'),fecha:cashValue('cashFecha'),operadorId:owner.operadorId||op.id,operador:owner.operador||op.nombre,efectivo:cashNum('cashEfectivo'),mercadoPago:cashNum('cashMP'),tarjetas:cashNum('cashTarjetas'),notaCredito:cashNum('cashNC'),gastos:old?Number(old.gastos||0):cashNum('cashGastos'),observaciones:String(cashValue('cashObs')||'').trim(),creado:old?.creado||ts,actualizado:ts});
+    const dup=rows.find(x=>String(x.id)!==String(editId)&&x.fecha===obj.fecha&&operatorOwns(x,{id:obj.operadorId,nombre:obj.operador}));if(dup&&!confirm('Ya existe un cierre para esta fecha y operador. ¿Guardar otro igualmente?'))return;
     if(editId){const i=rows.findIndex(x=>String(x.id)===String(editId));i>=0?rows[i]=obj:rows.push(obj)}else rows.push(obj);window.saveCashClosings(rows);queueCloudOp('upsertCash',obj.id,obj,obj.actualizado);toast(editId?'Cierre actualizado':'Cierre guardado');window.showCashSummary();
+  };
+
+  window.renderExpenses=function(){
+    const op=session();if(!op)return renderLoginOrSetup();currentView='gastos';editingId=null;setNav('gastos');title('Gastos');
+    const all=window.loadExpenses(),visible=window.isAdmin()?all:all.filter(x=>operatorOwns(x,op));
+    const sorted=[...visible].sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha))||String(b.creado).localeCompare(String(a.creado)));
+    const today=localDay(),todayRows=visible.filter(x=>x.fecha===today),todayTotal=todayRows.reduce((a,x)=>a+Number(x.monto||0),0);
+    document.getElementById('view').innerHTML=`<section class="panel" style="margin-top:0"><div class="panelhead"><div><div class="eyebrow">NUEVO GASTO</div><h3>Cargar gasto</h3></div><span class="badge">Hoy: ${m(todayTotal)}</span></div><form class="grid" onsubmit="saveExpenseForm(event)"><div class="field short"><label>Fecha</label><input id="expenseDate" type="date" value="${today}" readonly></div><div class="field"><label>Monto *</label><input id="expenseAmount" type="number" min="1" step="100" required autofocus placeholder="Ej. 45000"></div><div class="field"><label>Medio de pago *</label><select id="expensePayment">${EXPENSE_PAYMENTS.map(x=>`<option>${e(x)}</option>`).join('')}</select></div><div class="field"><label>Tipo de gasto *</label><select id="expenseCategory" onchange="expenseCategoryChanged()">${EXPENSE_CATEGORIES.map(x=>`<option>${e(x)}</option>`).join('')}</select></div><div class="field full"><label>Observación <span id="expenseObsRequired" class="muted">(opcional)</span></label><input id="expenseObs" placeholder="Ej. fuelle Drean Next, combustible camioneta, luz del local..."></div><div class="actions full"><button class="btn primary" type="submit">Guardar gasto</button></div></form></section><section class="panel"><div class="panelhead"><div><div class="eyebrow">HISTORIAL</div><h3>${window.isAdmin()?'Gastos registrados':'Mis gastos'}</h3></div><span class="badge">${visible.length}</span></div>${sorted.length?`<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Medio</th><th>Observación</th><th>Monto</th><th></th></tr></thead><tbody>${sorted.slice(0,150).map(x=>`<tr><td>${dateLabel(x.fecha)}</td><td><strong>${e(x.categoria)}</strong></td><td>${e(x.medioPago)}</td><td>${e(x.observacion||'-')}</td><td><strong>${m(x.monto)}</strong></td><td class="right"><button class="btn danger small" onclick="deleteExpense('${e(x.id)}')">Eliminar</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Todavía no cargaste gastos.</div>'}</section>`;
+    window.expenseCategoryChanged();
+  };
+  window.expenseCategoryChanged=function(){const cat=document.getElementById('expenseCategory')?.value||'',tag=document.getElementById('expenseObsRequired'),obs=document.getElementById('expenseObs');if(tag)tag.textContent=cat==='Otro'?'(obligatoria para Otro)':'(opcional)';if(obs)obs.required=cat==='Otro'};
+  window.saveExpenseForm=function(ev){
+    ev.preventDefault();const op=session();if(!op)return renderLoginOrSetup();const monto=Math.max(0,Number(document.getElementById('expenseAmount')?.value||0)),categoria=document.getElementById('expenseCategory')?.value||'',medioPago=document.getElementById('expensePayment')?.value||'',observacion=String(document.getElementById('expenseObs')?.value||'').trim(),fecha=document.getElementById('expenseDate')?.value||localDay();
+    if(!monto){alert('Ingresá el monto del gasto.');return}if(categoria==='Otro'&&!observacion){alert('En “Otro” escribí una observación para saber qué gasto fue.');return}
+    const ts=now();let cash=window.loadCashClosings(),c=todaysCashForOperator(cash,op,fecha);if(!c){c=normalizeCashClosing({id:uid('caja'),fecha,operadorId:op.id,operador:op.nombre,efectivo:0,mercadoPago:0,tarjetas:0,notaCredito:0,gastos:0,observaciones:'',creado:ts,actualizado:ts});cash.push(c)}
+    const obj=normalizeExpense({id:uid('gasto'),fecha,operadorId:op.id,operador:op.nombre,monto,medioPago,categoria,observacion,cajaId:c.id,creado:ts,actualizado:ts});let expenses=window.loadExpenses();expenses.push(obj);window.saveExpenses(expenses);
+    c.gastos=Math.max(0,Number(c.gastos||0)+monto);c.actualizado=ts;const ci=cash.findIndex(x=>String(x.id)===String(c.id));if(ci>=0)cash[ci]=c;window.saveCashClosings(cash);queueCloudOp('upsertCash',c.id,c,c.actualizado);toast('Gasto guardado · '+m(monto));window.renderExpenses();
+  };
+  window.deleteExpense=function(id){
+    const op=session();if(!op)return renderLoginOrSetup();let expenses=window.loadExpenses(),x=expenses.find(r=>String(r.id)===String(id));if(!x)return;if(!window.isAdmin()&&!operatorOwns(x,op)){toast('No podés eliminar un gasto de otro operador');return}if(!confirm('¿Eliminar este gasto de '+m(x.monto)+'?'))return;window.saveExpenses(expenses.filter(r=>String(r.id)!==String(id)));
+    let cash=window.loadCashClosings(),c=cash.find(r=>String(r.id)===String(x.cajaId));if(!c)c=cash.find(r=>r.fecha===x.fecha&&operatorOwns(r,{id:x.operadorId,nombre:x.operador}));if(c){c.gastos=Math.max(0,Number(c.gastos||0)-Number(x.monto||0));c.actualizado=now();window.saveCashClosings(cash);queueCloudOp('upsertCash',c.id,c,c.actualizado)}toast('Gasto eliminado');window.renderExpenses();
   };
   window.deleteCashSummary=function(id){if(!window.isAdmin()){toast('Solo el administrador puede eliminar cierres');return}const rows=window.loadCashClosings(),x=rows.find(r=>String(r.id)===String(id));if(!x)return;if(!confirm('¿Eliminar el cierre de '+dateLabel(x.fecha)+' de '+x.operador+'?'))return;window.saveCashClosings(rows.filter(r=>String(r.id)!==String(id)));queueCloudOp('deleteCash',id,null,now());toast('Cierre eliminado');window.showCashSummary()};
 
@@ -1085,7 +1141,7 @@ window.__nqnLegacyBoot=boot;
     const f=document.getElementById('importFile')?.files?.[0];if(!f){alert('Elegí un archivo de copia primero.');return}const reader=new FileReader();reader.onload=()=>{try{const x=JSON.parse(reader.result),source=Array.isArray(x)?x:x.ordenes;if(!Array.isArray(source))throw new Error();if(!confirm('¿Reemplazar los datos actuales por esta copia?'))return;save(ensureClientNumbers(source.map(normalizeOrder)),'Antes de importar copia');if(Array.isArray(x.cleriseventos))saveEvents(x.cleriseventos);if(Array.isArray(x.cierrescaja))window.saveCashClosings(x.cierrescaja);if(Array.isArray(x.operadores))window.saveOperators(x.operadores);let s=getSettings();s.cloudEverSynced=false;setSettings(s);setCloudQueue([]);clearSession();toast('Copia restaurada');cloudAutoSyncSoon();renderLoginOrSetup()}catch(err){alert('El archivo no parece ser una copia válida de NQN Service.')}};reader.readAsText(f)
   };
   window.runHealthCheck=function(){
-    const problems=[];if(!storageSelfTest())problems.push('El navegador no permite almacenamiento local.');const primary=readRowsKey(KEY),mirror=readRowsKey(KEY_MIRROR);if(!validRows(primary))problems.push('La copia principal de órdenes no es válida.');if(!validRows(mirror))problems.push('La copia espejo de órdenes no es válida.');if(validRows(primary)&&validRows(mirror)&&primary.length!==mirror.length)problems.push('Principal y espejo de órdenes tienen distinta cantidad.');if(loadEventsKey(KEY_EVENTS).length!==loadEventsKey(KEY_EVENTS_MIRROR).length)problems.push('Las copias de Cleris no coinciden.');if(readArray(KEY_CASH).length!==readArray(KEY_CASH_MIRROR).length)problems.push('Las copias de caja no coinciden.');if(readArray(KEY_OPERATORS).length!==readArray(KEY_OPERATORS_MIRROR).length)problems.push('Las copias de operadores no coinciden.');if(!activeAdmins(window.loadOperators()).length)problems.push('No hay administrador activo.');if(problems.length){alert('Revisión del sistema\n\n'+problems.join('\n'));return false}alert('Sistema OK.\n\nÓrdenes: '+load().length+'\nCleris: '+loadEvents().length+'\nCierres de caja: '+window.loadCashClosings().length+'\nOperadores: '+window.loadOperators().length+'\nAdministrador activo: OK');return true
+    const problems=[];if(!storageSelfTest())problems.push('El navegador no permite almacenamiento local.');const primary=readRowsKey(KEY),mirror=readRowsKey(KEY_MIRROR);if(!validRows(primary))problems.push('La copia principal de órdenes no es válida.');if(!validRows(mirror))problems.push('La copia espejo de órdenes no es válida.');if(validRows(primary)&&validRows(mirror)&&primary.length!==mirror.length)problems.push('Principal y espejo de órdenes tienen distinta cantidad.');if(loadEventsKey(KEY_EVENTS).length!==loadEventsKey(KEY_EVENTS_MIRROR).length)problems.push('Las copias de Cleris no coinciden.');if(readArray(KEY_CASH).length!==readArray(KEY_CASH_MIRROR).length)problems.push('Las copias de caja no coinciden.');if(readArray(KEY_EXPENSES).length!==readArray(KEY_EXPENSES_MIRROR).length)problems.push('Las copias de gastos no coinciden.');if(readArray(KEY_OPERATORS).length!==readArray(KEY_OPERATORS_MIRROR).length)problems.push('Las copias de operadores no coinciden.');if(!activeAdmins(window.loadOperators()).length)problems.push('No hay administrador activo.');if(problems.length){alert('Revisión del sistema\n\n'+problems.join('\n'));return false}alert('Sistema OK.\n\nÓrdenes: '+load().length+'\nCleris: '+loadEvents().length+'\nCierres de caja: '+window.loadCashClosings().length+'\nGastos: '+window.loadExpenses().length+'\nOperadores: '+window.loadOperators().length+'\nAdministrador activo: OK');return true
   };
 
   window.secureBoot=async function(){
