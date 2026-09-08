@@ -522,7 +522,7 @@ function orderForm(r,isNew){
     <div class="field"><label>Medio de pago</label><select id="medioPago">${PAGOS.map(x=>`<option ${r.medioPago===x?'selected':''}>${x}</option>`).join('')}</select></div>
     <div class="field"><label>Saldo</label><input id="saldoPreview" value="${money(balance(r))}" readonly></div>
     <div class="actions full">
-      ${isNew?`<button type="button" class="btn secondary" onclick="renderDashboard()">Cancelar</button>`:`<button type="button" class="btn secondary" onclick="newOrderSameClient('${esc(r.id)}')">＋ Mismo cliente</button><button type="button" class="btn secondary" onclick="printReceipt('${esc(r.id)}')">Comprobante / PDF</button><button type="button" class="btn danger" onclick="deleteOrder('${esc(r.id)}')">Eliminar</button>`}
+      ${isNew?`<button type="button" class="btn secondary" onclick="renderDashboard()">Cancelar</button>`:`<button type="button" class="btn secondary" onclick="newOrderSameClient('${esc(r.id)}')">＋ Mismo cliente</button><button type="button" class="btn secondary" onclick="printReceipt('${esc(r.id)}')">Comprobante / PDF</button><button type="button" class="btn" style="background:#25D366;color:#fff" onclick="shareReceiptWhatsApp('${esc(r.id)}')"><span aria-hidden="true" style="display:inline-flex;width:18px;height:18px;border:2px solid #fff;border-radius:50%;align-items:center;justify-content:center;font-size:11px;line-height:1">☎</span> Compartir por WhatsApp</button><button type="button" class="btn danger" onclick="deleteOrder('${esc(r.id)}')">Eliminar</button>`}
       <button class="btn primary" type="submit">${isNew?'Guardar ingreso':'Guardar cambios'}</button>
     </div>
   </form>`;
@@ -698,9 +698,80 @@ function importData(){
 }
 function restoreSnapshot(id){let snap=loadSnapshots().find(x=>Number(x.id)===Number(id));if(!snap||!Array.isArray(snap.ordenes))return;if(!confirm('¿Restaurar esta instantánea? Los datos actuales se conservarán como otra instantánea.'))return;save(snap.ordenes,'Antes de restaurar instantánea');let s=getSettings();s.cloudEverSynced=false;setSettings(s);setCloudQueue([]);toast('Instantánea restaurada');renderBackup();cloudAutoSyncSoon()}
 
+function receiptTermsText(){
+  return 'Importante: una vez notificado que el equipo se encuentra listo para retirar, el cliente dispone de 48 horas para hacerlo. Vencido ese plazo, podrá aplicarse un cargo diario por estadía según la tarifa vigente.';
+}
+function receiptWrapLines(ctx,text,maxWidth){
+  const clean=String(text??'').trim()||'-',out=[];
+  clean.split(/\n+/).forEach(paragraph=>{
+    const words=paragraph.split(/\s+/).filter(Boolean);let line='';
+    words.forEach(word=>{
+      const test=line?line+' '+word:word;
+      if(line&&ctx.measureText(test).width>maxWidth){out.push(line);line=word}else line=test;
+    });
+    if(line)out.push(line);
+  });
+  return out.length?out:['-'];
+}
+function receiptCanvas(r){
+  const width=1080,pad=78,maxWidth=width-pad*2;
+  const fields=[
+    ['Cliente',r.cliente],['Teléfono',r.telefono],['Equipo',r.tipo],['Marca y modelo',r.marcaModelo],
+    ['Falla informada',r.falla||'-'],['Accesorios',r.accesorios||'-'],['Observaciones',r.observaciones||'-']
+  ];
+  const measure=document.createElement('canvas'),m=measure.getContext('2d');
+  m.font='36px Arial';
+  const blocks=fields.map(pair=>({label:pair[0],lines:receiptWrapLines(m,pair[1],maxWidth)}));
+  m.font='26px Arial';const termLines=receiptWrapLines(m,receiptTermsText(),maxWidth-36);
+  let height=250;
+  blocks.forEach(block=>{height+=42+block.lines.length*46+38});
+  height+=70+termLines.length*36+120;
+  const canvas=document.createElement('canvas');canvas.width=width;canvas.height=Math.max(1350,height);
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle='#ffffff';ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle='#0d5bd8';ctx.font='900 58px Arial';ctx.fillText('NQN Service',pad,90);
+  ctx.fillStyle='#6f7d90';ctx.font='28px Arial';ctx.fillText('Servicio técnico',pad,130);
+  ctx.textAlign='right';ctx.fillStyle='#14243a';ctx.font='700 46px Arial';ctx.fillText('Orden #'+fmtOrder(r.numero),width-pad,82);
+  ctx.fillStyle='#6f7d90';ctx.font='27px Arial';ctx.fillText('Ingreso '+prettyDate(r.fechaIngreso),width-pad,122);ctx.fillText('Cliente C'+fmtClient(r.clienteNumero),width-pad,158);
+  ctx.textAlign='left';ctx.strokeStyle='#0d5bd8';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(pad,190);ctx.lineTo(width-pad,190);ctx.stroke();
+  let y=245;
+  blocks.forEach(block=>{
+    ctx.fillStyle='#788598';ctx.font='700 24px Arial';ctx.fillText(String(block.label).toUpperCase(),pad,y);y+=39;
+    ctx.fillStyle='#14243a';ctx.font='36px Arial';
+    block.lines.forEach(line=>{ctx.fillText(line,pad,y);y+=46});
+    y+=10;ctx.strokeStyle='#e4e9f0';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(width-pad,y);ctx.stroke();y+=28;
+  });
+  const boxY=y,boxH=58+termLines.length*36;
+  ctx.fillStyle='#f7f9fc';ctx.strokeStyle='#dde4ec';ctx.lineWidth=2;ctx.fillRect(pad,boxY,maxWidth,boxH);ctx.strokeRect(pad,boxY,maxWidth,boxH);
+  ctx.fillStyle='#596779';ctx.font='700 25px Arial';ctx.fillText('IMPORTANTE',pad+18,y+35);ctx.font='26px Arial';let ty=y+72;termLines.forEach(line=>{ctx.fillText(line,pad+18,ty);ty+=36});
+  y=boxY+boxH+42;ctx.fillStyle='#7c8998';ctx.font='24px Arial';ctx.fillText('Conserve el número de orden para futuras consultas.',pad,y);
+  return canvas;
+}
+function receiptCanvasBlob(canvas){
+  return new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('No se pudo crear la imagen')),'image/png',1));
+}
+function downloadReceiptImage(file){
+  const url=URL.createObjectURL(file),a=document.createElement('a');a.href=url;a.download=file.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
+}
+async function shareReceiptWhatsApp(id){
+  const r=load().find(x=>x.id===id);if(!r)return;
+  try{
+    const blob=await receiptCanvasBlob(receiptCanvas(r));
+    const file=new File([blob],'NQN_Service_Orden_'+fmtOrder(r.numero)+'.png',{type:'image/png'});
+    let canShare=!!navigator.share;
+    if(canShare&&navigator.canShare){try{canShare=navigator.canShare({files:[file]})}catch(e){canShare=false}}
+    if(canShare){
+      try{await navigator.share({files:[file],title:'NQN Service · Orden #'+fmtOrder(r.numero),text:'Comprobante de ingreso · Orden #'+fmtOrder(r.numero)});return}
+      catch(err){if(err&&err.name==='AbortError')return;console.error('No se pudo compartir el comprobante',err)}
+    }
+    downloadReceiptImage(file);
+    alert('La imagen del comprobante quedó guardada. Abrí WhatsApp y adjuntala desde tus archivos o descargas.');
+  }catch(err){console.error('Error al generar comprobante en imagen',err);alert('No se pudo generar la imagen. Podés seguir usando “Comprobante / PDF”.')}
+}
+
 function printReceipt(id){
   let r=load().find(x=>x.id===id);if(!r)return;let w=window.open('','_blank');if(!w){alert('El navegador bloqueó la ventana del comprobante. Permití ventanas emergentes para este archivo.');return}
-  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Comprobante #${fmtOrder(r.numero)}</title><style>body{font-family:Arial,sans-serif;color:#14243a;padding:32px}.sheet{max-width:760px;margin:auto}.top{display:flex;justify-content:space-between;border-bottom:3px solid #0d5bd8;padding-bottom:18px}.brand{font-size:28px;font-weight:900;color:#0d5bd8}.sub{color:#6f7d90}.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px}.item{padding:12px 0;border-bottom:1px solid #e4e9f0}.full{grid-column:1/-1}.lab{font-size:11px;color:#788598;font-weight:bold;text-transform:uppercase}.val{margin-top:5px}.foot{margin-top:28px;font-size:11px;color:#7c8998}@media print{button{display:none}}</style></head><body><div class="sheet"><div class="top"><div><div class="brand">NQN Service</div><div class="sub">Servicio técnico</div></div><div style="text-align:right"><h2 style="margin:0">Orden #${fmtOrder(r.numero)}</h2><div class="sub">Ingreso ${prettyDate(r.fechaIngreso)}</div><div class="sub">Cliente C${fmtClient(r.clienteNumero)}</div></div></div><div class="grid"><div class="item"><div class="lab">Cliente</div><div class="val">${esc(r.cliente)}</div></div><div class="item"><div class="lab">Teléfono</div><div class="val">${esc(r.telefono)}</div></div><div class="item"><div class="lab">Equipo</div><div class="val">${esc(r.tipo)}</div></div><div class="item"><div class="lab">Marca y modelo</div><div class="val">${esc(r.marcaModelo)}</div></div><div class="item full"><div class="lab">Falla informada</div><div class="val">${esc(r.falla||'-')}</div></div><div class="item full"><div class="lab">Accesorios</div><div class="val">${esc(r.accesorios||'-')}</div></div><div class="item full"><div class="lab">Observaciones</div><div class="val">${esc(r.observaciones||'-')}</div></div></div><div class="foot">Conserve el número de orden para futuras consultas.</div><button onclick="window.print()" style="margin:22px auto;display:block;padding:11px 15px;background:#0d5bd8;color:white;border:0;border-radius:9px;font-weight:bold">Imprimir / Guardar PDF</button></div></body></html>`);w.document.close()
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Comprobante #${fmtOrder(r.numero)}</title><style>body{font-family:Arial,sans-serif;color:#14243a;padding:32px}.sheet{max-width:760px;margin:auto}.top{display:flex;justify-content:space-between;border-bottom:3px solid #0d5bd8;padding-bottom:18px}.brand{font-size:28px;font-weight:900;color:#0d5bd8}.sub{color:#6f7d90}.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px}.item{padding:12px 0;border-bottom:1px solid #e4e9f0}.full{grid-column:1/-1}.lab{font-size:11px;color:#788598;font-weight:bold;text-transform:uppercase}.val{margin-top:5px}.foot{margin-top:28px;font-size:11px;color:#7c8998}.terms{margin-top:12px;padding:12px 14px;border:1px solid #dde4ec;background:#f7f9fc;border-radius:8px;font-size:11px;line-height:1.5;color:#596779}@media print{button{display:none}}</style></head><body><div class="sheet"><div class="top"><div><div class="brand">NQN Service</div><div class="sub">Servicio técnico</div></div><div style="text-align:right"><h2 style="margin:0">Orden #${fmtOrder(r.numero)}</h2><div class="sub">Ingreso ${prettyDate(r.fechaIngreso)}</div><div class="sub">Cliente C${fmtClient(r.clienteNumero)}</div></div></div><div class="grid"><div class="item"><div class="lab">Cliente</div><div class="val">${esc(r.cliente)}</div></div><div class="item"><div class="lab">Teléfono</div><div class="val">${esc(r.telefono)}</div></div><div class="item"><div class="lab">Equipo</div><div class="val">${esc(r.tipo)}</div></div><div class="item"><div class="lab">Marca y modelo</div><div class="val">${esc(r.marcaModelo)}</div></div><div class="item full"><div class="lab">Falla informada</div><div class="val">${esc(r.falla||'-')}</div></div><div class="item full"><div class="lab">Accesorios</div><div class="val">${esc(r.accesorios||'-')}</div></div><div class="item full"><div class="lab">Observaciones</div><div class="val">${esc(r.observaciones||'-')}</div></div></div><div class="foot">Conserve el número de orden para futuras consultas.</div><div class="terms">${esc(receiptTermsText())}</div><button onclick="window.print()" style="margin:22px auto;display:block;padding:11px 15px;background:#0d5bd8;color:white;border:0;border-radius:9px;font-weight:bold">Imprimir / Guardar PDF</button></div></body></html>`);w.document.close()
 }
 
 window.addEventListener('error',e=>{console.error(e.error||e.message)});
