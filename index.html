@@ -53,7 +53,7 @@ button,input,select,textarea{font:inherit}.shell{min-height:100vh;display:grid;g
 <body>
 <div class="shell">
   <aside class="sidebar">
-    <div class="brand"><div class="brandmark">NQN</div><div><div class="brandname">NQN Service</div><div class="brandsub">Gestión técnica · V9.2 gastos</div></div></div>
+    <div class="brand"><div class="brandmark">NQN</div><div><div class="brandname">NQN Service</div><div class="brandsub">Gestión técnica · V9.3 gastos</div></div></div>
     <div class="nav">
       <button id="nav-dashboard" class="active" onclick="showView('dashboard')">⌂ Dashboard</button>
       <button id="nav-nuevo" onclick="newOrder()">＋ Nuevo ingreso</button>
@@ -956,7 +956,7 @@ window.__nqnLegacyBoot=boot;
   }
   function updateAuthBar(){
     const el=document.getElementById('authStatus');if(!el)return;const op=session();
-    if(!op){el.innerHTML='<span class="badge">V9.2 gastos</span>';return}
+    if(!op){el.innerHTML='<span class="badge">V9.3 gastos</span>';return}
     el.innerHTML=`<button class="btn secondary small" type="button" onclick="logoutOperator()">👤 ${e(op.nombre)} · Salir</button>`;
   }
   function applyRoleNav(){
@@ -1098,7 +1098,7 @@ window.__nqnLegacyBoot=boot;
     const all=window.loadExpenses(),visible=window.isAdmin()?all:all.filter(x=>operatorOwns(x,op));
     const sorted=[...visible].sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha))||String(b.creado).localeCompare(String(a.creado)));
     const today=localDay(),todayRows=visible.filter(x=>x.fecha===today),todayTotal=todayRows.reduce((a,x)=>a+Number(x.monto||0),0);
-    document.getElementById('view').innerHTML=`<section class="panel" style="margin-top:0"><div class="panelhead"><div><div class="eyebrow">NUEVO GASTO</div><h3>Cargar gasto</h3></div><span class="badge">Hoy: ${m(todayTotal)}</span></div><form class="grid" onsubmit="saveExpenseForm(event)"><div class="field short"><label>Fecha</label><input id="expenseDate" type="date" value="${today}" readonly></div><div class="field"><label>Monto *</label><input id="expenseAmount" type="number" min="1" step="100" required autofocus placeholder="Ej. 45000"></div><div class="field"><label>Medio de pago *</label><select id="expensePayment">${EXPENSE_PAYMENTS.map(x=>`<option>${e(x)}</option>`).join('')}</select></div><div class="field"><label>Tipo de gasto *</label><select id="expenseCategory" onchange="expenseCategoryChanged()">${EXPENSE_CATEGORIES.map(x=>`<option>${e(x)}</option>`).join('')}</select></div><div class="field full"><label>Observación <span id="expenseObsRequired" class="muted">(opcional)</span></label><input id="expenseObs" placeholder="Ej. fuelle Drean Next, combustible camioneta, luz del local..."></div><div class="actions full"><button class="btn primary" type="submit">Guardar gasto</button></div></form></section><section class="panel"><div class="panelhead"><div><div class="eyebrow">HISTORIAL</div><h3>${window.isAdmin()?'Gastos registrados':'Mis gastos'}</h3></div><span class="badge">${visible.length}</span></div>${sorted.length?`<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Medio</th><th>Observación</th><th>Monto</th><th></th></tr></thead><tbody>${sorted.slice(0,150).map(x=>`<tr><td>${dateLabel(x.fecha)}</td><td><strong>${e(x.categoria)}</strong></td><td>${e(x.medioPago)}</td><td>${e(x.observacion||'-')}</td><td><strong>${m(x.monto)}</strong></td><td class="right"><button class="btn danger small" onclick="deleteExpense('${e(x.id)}')">Eliminar</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Todavía no cargaste gastos.</div>'}</section>`;
+    document.getElementById('view').innerHTML=`<section class="panel" style="margin-top:0"><div class="panelhead"><div><div class="eyebrow">NUEVO GASTO</div><h3>Cargar gasto</h3></div><span class="badge">Hoy: ${m(todayTotal)}</span></div><form class="grid" onsubmit="saveExpenseForm(event)"><div class="field short"><label>Fecha</label><input id="expenseDate" type="date" value="${today}" readonly></div><div class="field"><label>Monto *</label><input id="expenseAmount" type="number" min="1" step="1" required autofocus placeholder="Ej. 45000"></div><div class="field"><label>Medio de pago *</label><select id="expensePayment">${EXPENSE_PAYMENTS.map(x=>`<option>${e(x)}</option>`).join('')}</select></div><div class="field"><label>Tipo de gasto *</label><select id="expenseCategory" onchange="expenseCategoryChanged()">${EXPENSE_CATEGORIES.map(x=>`<option>${e(x)}</option>`).join('')}</select></div><div class="field full"><label>Observación <span id="expenseObsRequired" class="muted">(opcional)</span></label><input id="expenseObs" placeholder="Ej. fuelle Drean Next, combustible camioneta, luz del local..."></div><div class="actions full"><button class="btn primary" type="submit">Guardar gasto</button></div></form></section><section class="panel"><div class="panelhead"><div><div class="eyebrow">HISTORIAL</div><h3>${window.isAdmin()?'Gastos registrados':'Mis gastos'}</h3></div><span class="badge">${visible.length}</span></div>${sorted.length?`<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Medio</th><th>Observación</th><th>Monto</th><th></th></tr></thead><tbody>${sorted.slice(0,150).map(x=>`<tr><td>${dateLabel(x.fecha)}</td><td><strong>${e(x.categoria)}</strong></td><td>${e(x.medioPago)}</td><td>${e(x.observacion||'-')}</td><td><strong>${m(x.monto)}</strong></td><td class="right"><button class="btn secondary small" onclick="editExpense('${e(x.id)}')">Editar</button> <button class="btn danger small" onclick="deleteExpense('${e(x.id)}')">Eliminar</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Todavía no cargaste gastos.</div>'}</section>`;
     window.expenseCategoryChanged();
   };
   window.expenseCategoryChanged=function(){const cat=document.getElementById('expenseCategory')?.value||'',tag=document.getElementById('expenseObsRequired'),obs=document.getElementById('expenseObs');if(tag)tag.textContent=cat==='Otro'?'(obligatoria para Otro)':'(opcional)';if(obs)obs.required=cat==='Otro'};
@@ -1108,6 +1108,19 @@ window.__nqnLegacyBoot=boot;
     const ts=now();let cash=window.loadCashClosings(),c=todaysCashForOperator(cash,op,fecha);if(!c){c=normalizeCashClosing({id:uid('caja'),fecha,operadorId:op.id,operador:op.nombre,efectivo:0,mercadoPago:0,tarjetas:0,notaCredito:0,gastos:0,observaciones:'',creado:ts,actualizado:ts});cash.push(c)}
     const obj=normalizeExpense({id:uid('gasto'),fecha,operadorId:op.id,operador:op.nombre,monto,medioPago,categoria,observacion,cajaId:c.id,creado:ts,actualizado:ts});let expenses=window.loadExpenses();expenses.push(obj);window.saveExpenses(expenses);
     c.gastos=Math.max(0,Number(c.gastos||0)+monto);c.actualizado=ts;const ci=cash.findIndex(x=>String(x.id)===String(c.id));if(ci>=0)cash[ci]=c;window.saveCashClosings(cash);queueCloudOp('upsertCash',c.id,c,c.actualizado);toast('Gasto guardado · '+m(monto));window.renderExpenses();
+  };
+  window.editExpense=function(id){
+    const op=session();if(!op)return renderLoginOrSetup();let expenses=window.loadExpenses(),x=expenses.find(r=>String(r.id)===String(id));if(!x)return;
+    if(!window.isAdmin()&&!operatorOwns(x,op)){toast('No podés editar un gasto de otro operador');return}
+    const amountRaw=prompt('Monto del gasto:',String(Number(x.monto||0)));if(amountRaw===null)return;const monto=Number(String(amountRaw).replace(',','.'));if(!Number.isFinite(monto)||monto<=0){alert('Ingresá un monto válido.');return}
+    const catRaw=prompt('Tipo de gasto: Combustible, Repuestos, Herramientas, Alquiler, Servicios u Otro',x.categoria||'Otro');if(catRaw===null)return;
+    const categoria=EXPENSE_CATEGORIES.find(c=>c.toLowerCase()===String(catRaw).trim().toLowerCase());if(!categoria){alert('Elegí una categoría válida.');return}
+    const payRaw=prompt('Medio de pago: Efectivo o Mercado Pago',x.medioPago||'Efectivo');if(payRaw===null)return;
+    const medioPago=EXPENSE_PAYMENTS.find(c=>c.toLowerCase()===String(payRaw).trim().toLowerCase());if(!medioPago){alert('Elegí Efectivo o Mercado Pago.');return}
+    const obsRaw=prompt('Observación:',x.observacion||'');if(obsRaw===null)return;const observacion=String(obsRaw).trim();if(categoria==='Otro'&&!observacion){alert('En “Otro” la observación es obligatoria.');return}
+    const oldMonto=Number(x.monto||0),ts=now();x.monto=monto;x.categoria=categoria;x.medioPago=medioPago;x.observacion=observacion;x.actualizado=ts;window.saveExpenses(expenses);
+    let cash=window.loadCashClosings(),c=cash.find(r=>String(r.id)===String(x.cajaId));if(!c)c=cash.find(r=>r.fecha===x.fecha&&operatorOwns(r,{id:x.operadorId,nombre:x.operador}));if(c){c.gastos=Math.max(0,Number(c.gastos||0)-oldMonto+monto);c.actualizado=ts;window.saveCashClosings(cash);queueCloudOp('upsertCash',c.id,c,c.actualizado)}
+    toast('Gasto actualizado');window.renderExpenses();
   };
   window.deleteExpense=function(id){
     const op=session();if(!op)return renderLoginOrSetup();let expenses=window.loadExpenses(),x=expenses.find(r=>String(r.id)===String(id));if(!x)return;if(!window.isAdmin()&&!operatorOwns(x,op)){toast('No podés eliminar un gasto de otro operador');return}if(!confirm('¿Eliminar este gasto de '+m(x.monto)+'?'))return;window.saveExpenses(expenses.filter(r=>String(r.id)!==String(id)));
