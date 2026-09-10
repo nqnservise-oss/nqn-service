@@ -345,6 +345,25 @@ function fmtOrder(n){return String(n||0).padStart(3,'0')}
 function fmtClient(n){return String(n||0).padStart(4,'0')}
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 function normPhone(s){return String(s||'').replace(/\D/g,'')}
+function whatsappNumber(phone){
+  let p=normPhone(phone);
+  if(!p)return '';
+  if(p.startsWith('0054'))p=p.slice(4);
+  if(p.startsWith('54'))p=p.slice(2);
+  if(p.startsWith('0'))p=p.slice(1);
+  // Formato habitual de Neuquén: 299 + número. Si alguien cargó 15, lo quitamos.
+  if(p.startsWith('29915'))p='299'+p.slice(5);
+  // WhatsApp para celulares argentinos: 54 + 9 + código de área + número.
+  return p.startsWith('9')?'54'+p:'549'+p;
+}
+function openOrderWhatsApp(id,ev){
+  if(ev){ev.preventDefault();ev.stopPropagation();}
+  const r=load().find(x=>String(x.id)===String(id));
+  if(!r)return;
+  const n=whatsappNumber(r.telefono);
+  if(!n||n.length<12){alert('Revisá el teléfono del cliente antes de abrir WhatsApp.');return;}
+  window.open('https://wa.me/'+n,'_blank','noopener');
+}
 function loadCustomModels(){let x=safeJSON(localStorage.getItem(KEY_MODELS)||'{}',{});return x&&typeof x==='object'&&!Array.isArray(x)?x:{}}
 function saveCustomModel(brand,model){
   brand=String(brand||'').trim();model=String(model||'').trim();if(!brand||!model)return;
@@ -495,8 +514,8 @@ function title(t){document.getElementById('pageTitle').textContent=t}
 function showView(v){currentView=v;editingId=null;setNav(v);({dashboard:renderDashboard,ordenes:renderOrders,clientes:renderClients,kpis:renderKPIs,cleris:renderCleris,backup:renderBackup}[v]||renderDashboard)()}
 document.getElementById('today').textContent=new Date().toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});updateInstallButton();
 
-function orderTable(rows){
-  return `<div class="tablewrap"><table><thead><tr><th>Orden</th><th>Cliente</th><th>Equipo</th><th>Estado</th><th>Días</th><th>Saldo</th></tr></thead><tbody>${rows.map(r=>`<tr class="clickable" onclick="editOrder('${esc(r.id)}')"><td><div class="mono">#${fmtOrder(r.numero)}</div><div class="muted">${prettyDate(r.fechaIngreso)}</div></td><td><strong>${esc(r.cliente)}</strong><div class="muted">C${fmtClient(r.clienteNumero)} · ${esc(r.telefono)}</div></td><td>${esc(r.marcaModelo)}<div class="muted">${esc(r.tipo)}</div></td><td><span class="badge ${badgeClass(r)}">${esc(r.estado)}</span></td><td class="nowrap"><strong>${daysInShop(r)}</strong> d.</td><td><strong>${money(balance(r))}</strong></td></tr>`).join('')}</tbody></table></div>`;
+function orderTable(rows,showWhatsApp=false){
+  return `<div class="tablewrap"><table><thead><tr><th>Orden</th><th>Cliente</th><th>Equipo</th><th>Estado</th><th>Días</th><th>Saldo</th></tr></thead><tbody>${rows.map(r=>`<tr class="clickable" onclick="editOrder('${esc(r.id)}')"><td><div class="mono">#${fmtOrder(r.numero)}</div><div class="muted">${prettyDate(r.fechaIngreso)}</div></td><td><strong>${esc(r.cliente)}</strong><div class="muted" style="display:flex;align-items:center;gap:7px;flex-wrap:wrap"><span>C${fmtClient(r.clienteNumero)} · ${esc(r.telefono)}</span>${showWhatsApp?`<button type="button" class="btn small" title="Abrir WhatsApp de ${esc(r.cliente)}" aria-label="Abrir WhatsApp de ${esc(r.cliente)}" onclick="openOrderWhatsApp('${esc(r.id)}',event)" style="background:#25D366;color:#fff;padding:5px 8px;min-width:32px">💬</button>`:''}</div></td><td>${esc(r.marcaModelo)}<div class="muted">${esc(r.tipo)}</div></td><td><span class="badge ${badgeClass(r)}">${esc(r.estado)}</span></td><td class="nowrap"><strong>${daysInShop(r)}</strong> d.</td><td><strong>${money(balance(r))}</strong></td></tr>`).join('')}</tbody></table></div>`;
 }
 
 function renderDashboard(){
@@ -604,7 +623,7 @@ function renderOrders(){
 function filterOrders(){
   let q=(document.getElementById('searchQ')?.value||'').toLowerCase().trim(),e=document.getElementById('searchEstado')?.value||'';
   let rows=load().filter(r=>{let hay=[fmtOrder(r.numero),fmtClient(r.clienteNumero),r.cliente,r.telefono,r.marcaModelo,r.tipo].join(' ').toLowerCase().includes(q);return hay&&(!e||r.estado===e)}).sort((a,b)=>b.numero-a.numero);
-  document.getElementById('countTitle').textContent=rows.length+' órdenes';document.getElementById('ordersResult').innerHTML=rows.length?orderTable(rows):'<div class="empty">No encontré órdenes con esos filtros.</div>';
+  document.getElementById('countTitle').textContent=rows.length+' órdenes';document.getElementById('ordersResult').innerHTML=rows.length?orderTable(rows,true):'<div class="empty">No encontré órdenes con esos filtros.</div>';
 }
 
 function editOrder(id){
