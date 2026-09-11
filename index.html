@@ -974,6 +974,7 @@ window.__nqnLegacyBoot=boot;
       monto:Math.max(0,Number(r?.monto||0)),medioPago:EXPENSE_PAYMENTS.includes(String(r?.medioPago||''))?String(r.medioPago):'Efectivo',
       categoria:EXPENSE_CATEGORIES_VALID.includes(String(r?.categoria||''))?String(r.categoria):'Otro',
       observacion:String(r?.observacion||'').trim(),cajaId:String(r?.cajaId||''),
+      orderId:String(r?.orderId||''),orderNumero:Number(r?.orderNumero||0),orderCliente:String(r?.orderCliente||'').trim(),orderEquipo:String(r?.orderEquipo||'').trim(),
       creado:r?.creado||now(),actualizado:r?.actualizado||r?.creado||now()
     };
   }
@@ -1252,7 +1253,7 @@ window.__nqnLegacyBoot=boot;
     const all=window.loadExpenses(),visible=window.isAdmin()?all:all.filter(x=>operatorOwns(x,op));
     const sorted=[...visible].sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha))||String(b.creado).localeCompare(String(a.creado)));
     const today=localDay(),todayRows=visible.filter(x=>x.fecha===today),todayTotal=todayRows.reduce((a,x)=>a+Number(x.monto||0),0);
-    document.getElementById('view').innerHTML=`<section class="panel" style="margin-top:0"><div class="panelhead"><div><div class="eyebrow">NUEVO GASTO</div><h3>Cargar gasto</h3></div><span class="badge">Hoy: ${m(todayTotal)}</span></div><form class="grid" onsubmit="saveExpenseForm(event)"><div class="field short"><label>Fecha</label><input id="expenseDate" type="date" value="${today}" readonly></div><div class="field"><label>Monto *</label><input id="expenseAmount" type="text" inputmode="decimal" required autofocus placeholder="Ej. 78.788,35"></div><div class="field"><label>Medio de pago *</label><select id="expensePayment" onchange="expensePaymentChanged(true)">${EXPENSE_PAYMENTS.map(x=>`<option>${e(x)}</option>`).join('')}</select><button id="openMercadoPagoBtn" type="button" class="btn secondary small" style="display:none;margin-top:8px" onclick="openMercadoPago()">Abrir Mercado Pago</button></div><div class="field"><label>Tipo de gasto *</label><select id="expenseCategory" onchange="expenseCategoryChanged()">${EXPENSE_CATEGORIES.map(x=>`<option>${e(x)}</option>`).join('')}</select></div><div class="field full"><label>Observación <span id="expenseObsRequired" class="muted">(opcional)</span></label><input id="expenseObs" placeholder="Ej. fuelle Drean Next, combustible camioneta, luz del local..."></div><div class="actions full"><button class="btn primary" type="submit">Guardar gasto</button></div></form></section><section class="panel"><div class="panelhead"><div><div class="eyebrow">HISTORIAL</div><h3>${window.isAdmin()?'Gastos registrados':'Mis gastos'}</h3></div><span class="badge">${visible.length}</span></div>${sorted.length?`<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Medio</th><th>Observación</th><th>Monto</th><th></th></tr></thead><tbody>${sorted.slice(0,150).map(x=>`<tr><td>${dateLabel(x.fecha)}</td><td><strong>${e(x.categoria)}</strong></td><td>${e(x.medioPago)}</td><td>${e(x.observacion||'-')}</td><td><strong>${m(x.monto)}</strong></td><td class="right"><button class="btn secondary small" onclick="editExpense('${e(x.id)}')">Editar</button> <button class="btn danger small" onclick="deleteExpense('${e(x.id)}')">Eliminar</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Todavía no cargaste gastos.</div>'}</section>`;
+    document.getElementById('view').innerHTML=`<section class="panel" style="margin-top:0"><div class="panelhead"><div><div class="eyebrow">NUEVO GASTO</div><h3>Cargar gasto</h3></div><span class="badge">Hoy: ${m(todayTotal)}</span></div><form class="grid" onsubmit="saveExpenseForm(event)"><div class="field short"><label>Fecha</label><input id="expenseDate" type="date" value="${today}" readonly></div><div class="field"><label>Monto *</label><input id="expenseAmount" type="text" inputmode="decimal" required autofocus placeholder="Ej. 78.788,35"></div><div class="field"><label>Medio de pago *</label><select id="expensePayment" onchange="expensePaymentChanged(true)">${EXPENSE_PAYMENTS.map(x=>`<option>${e(x)}</option>`).join('')}</select><button id="openMercadoPagoBtn" type="button" class="btn secondary small" style="display:none;margin-top:8px" onclick="openMercadoPago()">Abrir Mercado Pago</button></div><div class="field"><label>Tipo de gasto *</label><select id="expenseCategory" onchange="expenseCategoryChanged()">${EXPENSE_CATEGORIES.map(x=>`<option>${e(x)}</option>`).join('')}</select></div><div class="field full" id="expenseOrderField" style="display:none"><label>Orden de trabajo *</label><input id="expenseOrderSearch" list="expenseOrderOptions" placeholder="Ej. 007 o nombre del cliente"><datalist id="expenseOrderOptions"></datalist><div id="expenseOrderConfirm" class="muted" style="margin-top:6px">Buscá por OT o cliente.</div></div><div class="field full"><label>Observación <span id="expenseObsRequired" class="muted">(opcional)</span></label><input id="expenseObs" placeholder="Ej. fuelle Drean Next, combustible camioneta, luz del local..."></div><div class="actions full"><button class="btn primary" type="submit">Guardar gasto</button></div></form></section><section class="panel"><div class="panelhead"><div><div class="eyebrow">HISTORIAL</div><h3>${window.isAdmin()?'Gastos registrados':'Mis gastos'}</h3></div><span class="badge">${visible.length}</span></div>${sorted.length?`<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>OT</th><th>Medio</th><th>Observación</th><th>Monto</th><th></th></tr></thead><tbody>${sorted.slice(0,150).map(x=>`<tr><td>${dateLabel(x.fecha)}</td><td><strong>${e(x.categoria)}</strong></td><td>${x.orderNumero?'<strong>OT '+fmtOrder(x.orderNumero)+'</strong><div class="muted">'+e(x.orderCliente||'')+'</div>':'-'}</td><td>${e(x.medioPago)}</td><td>${e(x.observacion||'-')}</td><td><strong>${m(x.monto)}</strong></td><td class="right"><button class="btn secondary small" onclick="editExpense('${e(x.id)}')">Editar</button> <button class="btn danger small" onclick="deleteExpense('${e(x.id)}')">Eliminar</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Todavía no cargaste gastos.</div>'}</section>`;
     window.expenseCategoryChanged();
     window.expensePaymentChanged();
   };
@@ -1268,12 +1269,36 @@ window.__nqnLegacyBoot=boot;
     try{window.location.href='mercadopago://';}catch(e){}
     setTimeout(()=>{if(!left&&!document.hidden)window.open('https://www.mercadopago.com.ar/','_blank','noopener')},900);
   };
-  window.expenseCategoryChanged=function(){const cat=document.getElementById('expenseCategory')?.value||'',tag=document.getElementById('expenseObsRequired'),obs=document.getElementById('expenseObs');if(tag)tag.textContent=cat==='Otro'?'(obligatoria para Otro)':'(opcional)';if(obs)obs.required=cat==='Otro'};
+  window.expenseCategoryChanged=function(){
+    const cat=document.getElementById('expenseCategory')?.value||'',tag=document.getElementById('expenseObsRequired'),obs=document.getElementById('expenseObs'),field=document.getElementById('expenseOrderField');
+    if(tag)tag.textContent=cat==='Otro'?'(obligatoria para Otro)':'(opcional)';
+    if(obs)obs.required=cat==='Otro';
+    if(field)field.style.display=cat==='Repuestos'?'block':'none';
+    if(cat==='Repuestos')window.prepareExpenseOrders();
+  };
+  window.prepareExpenseOrders=function(){
+    const input=document.getElementById('expenseOrderSearch'),list=document.getElementById('expenseOrderOptions'),confirmBox=document.getElementById('expenseOrderConfirm');if(!input||!list)return;
+    const rows=load().filter(r=>r.estado!=='Entregado').sort((a,b)=>(Number(b.numero)||0)-(Number(a.numero)||0));
+    list.innerHTML=rows.map(r=>`<option value="${fmtOrder(r.numero)}">${e(r.cliente||'')} · ${e(r.tipo||'')} ${e(r.marcaModelo||'')}</option>`).join('');
+    const update=()=>{
+      const q=String(input.value||'').trim().toLowerCase().replace(/^ot\s*/,'').replace(/^0+/,'');
+      const found=rows.find(r=>String(Number(r.numero)||0)===q)||rows.find(r=>String(r.cliente||'').toLowerCase()===String(input.value||'').trim().toLowerCase());
+      input.dataset.orderId=found?.id||'';
+      if(confirmBox)confirmBox.innerHTML=found?`<strong>OT ${fmtOrder(found.numero)}</strong> · ${e(found.cliente||'')} · ${e(found.tipo||'')} ${e(found.marcaModelo||'')}`:'Buscá por OT o cliente.';
+    };
+    input.oninput=update;input.onchange=update;update();
+  };
   window.saveExpenseForm=function(ev){
     ev.preventDefault();const op=session();if(!op)return renderLoginOrSetup();const parsedMonto=parseMoneyAR(document.getElementById('expenseAmount')?.value||'');const monto=Number.isFinite(parsedMonto)?Math.max(0,parsedMonto):0,categoria=document.getElementById('expenseCategory')?.value||'',medioPago=document.getElementById('expensePayment')?.value||'',observacion=String(document.getElementById('expenseObs')?.value||'').trim(),fecha=document.getElementById('expenseDate')?.value||localDay();
     if(!monto){alert('Ingresá el monto del gasto.');return}if(categoria==='Otro'&&!observacion){alert('En “Otro” escribí una observación para saber qué gasto fue.');return}
+    let linkedOrder=null;
+    if(categoria==='Repuestos'){
+      const oid=document.getElementById('expenseOrderSearch')?.dataset?.orderId||'';
+      linkedOrder=load().find(r=>String(r.id)===String(oid));
+      if(!linkedOrder){alert('Seleccioná una OT válida para este repuesto.');return}
+    }
     const ts=now();let cash=window.loadCashClosings(),c=todaysCashForOperator(cash,op,fecha);if(!c){c=normalizeCashClosing({id:uid('caja'),fecha,operadorId:op.id,operador:op.nombre,efectivo:0,mercadoPago:0,tarjetas:0,notaCredito:0,gastos:0,observaciones:'',creado:ts,actualizado:ts});cash.push(c)}
-    const obj=normalizeExpense({id:uid('gasto'),fecha,operadorId:op.id,operador:op.nombre,monto,medioPago,categoria,observacion,cajaId:c.id,creado:ts,actualizado:ts});let expenses=window.loadExpenses();expenses.push(obj);window.saveExpenses(expenses);
+    const obj=normalizeExpense({id:uid('gasto'),fecha,operadorId:op.id,operador:op.nombre,monto,medioPago,categoria,observacion,cajaId:c.id,orderId:linkedOrder?.id||'',orderNumero:linkedOrder?.numero||0,orderCliente:linkedOrder?.cliente||'',orderEquipo:linkedOrder?((linkedOrder.tipo||'')+' '+(linkedOrder.marcaModelo||'')).trim():'',creado:ts,actualizado:ts});let expenses=window.loadExpenses();expenses.push(obj);window.saveExpenses(expenses);
     c.gastos=Math.max(0,Number(c.gastos||0)+monto);c.actualizado=ts;const ci=cash.findIndex(x=>String(x.id)===String(c.id));if(ci>=0)cash[ci]=c;window.saveCashClosings(cash);queueCloudOp('upsertCash',c.id,c,c.actualizado);toast('Gasto guardado · '+m(monto));window.renderExpenses();
   };
   window.editExpense=function(id){
