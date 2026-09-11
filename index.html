@@ -606,7 +606,7 @@ function submitOrder(ev,isNew){
   if(obj.pagado>obj.monto&&obj.monto>0){if(!confirm('El monto pagado es mayor al total. ¿Guardar igual?'))return}
   if(isNew){
     obj.id=(crypto.randomUUID?crypto.randomUUID():Date.now().toString());obj.numero=nextOrder();obj.clienteNumero=findClientNumber(obj.telefono,obj.cliente);obj.creado=now;
-    obj.fechasEstado={'En taller':now};obj.historial=[{fecha:now,estado:'En taller'}];rows.push(obj);save(rows,'Antes de crear orden');queueCloudOp('upsertOrder',obj.id,obj,obj.actualizado||obj.creado);toast('Orden '+fmtOrder(obj.numero)+' guardada');editOrder(obj.id);setTimeout(()=>showNewOrderSharePrompt(obj.id),120);
+    obj.fechasEstado={'En taller':now};obj.historial=[{fecha:now,estado:'En taller'}];rows.push(obj);save(rows,'Antes de crear orden');queueCloudOp('upsertOrder',obj.id,obj,obj.actualizado||obj.creado);toast('Orden '+fmtOrder(obj.numero)+' guardada');editOrder(obj.id);
   }else{
     let i=rows.findIndex(r=>r.id===editingId);if(i<0)return;let old=rows[i];
     obj.id=old.id;obj.numero=old.numero;obj.clienteNumero=findClientNumber(obj.telefono,obj.cliente)||old.clienteNumero;obj.creado=old.creado;obj.fechasEstado={...(old.fechasEstado||{})};obj.historial=[...(old.historial||[])];
@@ -633,21 +633,6 @@ function editOrder(id){
   attachBalancePreview();
 }
 function attachBalancePreview(){let m=document.getElementById('monto'),p=document.getElementById('pagado'),s=document.getElementById('saldoPreview');if(!m||!p||!s)return;let f=()=>{const mt=parseMoneyAR(m.value),pg=parseMoneyAR(p.value);s.value=money(Math.max(0,(Number.isFinite(mt)?mt:0)-(Number.isFinite(pg)?pg:0)))};m.addEventListener('input',f);p.addEventListener('input',f);f()}
-function showNewOrderSharePrompt(id){
-  const r=load().find(x=>x.id===id);if(!r)return;
-  const actions=document.querySelector('#view .actions');
-  if(!actions||document.getElementById('newOrderShareBtn'))return;
-  const btn=document.createElement('button');
-  btn.id='newOrderShareBtn';
-  btn.type='button';
-  btn.className='btn';
-  btn.style.background='#25D366';
-  btn.style.color='#fff';
-  btn.innerHTML='☎ Compartir comprobante ahora';
-  btn.onclick=()=>shareReceiptWhatsApp(id);
-  actions.insertBefore(btn,actions.lastElementChild);
-  toast('Orden guardada · ya podés compartir el comprobante');
-}
 function newOrderSameClient(id){let r=load().find(x=>x.id===id);if(r)newOrder({cliente:r.cliente,telefono:r.telefono})}
 function deleteOrder(id){if(!confirm('¿Eliminar esta orden? Se guardará una copia automática anterior, pero conviene evitar eliminar si solo querés cambiar el estado.'))return;let rows=load().filter(r=>r.id!==id);save(rows,'Antes de eliminar orden');queueCloudOp('deleteOrder',id,null,nowISO());toast('Orden eliminada');renderOrders()}
 
@@ -822,17 +807,27 @@ async function shareReceiptWhatsApp(id){
   try{
     const blob=await receiptCanvasBlob(receiptCanvas(r));
     const file=new File([blob],'NQN_Service_Orden_'+fmtOrder(r.numero)+'.png',{type:'image/png'});
-    let canShare=!!navigator.share;
-    if(canShare&&navigator.canShare){try{canShare=navigator.canShare({files:[file]})}catch(e){canShare=false}}
-    if(canShare){
-      try{await navigator.share({files:[file],title:'NQN Service · Orden #'+fmtOrder(r.numero),text:'Comprobante de ingreso · Orden #'+fmtOrder(r.numero)});return}
-      catch(err){if(err&&err.name==='AbortError')return;console.error('No se pudo compartir el comprobante',err)}
-    }
     downloadReceiptImage(file);
-    alert('La imagen del comprobante quedó guardada. Abrí WhatsApp y adjuntala desde tus archivos o descargas.');
-  }catch(err){console.error('Error al generar comprobante en imagen',err);alert('No se pudo generar la imagen. Podés seguir usando “Comprobante / PDF”.')}
-}
 
+    let phone=String(r.telefono||'').replace(/\D/g,'');
+    if(phone.startsWith('0'))phone=phone.replace(/^0+/,'');
+    if(phone.startsWith('15'))phone=phone.slice(2);
+    if(!phone.startsWith('54'))phone='54'+phone;
+    // Para móviles argentinos, WhatsApp usa 549 + código de área + número.
+    if(phone.startsWith('54')&&!phone.startsWith('549'))phone='549'+phone.slice(2);
+
+    if(phone.length<11){
+      alert('El teléfono de esta orden no parece válido para WhatsApp. Revisalo y volvé a intentar.');
+      return;
+    }
+
+    const msg=encodeURIComponent('Hola '+(r.cliente||'')+', te envío el comprobante de ingreso de NQN Service · Orden #'+fmtOrder(r.numero)+'.');
+    window.location.href='https://wa.me/'+phone+'?text='+msg;
+  }catch(err){
+    console.error('Error al generar comprobante en imagen',err);
+    alert('No se pudo generar la imagen. Podés seguir usando “Comprobante / PDF”.');
+  }
+}
 function printReceipt(id){
   let r=load().find(x=>x.id===id);if(!r)return;let w=window.open('','_blank');if(!w){alert('El navegador bloqueó la ventana del comprobante. Permití ventanas emergentes para este archivo.');return}
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Comprobante #${fmtOrder(r.numero)}</title><style>body{font-family:Arial,sans-serif;color:#14243a;padding:32px}.sheet{max-width:760px;margin:auto}.top{display:flex;justify-content:space-between;border-bottom:3px solid #0d5bd8;padding-bottom:18px}.brand{font-size:28px;font-weight:900;color:#0d5bd8}.sub{color:#6f7d90}.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px}.item{padding:12px 0;border-bottom:1px solid #e4e9f0}.full{grid-column:1/-1}.lab{font-size:11px;color:#788598;font-weight:bold;text-transform:uppercase}.val{margin-top:5px}.foot{margin-top:28px;font-size:11px;color:#7c8998}.terms{margin-top:12px;padding:12px 14px;border:1px solid #dde4ec;background:#f7f9fc;border-radius:8px;font-size:11px;line-height:1.5;color:#596779}@media print{button{display:none}}</style></head><body><div class="sheet"><div class="top"><div><div class="brand">NQN Service</div><div class="sub">Servicio técnico</div></div><div style="text-align:right"><h2 style="margin:0">Orden #${fmtOrder(r.numero)}</h2><div class="sub">Ingreso ${prettyDate(r.fechaIngreso)}</div><div class="sub">Cliente C${fmtClient(r.clienteNumero)}</div></div></div><div class="grid"><div class="item"><div class="lab">Cliente</div><div class="val">${esc(r.cliente)}</div></div><div class="item"><div class="lab">Teléfono</div><div class="val">${esc(r.telefono)}</div></div><div class="item"><div class="lab">Equipo</div><div class="val">${esc(r.tipo)}</div></div><div class="item"><div class="lab">Marca y modelo</div><div class="val">${esc(r.marcaModelo)}</div></div><div class="item full"><div class="lab">Falla informada</div><div class="val">${esc(r.falla||'-')}</div></div><div class="item full"><div class="lab">Accesorios</div><div class="val">${esc(r.accesorios||'-')}</div></div><div class="item full"><div class="lab">Observaciones</div><div class="val">${esc(r.observaciones||'-')}</div></div></div><div class="foot">Conserve el número de orden para futuras consultas.</div><div class="terms">${esc(receiptTermsText())}</div><button onclick="window.print()" style="margin:22px auto;display:block;padding:11px 15px;background:#0d5bd8;color:white;border:0;border-radius:9px;font-weight:bold">Imprimir / Guardar PDF</button></div></body></html>`);w.document.close()
