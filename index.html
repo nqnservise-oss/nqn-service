@@ -48,6 +48,57 @@ button,input,select,textarea{font:inherit}.shell{min-height:100vh;display:grid;g
 @media(max-width:950px){.shell{grid-template-columns:1fr}.sidebar{height:auto;position:relative;flex-direction:row;align-items:center;overflow:auto}.brand{margin:0 12px 0 0}.brandname,.brandsub,.foot{display:none}.nav{flex-direction:row}.main{padding:20px}.formlayout{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}.alerts{grid-template-columns:1fr}.sidecard{order:-1}}
 @media(max-width:620px){.stats{grid-template-columns:1fr}.grid,.searchbar,.backupbox{grid-template-columns:1fr}.full{grid-column:1}.hero{flex-direction:column;align-items:flex-start;gap:18px}.top h1{font-size:25px}.nav button{white-space:nowrap}.actions .btn{width:100%}}
 @media print{.sidebar,.top,.no-print,.actions{display:none!important}.shell{display:block}.main{padding:0}.panel{border:0}.sidecard{background:#fff;color:#000;border:1px solid #ddd}.sidecard *{color:#000!important}}
+
+/* ===== AJUSTE VISUAL 12-09-2026: mejor legibilidad, sin tocar lógica ===== */
+/* Etiquetas de todos los formularios: más visibles */
+label{
+  font-size:14px;
+  font-weight:800;
+  line-height:1.25;
+  color:#405269;
+}
+.field{gap:8px}
+.grid{row-gap:18px}
+.hint{font-size:12px;line-height:1.45}
+
+/* Campos algo más cómodos de leer sin agrandar demasiado la interfaz */
+input,select,textarea{font-size:14px;line-height:1.35}
+
+/* Saldo: dato prioritario dentro de la orden */
+#saldoPreview{
+  font-size:17px;
+  font-weight:850;
+  color:var(--blue);
+  background:var(--soft);
+  border-color:#c8dcff;
+}
+
+/* Resumen lateral: lectura más rápida de importes y estado */
+.sidecard .summaryrow{font-size:14px;padding:10px 0}
+.sidecard .summaryrow strong{font-size:14px;font-weight:850}
+.sidecard .summaryrow.total{
+  font-size:20px;
+  margin:7px -8px 2px;
+  padding:13px 8px;
+  border-top:1px solid #365675;
+  border-radius:10px;
+  background:rgba(255,255,255,.06);
+}
+.sidecard .summaryrow.total strong{font-size:21px}
+
+/* Estados más fáciles de distinguir */
+.badge{font-size:12px;font-weight:800;padding:6px 10px}
+
+/* En celular, un punto extra de legibilidad */
+@media(max-width:620px){
+  label{font-size:15px}
+  input,select,textarea{font-size:15px}
+  .field{gap:8px}
+  .grid{row-gap:17px}
+  .hint{font-size:12px}
+}
+/* ===== FIN AJUSTE VISUAL ===== */
+
 </style>
 </head>
 <body>
