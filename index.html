@@ -104,7 +104,7 @@ input,select,textarea{font-size:14px;line-height:1.35}
 <body>
 <div class="shell">
   <aside class="sidebar">
-    <div class="brand"><div class="brandmark">NQN</div><div><div class="brandname">NQN Service</div><div class="brandsub">Gestión técnica · V9.15 stock</div></div></div>
+    <div class="brand"><div class="brandmark">NQN</div><div><div class="brandname">NQN Service</div><div class="brandsub">Gestión técnica · V9.16 facturación diaria</div></div></div>
     <div class="nav">
       <button id="nav-dashboard" class="active" onclick="showView('dashboard')">⌂ Dashboard</button>
       <button id="nav-nuevo" onclick="newOrder()">＋ Nuevo ingreso</button>
@@ -147,7 +147,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredIns
 window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;updateInstallButton();toast('NQN Service instalada')});
 function updateInstallButton(){let b=document.getElementById('installPwaBtn');if(b)b.classList.toggle('show',!!deferredInstallPrompt)}
 async function installPwa(){if(!deferredInstallPrompt){alert('Si Chrome no muestra la instalación todavía, recargá la página una vez y volvé a intentar.');return}deferredInstallPrompt.prompt();try{await deferredInstallPrompt.userChoice}catch(e){}deferredInstallPrompt=null;updateInstallButton()}
-const OFFLINE_CACHE='nqn-service-v15-stock';
+const OFFLINE_CACHE='nqn-service-v16-facturacion-diaria';
 const OFFLINE_ASSETS=['./','./index.html','./NQN_SERVICE_ESTABLE.html','./manifest.webmanifest','./turnos.js','./icons/icon-192.png','./icons/icon-512.png'];
 let swReloading=false;
 async function ensureOfflineReady(){
@@ -753,7 +753,31 @@ function renderKPIs(){
   let fact=entregados.reduce((a,r)=>a+Number(r.monto||0),0),ticket=entregados.length?fact/entregados.length:0;
   let avgDays=entregados.length?entregados.reduce((a,r)=>a+daysInShop(r),0)/entregados.length:0,cobrar=rows.reduce((a,r)=>a+balance(r),0);
   let counts={};ingresos.forEach(r=>{let b=brandOf(r);counts[b]=(counts[b]||0)+1});let ranking=Object.entries(counts).sort((a,b)=>b[1]-a[1]),max=ranking.length?ranking[0][1]:1;
-  document.getElementById('view').innerHTML=`<section class="panel" style="margin-top:0"><div class="panelhead"><div><div class="eyebrow">MES ACTUAL</div><h3>Indicadores que sí sirven</h3></div><span class="badge">${mk}</span></div><div class="kpigrid"><div class="stat soft"><div class="statlabel">Facturación taller</div><div class="statvalue smallmoney">${money(fact)}</div><div class="stathelp">Órdenes entregadas este mes</div></div><div class="stat"><div class="statlabel">Ticket promedio</div><div class="statvalue smallmoney">${money(ticket)}</div><div class="stathelp">Sobre órdenes entregadas</div></div><div class="stat"><div class="statlabel">Ingresos</div><div class="statvalue">${ingresos.length}</div><div class="stathelp">Equipos ingresados este mes</div></div><div class="stat"><div class="statlabel">Entregados</div><div class="statvalue">${entregados.length}</div><div class="stathelp">Equipos cerrados este mes</div></div><div class="stat"><div class="statlabel">Días promedio</div><div class="statvalue">${avgDays.toFixed(1)}</div><div class="stathelp">Ingreso a entrega</div></div><div class="stat ${cobrar?'warn':''}"><div class="statlabel">Por cobrar</div><div class="statvalue smallmoney">${money(cobrar)}</div><div class="stathelp">Saldo abierto total</div></div></div></section><section class="panel"><div class="panelhead"><div><div class="eyebrow">MARCAS</div><h3>Marcas que más ingresaron este mes</h3></div></div>${ranking.length?`<div class="brandlist">${ranking.map(([name,count])=>`<div class="brandrow"><strong>${esc(name)}</strong><div class="bartrack"><div class="barfill" style="width:${Math.round(count/max*100)}%"></div></div><div class="right"><strong>${count}</strong></div></div>`).join('')}</div>`:'<div class="empty">Todavía no hay ingresos este mes.</div>'}</section>`;
+
+  const META_DIARIA=500000, CERCA_META=400000;
+  const hoy=localISODate(), [yy,mm]=mk.split('-').map(Number), ultimo=new Date(yy,mm,0).getDate();
+  let factPorDia={};
+  entregados.forEach(r=>{if(r.fechaEntrega)factPorDia[r.fechaEntrega]=(factPorDia[r.fechaEntrega]||0)+Number(r.monto||0)});
+  let dias=[];
+  for(let d=1;d<=ultimo;d++){
+    const fecha=`${yy}-${String(mm).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dt=new Date(yy,mm-1,d,12,0,0), dow=dt.getDay();
+    if(dow===0||dow===6)continue;
+    const futuro=fecha>hoy, monto=factPorDia[fecha]||0;
+    dias.push({fecha,dt,monto,futuro});
+  }
+  const transcurridos=dias.filter(x=>!x.futuro), conFact=transcurridos.filter(x=>x.monto>0).length, enCero=transcurridos.filter(x=>x.monto===0).length;
+  const promedio=transcurridos.length?transcurridos.reduce((a,x)=>a+x.monto,0)/transcurridos.length:0;
+  const diaClase=x=>x.futuro?'':(x.monto>=META_DIARIA?'green':x.monto>=CERCA_META?'warn':'bad');
+  const diaEstado=x=>x.futuro?'Pendiente':(x.monto>=META_DIARIA?'Meta cumplida':x.monto>=CERCA_META?'Cerca de la meta':x.monto===0?'Sin facturación':'Debajo de la meta');
+
+  document.getElementById('view').innerHTML=`<section class="panel" style="margin-top:0"><div class="panelhead"><div><div class="eyebrow">MES ACTUAL</div><h3>Indicadores que sí sirven</h3></div><span class="badge">${mk}</span></div><div class="kpigrid"><div class="stat soft"><div class="statlabel">Facturación taller</div><div class="statvalue smallmoney">${money(fact)}</div><div class="stathelp">Órdenes entregadas este mes</div></div><div class="stat"><div class="statlabel">Ticket promedio</div><div class="statvalue smallmoney">${money(ticket)}</div><div class="stathelp">Sobre órdenes entregadas</div></div><div class="stat"><div class="statlabel">Ingresos</div><div class="statvalue">${ingresos.length}</div><div class="stathelp">Equipos ingresados este mes</div></div><div class="stat"><div class="statlabel">Entregados</div><div class="statvalue">${entregados.length}</div><div class="stathelp">Equipos cerrados este mes</div></div><div class="stat"><div class="statlabel">Días promedio</div><div class="statvalue">${avgDays.toFixed(1)}</div><div class="stathelp">Ingreso a entrega</div></div><div class="stat ${cobrar?'warn':''}"><div class="statlabel">Por cobrar</div><div class="statvalue smallmoney">${money(cobrar)}</div><div class="stathelp">Saldo abierto total</div></div></div></section>
+  <section class="panel"><div class="panelhead"><div><div class="eyebrow">FACTURACIÓN DIARIA</div><h3>Días hábiles del mes</h3></div><span class="badge">Meta ${money(META_DIARIA)} / día</span></div>
+    <div class="kpigrid" style="margin-bottom:18px"><div class="stat"><div class="statlabel">Días hábiles transcurridos</div><div class="statvalue">${transcurridos.length}</div><div class="stathelp">Sin sábados ni domingos</div></div><div class="stat"><div class="statlabel">Días con facturación</div><div class="statvalue">${conFact}</div></div><div class="stat ${enCero?'bad':''}"><div class="statlabel">Días en $0</div><div class="statvalue">${enCero}</div><div class="stathelp">Días hábiles sin entregas facturadas</div></div><div class="stat"><div class="statlabel">Promedio por día hábil</div><div class="statvalue smallmoney">${money(promedio)}</div><div class="stathelp">Incluye los días en cero</div></div></div>
+    <div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Día</th><th>Facturación</th><th>Resultado</th></tr></thead><tbody>${dias.map(x=>`<tr${x.futuro?' style="opacity:.45"':''}><td><strong>${prettyDate(x.fecha)}</strong></td><td>${x.dt.toLocaleDateString('es-AR',{weekday:'long'})}</td><td><strong>${money(x.monto)}</strong></td><td><span class="badge ${diaClase(x)}">${diaEstado(x)}</span></td></tr>`).join('')}</tbody></table></div>
+    <p class="sectionnote">Verde: ${money(META_DIARIA)} o más. Amarillo: desde ${money(CERCA_META)}. Rojo: menos de ${money(CERCA_META)}. Los días futuros quedan en gris y no afectan los indicadores.</p>
+  </section>
+  <section class="panel"><div class="panelhead"><div><div class="eyebrow">MARCAS</div><h3>Marcas que más ingresaron este mes</h3></div></div>${ranking.length?`<div class="brandlist">${ranking.map(([name,count])=>`<div class="brandrow"><strong>${esc(name)}</strong><div class="bartrack"><div class="barfill" style="width:${Math.round(count/max*100)}%"></div></div><div class="right"><strong>${count}</strong></div></div>`).join('')}</div>`:'<div class="empty">Todavía no hay ingresos este mes.</div>'}</section>`;
 }
 
 function renderCleris(){
@@ -1153,7 +1177,7 @@ window.__nqnLegacyBoot=boot;
   }
   function updateAuthBar(){
     const el=document.getElementById('authStatus');if(!el)return;const op=session();
-    if(!op){el.innerHTML='<span class="badge">V9.15 stock</span>';return}
+    if(!op){el.innerHTML='<span class="badge">V9.16 facturación diaria</span>';return}
     el.innerHTML=`<button class="btn secondary small" type="button" onclick="logoutOperator()">👤 ${e(op.nombre)} · Salir</button>`;
   }
   function applyRoleNav(){
