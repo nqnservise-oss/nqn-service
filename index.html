@@ -104,7 +104,7 @@ input,select,textarea{font-size:14px;line-height:1.35}
 <body>
 <div class="shell">
   <aside class="sidebar">
-    <div class="brand"><div class="brandmark">NQN</div><div><div class="brandname">NQN Service</div><div class="brandsub">Gestión técnica · V9.11 pagos en caja</div></div></div>
+    <div class="brand"><div class="brandmark">NQN</div><div><div class="brandname">NQN Service</div><div class="brandsub">Gestión técnica · V9.12 señas por fecha</div></div></div>
     <div class="nav">
       <button id="nav-dashboard" class="active" onclick="showView('dashboard')">⌂ Dashboard</button>
       <button id="nav-nuevo" onclick="newOrder()">＋ Nuevo ingreso</button>
@@ -619,9 +619,12 @@ function orderForm(r,isNew){
     <div class="field full"><label>Accesorios</label><input id="accesorios" value="${esc(r.accesorios)}" placeholder="Mangueras, tapa, cable, etc."></div>
     <div class="field full"><label>Observaciones</label><textarea id="observaciones" rows="3">${esc(r.observaciones)}</textarea></div>
     <div class="field"><label>Monto total</label><input id="monto" type="text" inputmode="decimal" value="${moneyInput(r.monto)}" placeholder="Ej. 78.788,35"></div>
-    <div class="field"><label>Pagado</label><input id="pagado" type="text" inputmode="decimal" value="${moneyInput(r.pagado)}" placeholder="Ej. 78.788,35"></div>
+    <div class="field"><label>Total recibido</label><input id="pagadoActual" value="${money(r.pagado)}" readonly></div>
+    <div class="field"><label>Seña / entrega</label><input id="pagado" type="text" inputmode="decimal" value="" placeholder="Monto que entra ahora"></div>
+    <div class="field short"><label>Fecha de seña / entrega</label><input id="fechaPago" type="date" value="${localISODate()}"></div>
     <div class="field"><label>Medio de pago</label><select id="medioPago">${PAGOS.map(x=>`<option ${r.medioPago===x?'selected':''}>${x}</option>`).join('')}</select></div>
     <div class="field"><label>Saldo</label><input id="saldoPreview" value="${money(balance(r))}" readonly></div>
+    ${Array.isArray(r.pagos)&&r.pagos.length?`<div class="field full"><label>Entregas registradas</label><div class="timeline">${r.pagos.filter(p=>Number(p.monto||0)!==0).map(p=>`<div class="timelineitem"><span>${prettyDate(p.fecha)} · ${esc(p.medioPago||'')}</span><strong>${money(p.monto)}</strong></div>`).join('')}</div></div>`:''}
     <div class="actions full">
       ${isNew?`<button type="button" class="btn secondary" onclick="renderDashboard()">Cancelar</button>`:`<button type="button" class="btn secondary" onclick="newOrderSameClient('${esc(r.id)}')">＋ Mismo cliente</button><button type="button" class="btn secondary" onclick="printReceipt('${esc(r.id)}')">Comprobante / PDF</button><button type="button" class="btn" style="background:#25D366;color:#fff" onclick="shareReceiptWhatsApp('${esc(r.id)}')"><span aria-hidden="true" style="display:inline-flex;width:18px;height:18px;border:2px solid #fff;border-radius:50%;align-items:center;justify-content:center;font-size:11px;line-height:1">☎</span> Compartir por WhatsApp</button><button type="button" class="btn danger" onclick="deleteOrder('${esc(r.id)}')">Eliminar</button>`}
       <button class="btn primary" type="submit">${isNew?'Guardar ingreso':'Guardar cambios'}</button>
@@ -646,33 +649,37 @@ function findClientNumber(phone,name){let p=normPhone(phone);let rows=load();let
 function submitOrder(ev,isNew){
   ev.preventDefault();
   let rows=load(),now=nowISO(),fechaEntrega=isNew?'':(document.getElementById('fechaEntrega')?.value||'');
+  const nuevaEntrega=Math.max(0,parseMoneyAR(document.getElementById('pagado')?.value)||0);
+  const fechaPago=document.getElementById('fechaPago')?.value||localISODate();
+  const medioPago=document.getElementById('medioPago')?.value||'Pendiente';
   let obj={
     fechaIngreso:document.getElementById('fechaIngreso').value,fechaEntrega,
     cliente:document.getElementById('cliente').value.trim(),telefono:document.getElementById('telefono').value.trim(),
     marcaModelo:collectBrandModel(),tipo:document.getElementById('tipo').value,falla:document.getElementById('falla').value.trim(),
     accesorios:document.getElementById('accesorios').value.trim(),observaciones:document.getElementById('observaciones').value.trim(),
-    estado:fechaEntrega?'Entregado':'En taller',monto:Math.max(0,parseMoneyAR(document.getElementById('monto').value)||0),pagado:Math.max(0,parseMoneyAR(document.getElementById('pagado').value)||0),
-    medioPago:document.getElementById('medioPago').value,actualizado:now
+    estado:fechaEntrega?'Entregado':'En taller',monto:Math.max(0,parseMoneyAR(document.getElementById('monto').value)||0),
+    pagado:0,medioPago,actualizado:now,pagos:[]
   };
   if(!obj.marcaModelo){alert('Elegí la marca y el modelo. Si no aparecen en la lista, usá “Otra marca” / “Otro modelo”.');return}
-  if(obj.pagado>obj.monto&&obj.monto>0){if(!confirm('El monto pagado es mayor al total. ¿Guardar igual?'))return}
+  if(nuevaEntrega>0&&medioPago==='Pendiente'){alert('Elegí el medio de pago para registrar la seña / entrega en caja.');return}
   if(isNew){
     obj.id=(crypto.randomUUID?crypto.randomUUID():Date.now().toString());obj.numero=nextOrder();obj.clienteNumero=findClientNumber(obj.telefono,obj.cliente);obj.creado=now;
-    obj.fechasEstado={'En taller':now};obj.historial=[{fecha:now,estado:'En taller'}];obj.pagos=[];
-    if(obj.pagado>0&&obj.medioPago!=='Pendiente')obj.pagos.push({id:'pago-'+Date.now()+'-'+Math.random().toString(36).slice(2),fecha:localISODate(),monto:obj.pagado,medioPago:obj.medioPago,creado:now});
+    obj.fechasEstado={'En taller':now};obj.historial=[{fecha:now,estado:'En taller'}];
+    if(nuevaEntrega>0)obj.pagos.push({id:'pago-'+Date.now()+'-'+Math.random().toString(36).slice(2),fecha:fechaPago,monto:nuevaEntrega,medioPago,creado:now});
+    obj.pagado=obj.pagos.reduce((a,p)=>a+Number(p.monto||0),0);
+    if(obj.pagado>obj.monto&&obj.monto>0&&!confirm('La seña / entrega supera el monto total. ¿Guardar igual?'))return;
     rows.push(obj);save(rows,'Antes de crear orden');queueCloudOp('upsertOrder',obj.id,obj,obj.actualizado||obj.creado);toast('Orden '+fmtOrder(obj.numero)+' guardada');editOrder(obj.id);
   }else{
     let i=rows.findIndex(r=>r.id===editingId);if(i<0)return;let old=rows[i];
     obj.id=old.id;obj.numero=old.numero;obj.clienteNumero=findClientNumber(obj.telefono,obj.cliente)||old.clienteNumero;obj.creado=old.creado;obj.fechasEstado={...(old.fechasEstado||{})};obj.historial=[...(old.historial||[])];obj.pagos=Array.isArray(old.pagos)?[...old.pagos]:[];
-    const diferenciaPago=Number(obj.pagado||0)-Number(old.pagado||0);
-    if(diferenciaPago>0){
-      if(obj.medioPago==='Pendiente'){alert('Elegí el medio de pago para registrar el cobro en caja.');return}
-      obj.pagos.push({id:'pago-'+Date.now()+'-'+Math.random().toString(36).slice(2),fecha:localISODate(),monto:diferenciaPago,medioPago:obj.medioPago,creado:now});
-    }else if(diferenciaPago<0){
-      obj.pagos.push({id:'ajuste-'+Date.now()+'-'+Math.random().toString(36).slice(2),fecha:localISODate(),monto:diferenciaPago,medioPago:old.medioPago||obj.medioPago,creado:now});
-    }
+    // Compatibilidad: si una orden vieja tenía pagado pero todavía no tenía historial de pagos,
+    // no inventamos una fecha. Ese importe sigue formando parte del total recibido.
+    const legacyPagado=obj.pagos.length?0:Math.max(0,Number(old.pagado||0));
+    if(nuevaEntrega>0)obj.pagos.push({id:'pago-'+Date.now()+'-'+Math.random().toString(36).slice(2),fecha:fechaPago,monto:nuevaEntrega,medioPago,creado:now});
+    obj.pagado=legacyPagado+obj.pagos.reduce((a,p)=>a+Number(p.monto||0),0);
+    if(obj.pagado>obj.monto&&obj.monto>0&&!confirm('El total recibido supera el monto total. ¿Guardar igual?'))return;
     if(obj.estado!==old.estado){obj.fechasEstado[obj.estado]=now;obj.historial.push({fecha:now,estado:obj.estado})}
-    rows[i]=obj;save(rows,'Antes de editar orden #'+fmtOrder(obj.numero));queueCloudOp('upsertOrder',obj.id,obj,obj.actualizado);toast(obj.estado==='Entregado'?'Orden cerrada como entregada':'Orden actualizada');editOrder(obj.id);
+    rows[i]=obj;save(rows,'Antes de editar orden #'+fmtOrder(obj.numero));queueCloudOp('upsertOrder',obj.id,obj,obj.actualizado);toast(nuevaEntrega>0?'Seña / entrega registrada en caja':(obj.estado==='Entregado'?'Orden cerrada como entregada':'Orden actualizada'));editOrder(obj.id);
   }
 }
 
@@ -693,7 +700,7 @@ function editOrder(id){
   document.getElementById('view').innerHTML=`<div class="formlayout"><section class="panel" style="margin-top:0"><div class="panelhead"><div><div class="eyebrow">INGRESÓ ${prettyDate(r.fechaIngreso)}</div><h3>${esc(r.cliente)} · C${fmtClient(r.clienteNumero)}</h3></div><span class="badge ${badgeClass(r)}">${esc(r.estado)}</span></div>${orderForm(r,false)}</section><aside class="sidecard"><div class="eyebrow" style="color:#8fb9ff">RESUMEN</div><div class="summaryrow"><span>Total</span><strong>${money(r.monto)}</strong></div><div class="summaryrow"><span>Pagado</span><strong>${money(r.pagado)}</strong></div><div class="summaryrow"><span>Medio</span><strong>${esc(r.medioPago)}</strong></div><div class="summaryrow total"><span>Saldo</span><strong>${money(balance(r))}</strong></div><div class="summaryrow"><span>Días en taller</span><strong>${daysInShop(r)}</strong></div><div class="summaryrow"><span>Estado</span><strong>${esc(r.estado)}</strong></div>${r.fechaEntrega?`<div class="summaryrow"><span>Entregado</span><strong>${prettyDate(r.fechaEntrega)}</strong></div>`:''}<div style="margin-top:12px;color:#91a5ba;font-size:11px">TELÉFONO</div><div style="font-size:18px;font-weight:800;margin-top:4px">${esc(r.telefono)}</div>${history.length?`<div style="margin-top:18px;color:#91a5ba;font-size:11px">OTRAS ÓRDENES DEL CLIENTE</div><div class="timeline">${history.map(x=>`<div class="timelineitem" style="background:#193652;color:#dce8f5;cursor:pointer" onclick="editOrder('${esc(x.id)}')"><strong>#${fmtOrder(x.numero)} ${esc(x.marcaModelo)}</strong><span>${prettyDate(x.fechaIngreso)}</span></div>`).join('')}</div>`:''}</aside></div>`;
   attachBalancePreview();
 }
-function attachBalancePreview(){let m=document.getElementById('monto'),p=document.getElementById('pagado'),s=document.getElementById('saldoPreview');if(!m||!p||!s)return;let f=()=>{const mt=parseMoneyAR(m.value),pg=parseMoneyAR(p.value);s.value=money(Math.max(0,(Number.isFinite(mt)?mt:0)-(Number.isFinite(pg)?pg:0)))};m.addEventListener('input',f);p.addEventListener('input',f);f()}
+function attachBalancePreview(){let m=document.getElementById('monto'),p=document.getElementById('pagado'),a=document.getElementById('pagadoActual'),s=document.getElementById('saldoPreview');if(!m||!p||!s)return;let f=()=>{const mt=parseMoneyAR(m.value),nuevo=parseMoneyAR(p.value),actual=parseMoneyAR(a?.value||'0');s.value=money(Math.max(0,(Number.isFinite(mt)?mt:0)-(Number.isFinite(actual)?actual:0)-(Number.isFinite(nuevo)?nuevo:0)))};m.addEventListener('input',f);p.addEventListener('input',f);f()}
 function newOrderSameClient(id){let r=load().find(x=>x.id===id);if(r)newOrder({cliente:r.cliente,telefono:r.telefono})}
 function deleteOrder(id){if(!confirm('¿Eliminar esta orden? Se guardará una copia automática anterior, pero conviene evitar eliminar si solo querés cambiar el estado.'))return;let rows=load().filter(r=>r.id!==id);save(rows,'Antes de eliminar orden');queueCloudOp('deleteOrder',id,null,nowISO());toast('Orden eliminada');renderOrders()}
 
@@ -1258,8 +1265,13 @@ window.__nqnLegacyBoot=boot;
   function monthBalance(fecha,owner){
     const mk=String(fecha||localDay()).slice(0,7);
     const isAdmin=window.isAdmin();
-    const orders=(typeof load==='function'?load():[]).filter(r=>r&&r.estado==='Entregado'&&String(r.fechaEntrega||'').slice(0,7)===mk);
-    const ingresos=orders.reduce((a,r)=>a+Math.max(0,Number(r.pagado||0)),0);
+    const orders=(typeof load==='function'?load():[]);
+    const ingresos=orders.reduce((a,r)=>{
+      const pagos=Array.isArray(r?.pagos)?r.pagos:[];
+      if(pagos.length)return a+pagos.filter(p=>String(p.fecha||'').slice(0,7)===mk).reduce((s,p)=>s+Number(p.monto||0),0);
+      if(r?.estado==='Entregado'&&String(r.fechaEntrega||'').slice(0,7)===mk)return a+Math.max(0,Number(r.pagado||0));
+      return a;
+    },0);
     const expenses=(window.loadExpenses?window.loadExpenses():[]).filter(x=>String(x.fecha||'').slice(0,7)===mk&&(isAdmin||operatorOwns(x,owner)));
     const gastos=expenses.reduce((a,x)=>a+Math.max(0,Number(x.monto||0)),0);
     const closings=(window.loadCashClosings?window.loadCashClosings():[]).filter(x=>String(x.fecha||'').slice(0,7)===mk&&(isAdmin||operatorOwns(x,owner)));
