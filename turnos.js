@@ -59,6 +59,8 @@
       direccion:String(t.direccion||t.barrio||''),tipo:TIPOS.includes(t.tipo)?t.tipo:'Retiro',
       estado:toLocalEstado(t.estado),
       obs:String(t.obs||t.observaciones||''),
+      ordenId:String(t.ordenId||''),
+      ordenNumero:Number(t.ordenNumero||0),
       creado:t.creado||t.updatedAt||t.actualizado||nowIso(),
       actualizado:t.actualizado||t.updatedAt||t.creado||nowIso()
     };
@@ -69,6 +71,7 @@
       cliente:String(t?.cliente||''),telefono:String(t?.telefono||''),direccion:String(t?.direccion||''),
       tipo:TIPOS.includes(t?.tipo)?t.tipo:'Retiro',motivo:String(t?.tipo||''),
       estado:toCloudEstado(t?.estado),obs:String(t?.obs||''),observaciones:String(t?.obs||''),
+      ordenId:String(t?.ordenId||''),ordenNumero:Number(t?.ordenNumero||0),
       creado:t?.creado||t?.updatedAt||nowIso(),
       actualizado:t?.actualizado||t?.updatedAt||nowIso()
     };
@@ -79,7 +82,7 @@
     (Array.isArray(rows)?rows:[]).forEach(r=>{
       const t=normalizeRemoteTurn(r);if(!t)return;
       if(!next[t.fecha])next[t.fecha]={};
-      next[t.fecha][t.hora]={cliente:t.cliente,telefono:t.telefono,direccion:t.direccion,tipo:t.tipo,estado:t.estado,obs:t.obs,creado:t.creado,actualizado:t.actualizado,updatedAt:t.actualizado};
+      next[t.fecha][t.hora]={cliente:t.cliente,telefono:t.telefono,direccion:t.direccion,tipo:t.tipo,estado:t.estado,obs:t.obs,ordenId:t.ordenId||'',ordenNumero:Number(t.ordenNumero||0),creado:t.creado,actualizado:t.actualizado,updatedAt:t.actualizado};
     });
     if(pendingIds&&pendingIds.size){
       Object.keys(all).forEach(date=>Object.keys(all[date]||{}).forEach(slot=>{
@@ -168,8 +171,11 @@
   }
   function renderSlot(slot,t){
     if(!t)return `<div class="turno-card empty-slot"><div class="turno-time">${slot}</div><div class="turno-emptycopy">Horario disponible.</div><div class="turno-actions"><button class="btn primary" onclick="turnosEdit('${slot}')">＋ Cargar turno</button></div></div>`;
-    const details=[];if(t.tipo)details.push(esc(t.tipo));if(t.telefono)details.push(esc(t.telefono));if(t.direccion)details.push(esc(t.direccion));
-    return `<div class="turno-card"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div class="turno-time">${slot}</div>${statusBadge(t.estado)}</div><div class="turno-client">${esc(t.cliente||'Sin nombre')}</div><div class="turno-meta">${details.join(' · ')||'Sin datos adicionales'}</div>${t.obs?`<div class="turno-meta"><strong>Obs.:</strong> ${esc(t.obs)}</div>`:''}<div class="turno-actions"><button class="btn secondary small" onclick="turnosEdit('${slot}')">Editar</button>${t.estado!=='confirmado'&&t.estado!=='realizado'?`<button class="btn success small" onclick="turnosStatus('${slot}','confirmado')">Confirmar</button>`:''}${t.estado!=='realizado'?`<button class="btn success small" onclick="turnosStatus('${slot}','realizado')">Realizado</button>`:''}${t.estado!=='cancelado'?`<button class="btn danger small" onclick="turnosStatus('${slot}','cancelado')">Cancelar</button>`:''}<button class="btn secondary small" onclick="turnosDelete('${slot}')">Borrar</button></div></div>`;
+    const details=[];if(t.tipo)details.push(esc(t.tipo));if(t.telefono)details.push(esc(t.telefono));
+    const address=t.direccion?`<div class="turno-meta" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span><strong>Dirección:</strong> ${esc(t.direccion)}</span><button type="button" class="btn secondary small" onclick="turnosOpenMap('${slot}')">📍 Mapa</button></div>`:'';
+    const orderInfo=t.ordenId?`<div class="turno-meta"><strong>Orden creada:</strong> ${t.ordenNumero?'#'+String(t.ordenNumero).padStart(3,'0'):'sí'}</div>`:'';
+    const createOrder=t.estado!=='cancelado'&&!t.ordenId?`<button class="btn primary small" onclick="turnosCreateOrder('${slot}')">＋ Crear orden</button>`:'';
+    return `<div class="turno-card"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div class="turno-time">${slot}</div>${statusBadge(t.estado)}</div><div class="turno-client">${esc(t.cliente||'Sin nombre')}</div><div class="turno-meta">${details.join(' · ')||'Sin datos adicionales'}</div>${address}${t.obs?`<div class="turno-meta"><strong>Obs.:</strong> ${esc(t.obs)}</div>`:''}${orderInfo}<div class="turno-actions"><button class="btn secondary small" onclick="turnosEdit('${slot}')">Editar</button>${createOrder}${t.estado!=='confirmado'&&t.estado!=='realizado'?`<button class="btn success small" onclick="turnosStatus('${slot}','confirmado')">Confirmar</button>`:''}${t.estado!=='realizado'?`<button class="btn success small" onclick="turnosStatus('${slot}','realizado')">Realizado</button>`:''}${t.estado!=='cancelado'?`<button class="btn danger small" onclick="turnosStatus('${slot}','cancelado')">Cancelar</button>`:''}<button class="btn secondary small" onclick="turnosDelete('${slot}')">Borrar</button></div></div>`;
   }
   function renderEditor(slot,t){
     const host=document.getElementById('turnoEditor');if(!host)return;
@@ -177,6 +183,47 @@
     host.innerHTML=`<div class="panel turno-form"><div class="panelhead"><div><div class="eyebrow">${t?'EDITAR TURNO':'NUEVO TURNO'}</div><h3>${slot}</h3></div><button class="btn secondary small" onclick="turnosCloseEditor()">Cerrar</button></div><div class="grid"><div class="field"><label>Cliente *</label><input id="turnoCliente" value="${esc(data.cliente)}" placeholder="Nombre y apellido"></div><div class="field"><label>Teléfono</label><input id="turnoTelefono" inputmode="tel" value="${esc(data.telefono)}" placeholder="Ej. 299..."></div><div class="field full"><label>Dirección / barrio</label><input id="turnoDireccion" value="${esc(data.direccion)}" placeholder="Para organizar la salida"></div><div class="field"><label>Tipo</label><select id="turnoTipo">${TIPOS.map(v=>`<option ${data.tipo===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="field"><label>Estado</label><select id="turnoEstado"><option value="pendiente" ${data.estado==='pendiente'?'selected':''}>Pendiente</option><option value="confirmado" ${data.estado==='confirmado'?'selected':''}>Confirmado</option><option value="realizado" ${data.estado==='realizado'?'selected':''}>Realizado</option><option value="cancelado" ${data.estado==='cancelado'?'selected':''}>Cancelado</option></select></div><div class="field full"><label>Observaciones</label><textarea id="turnoObs" rows="3" placeholder="Equipo, referencia o detalle importante">${esc(data.obs)}</textarea></div><div class="actions full"><button class="btn secondary" onclick="turnosCloseEditor()">Cancelar</button><button class="btn primary" onclick="turnosSave('${slot}')">Guardar turno</button></div></div></div>`;
     setTimeout(()=>document.getElementById('turnoCliente')?.focus(),0);
   }
+
+  function mapQuery(address){
+    let q=String(address||'').trim();
+    if(!q)return '';
+    // Si se cargó solo calle y número, agregamos la ciudad para evitar resultados de otra provincia.
+    if(!/(neuqu[eé]n|plottier|centenario|cipolletti|argentina)/i.test(q))q+=', Neuquén, Neuquén, Argentina';
+    return q;
+  }
+  window.turnosOpenMap=function(slot){
+    const t=dayData(selectedDate)[slot];
+    if(!t||!String(t.direccion||'').trim()){window.toast?window.toast('Este turno no tiene dirección cargada'):alert('Este turno no tiene dirección cargada');return}
+    const q=mapQuery(t.direccion);
+    // El enlace oficial de Google Maps abre la app en Android cuando está instalada; en PC abre Maps web.
+    const url='https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(q);
+    const w=window.open(url,'_blank','noopener');
+    if(!w)window.location.href=url;
+  };
+  window.turnosCreateOrder=function(slot){
+    const t=dayData(selectedDate)[slot];if(!t)return;
+    if(t.estado==='cancelado'){window.toast&&window.toast('El turno está cancelado');return}
+    if(t.ordenId){window.toast&&window.toast('Este turno ya tiene una orden creada');return}
+    if(typeof window.newOrder!=='function'){alert('No se pudo abrir Nuevo ingreso.');return}
+    window.newOrder({
+      cliente:t.cliente||'',
+      telefono:t.telefono||'',
+      observaciones:t.obs||'',
+      turnoOrigen:{fecha:selectedDate,slot}
+    });
+  };
+  window.turnosConfirmOrderCreated=function(orderId,orderNumero){
+    const origen=window.__nqnTurnoPendiente;
+    if(!origen||!origen.fecha||!origen.slot)return;
+    const t=dayData(origen.fecha)[origen.slot];
+    if(t){
+      t.estado='realizado';
+      t.ordenId=String(orderId||'');
+      t.ordenNumero=Number(orderNumero||0);
+      setTurno(origen.fecha,origen.slot,t);
+    }
+    window.__nqnTurnoPendiente=null;
+  };
 
   window.turnosSetDate=function(value){if(!value)return;selectedDate=value;editingSlot=null;renderTurnos()};
   window.turnosMoveDay=function(delta){const d=parseLocalDate(selectedDate);d.setDate(d.getDate()+Number(delta||0));selectedDate=localISODate(d);editingSlot=null;renderTurnos()};
