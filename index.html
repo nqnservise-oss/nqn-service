@@ -104,7 +104,7 @@ input,select,textarea{font-size:14px;line-height:1.35}
 <body>
 <div class="shell">
   <aside class="sidebar">
-    <div class="brand"><div class="brandmark">NQN</div><div><div class="brandname">NQN Service</div><div class="brandsub">Gestión técnica · V9.18 alerta limpia</div></div></div>
+    <div class="brand"><div class="brandmark">NQN</div><div><div class="brandname">NQN Service</div><div class="brandsub">Gestión técnica · V9.19 turnos ágil</div></div></div>
     <div class="nav">
       <button id="nav-dashboard" class="active" onclick="showView('dashboard')">⌂ Dashboard</button>
       <button id="nav-nuevo" onclick="newOrder()">＋ Nuevo ingreso</button>
@@ -609,7 +609,10 @@ function showLateOrders(){
 
 function newOrder(prefill={}){
   editingId=null;currentView='nuevo';setNav('nuevo');title('Nuevo ingreso');
-  let r={fechaIngreso:localISODate(),fechaEntrega:'',estado:'En taller',situacionTaller:'En reparación',cliente:prefill.cliente||'',telefono:prefill.telefono||'',marcaModelo:'',tipo:'Lavarropas',falla:'',accesorios:'',observaciones:'',monto:0,pagado:0,medioPago:'Pendiente'};
+  // Si la orden nace desde un turno, guardamos el origen solo hasta que se confirme el alta.
+  // Una nueva orden iniciada por cualquier otro camino limpia ese vínculo para evitar marcar turnos por error.
+  window.__nqnTurnoPendiente=prefill&&prefill.turnoOrigen?prefill.turnoOrigen:null;
+  let r={fechaIngreso:localISODate(),fechaEntrega:'',estado:'En taller',situacionTaller:'En reparación',cliente:prefill.cliente||'',telefono:prefill.telefono||'',marcaModelo:'',tipo:'Lavarropas',falla:prefill.falla||'',accesorios:'',observaciones:prefill.observaciones||'',monto:0,pagado:0,medioPago:'Pendiente'};
   document.getElementById('view').innerHTML=`<div class="formlayout" style="grid-template-columns:1fr"><section class="panel" style="margin-top:0"><div class="panelhead"><div><div class="eyebrow">NUEVA ORDEN</div><h3>Orden #${fmtOrder(nextOrder())}</h3></div></div>${orderForm(r,true)}</section></div>`;
   setTimeout(()=>{checkExistingClient();attachBalancePreview()},0);
 }
@@ -679,7 +682,10 @@ function submitOrder(ev,isNew){
     if(nuevaEntrega>0)obj.pagos.push({id:'pago-'+Date.now()+'-'+Math.random().toString(36).slice(2),fecha:fechaPago,monto:nuevaEntrega,medioPago,creado:now});
     obj.pagado=obj.pagos.reduce((a,p)=>a+Number(p.monto||0),0);
     if(obj.pagado>obj.monto&&obj.monto>0&&!confirm('La seña / entrega supera el monto total. ¿Guardar igual?'))return;
-    rows.push(obj);save(rows,'Antes de crear orden');queueCloudOp('upsertOrder',obj.id,obj,obj.actualizado||obj.creado);toast('Orden '+fmtOrder(obj.numero)+' guardada');editOrder(obj.id);
+    rows.push(obj);save(rows,'Antes de crear orden');queueCloudOp('upsertOrder',obj.id,obj,obj.actualizado||obj.creado);
+    // Recién cuando la orden quedó guardada confirmamos la conversión del turno.
+    if(typeof window.turnosConfirmOrderCreated==='function')window.turnosConfirmOrderCreated(obj.id,obj.numero);
+    toast('Orden '+fmtOrder(obj.numero)+' guardada');editOrder(obj.id);
   }else{
     let i=rows.findIndex(r=>r.id===editingId);if(i<0)return;let old=rows[i];
     obj.id=old.id;obj.numero=old.numero;obj.clienteNumero=findClientNumber(obj.telefono,obj.cliente)||old.clienteNumero;obj.creado=old.creado;obj.fechasEstado={...(old.fechasEstado||{})};obj.historial=[...(old.historial||[])];obj.pagos=Array.isArray(old.pagos)?[...old.pagos]:[];obj.repuestosUsados=Array.isArray(old.repuestosUsados)?[...old.repuestosUsados]:[];
