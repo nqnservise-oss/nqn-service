@@ -137,7 +137,7 @@ input,select,textarea{font-size:16px;line-height:1.4}
 <body>
 <div class="shell">
   <aside class="sidebar">
-    <div class="brand"><div class="brandmark">NQN</div><div><div class="brandname">NQN Service</div><div class="brandsub">Gestión técnica · V9.20 caja + OT</div></div></div>
+    <div class="brand"><div class="brandmark">NQN</div><div><div class="brandname">NQN Service</div><div class="brandsub">Gestión técnica · V9.22 stock + devolución</div></div></div>
     <div class="nav">
       <button id="nav-dashboard" class="active" onclick="showView('dashboard')">⌂ Dashboard</button>
       <button id="nav-nuevo" onclick="newOrder()">＋ Nuevo ingreso</button>
@@ -180,7 +180,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredIns
 window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;updateInstallButton();toast('NQN Service instalada')});
 function updateInstallButton(){let b=document.getElementById('installPwaBtn');if(b)b.classList.toggle('show',!!deferredInstallPrompt)}
 async function installPwa(){if(!deferredInstallPrompt){alert('Si Chrome no muestra la instalación todavía, recargá la página una vez y volvé a intentar.');return}deferredInstallPrompt.prompt();try{await deferredInstallPrompt.userChoice}catch(e){}deferredInstallPrompt=null;updateInstallButton()}
-const OFFLINE_CACHE='nqn-service-v20-caja-ot';
+const OFFLINE_CACHE='nqn-service-v22-stock-delete';
 const OFFLINE_ASSETS=['./','./index.html','./NQN_SERVICE_ESTABLE.html','./manifest.webmanifest','./turnos.js','./icons/icon-192.png','./icons/icon-512.png'];
 let swReloading=false;
 async function ensureOfflineReady(){
@@ -867,7 +867,49 @@ function editOrder(id){
 }
 function attachBalancePreview(){let m=document.getElementById('monto'),p=document.getElementById('pagado'),a=document.getElementById('pagadoActual'),s=document.getElementById('saldoPreview');if(!m||!p||!s)return;let f=()=>{const mt=parseMoneyAR(m.value),nuevo=parseMoneyAR(p.value),actual=parseMoneyAR(a?.value||'0');s.value=money(Math.max(0,(Number.isFinite(mt)?mt:0)-(Number.isFinite(actual)?actual:0)-(Number.isFinite(nuevo)?nuevo:0)))};m.addEventListener('input',f);p.addEventListener('input',f);f()}
 function newOrderSameClient(id){let r=load().find(x=>x.id===id);if(r)newOrder({cliente:r.cliente,telefono:r.telefono})}
-function deleteOrder(id){if(!confirm('¿Eliminar esta orden? Se guardará una copia automática anterior, pero conviene evitar eliminar si solo querés cambiar el estado.'))return;let rows=load().filter(r=>r.id!==id);save(rows,'Antes de eliminar orden');queueCloudOp('deleteOrder',id,null,nowISO());toast('Orden eliminada');renderOrders()}
+function deleteOrder(id){
+  let all=load(),order=all.find(r=>String(r.id)===String(id));
+  if(!order)return;
+  const usages=Array.isArray(order.repuestosUsados)?order.repuestosUsados.filter(x=>Number(x?.cantidad||0)>0):[];
+  const units=usages.reduce((a,x)=>a+Math.max(1,Number(x.cantidad||1)),0);
+  const extra=units?('\n\nSe devolverán automáticamente '+units+' unidad'+(units===1?'':'es')+' de repuestos al stock.') : '';
+  if(!confirm('¿Eliminar esta orden? Se guardará una copia automática anterior, pero conviene evitar eliminar si solo querés cambiar el estado.'+extra))return;
+
+  let stock=null;
+  if(usages.length){
+    if(typeof window.loadStock!=='function'||typeof window.saveStock!=='function'){
+      alert('No pude acceder al stock. La OT no se eliminó para evitar perder los repuestos usados.');
+      return;
+    }
+    stock=window.loadStock();
+    const ts=nowISO();
+    usages.forEach(usage=>{
+      const qty=Math.max(1,Number(usage.cantidad||1));
+      const sid=String(usage.stockId||'').trim();
+      let i=sid?stock.findIndex(x=>String(x.id)===sid):-1;
+      if(i>=0){
+        stock[i]={...stock[i],cantidad:Number(stock[i].cantidad||0)+qty,actualizado:ts};
+      }else{
+        stock.push({
+          id:sid||('stock-rest-'+Date.now()+'-'+Math.random().toString(36).slice(2)),
+          nombre:String(usage.nombre||'Repuesto devuelto'),
+          cantidad:qty,
+          minimo:2,
+          costo:Math.max(0,Number(usage.costoUnitario||0)),
+          creado:ts,
+          actualizado:ts
+        });
+      }
+    });
+  }
+
+  let rows=all.filter(r=>String(r.id)!==String(id));
+  save(rows,'Antes de eliminar orden');
+  if(stock)window.saveStock(stock);
+  queueCloudOp('deleteOrder',id,null,nowISO());
+  toast(units?'Orden eliminada · repuestos devueltos al stock':'Orden eliminada');
+  renderOrders();
+}
 
 function renderClients(){
   title('Clientes');setNav('clientes');let rows=load(),map=new Map();
