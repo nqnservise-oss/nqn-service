@@ -137,7 +137,7 @@ input,select,textarea{font-size:16px;line-height:1.4}
 <body>
 <div class="shell">
   <aside class="sidebar">
-    <div class="brand"><div class="brandmark">NQN</div><div><div class="brandname">NQN Service</div><div class="brandsub">Gestión técnica · V9.23 cobrar saldo</div></div></div>
+    <div class="brand"><div class="brandmark">NQN</div><div><div class="brandname">NQN Service</div><div class="brandsub">Gestión técnica · V9.24 saldo + pago mixto</div></div></div>
     <div class="nav">
       <button id="nav-dashboard" class="active" onclick="showView('dashboard')">⌂ Dashboard</button>
       <button id="nav-nuevo" onclick="newOrder()">＋ Nuevo ingreso</button>
@@ -180,7 +180,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredIns
 window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;updateInstallButton();toast('NQN Service instalada')});
 function updateInstallButton(){let b=document.getElementById('installPwaBtn');if(b)b.classList.toggle('show',!!deferredInstallPrompt)}
 async function installPwa(){if(!deferredInstallPrompt){alert('Si Chrome no muestra la instalación todavía, recargá la página una vez y volvé a intentar.');return}deferredInstallPrompt.prompt();try{await deferredInstallPrompt.userChoice}catch(e){}deferredInstallPrompt=null;updateInstallButton()}
-const OFFLINE_CACHE='nqn-service-v23-cobrar-saldo';
+const OFFLINE_CACHE='nqn-service-v24-saldo-mixto';
 const OFFLINE_ASSETS=['./','./index.html','./NQN_SERVICE_ESTABLE.html','./manifest.webmanifest','./turnos.js','./icons/icon-192.png','./icons/icon-512.png'];
 let swReloading=false;
 async function ensureOfflineReady(){
@@ -740,9 +740,10 @@ function orderForm(r,isNew){
     <div class="field"><label>Total recibido</label><input id="pagadoActual" value="${money(r.pagado)}" readonly></div>
     <div class="field"><label>Seña / entrega</label><input id="pagado" type="text" inputmode="decimal" value=""></div>
     <div class="field short"><label>Fecha de seña / entrega</label><input id="fechaPago" type="date" value="${localISODate()}"></div>
-    <div class="field"><label>Medio de pago</label><select id="medioPago">${PAGOS.map(x=>`<option ${r.medioPago===x?'selected':''}>${x}</option>`).join('')}</select>${isNew?'':`<div class="hint">Si no cargás una nueva seña / entrega, cambiar este campo corrige el medio del último cobro registrado y la caja se recalcula automáticamente.</div>`}</div>
-    <div class="field"><label>Saldo</label><input id="saldoPreview" value="${money(balance(r))}" readonly>${!isNew&&balance(r)>0?`<button type="button" class="btn success" style="margin-top:8px" onclick="collectBalance('${esc(r.id)}')">✓ Cobrar saldo</button><div class="hint">Usa la fecha y el medio de pago elegidos arriba. Registra el cobro en caja y deja el saldo en cero.</div>`:''}</div>
-    ${Array.isArray(r.pagos)&&r.pagos.length?`<div class="field full"><label>Entregas registradas</label><div class="timeline">${r.pagos.filter(p=>Number(p.monto||0)!==0).map(p=>`<div class="timelineitem"><span>${prettyDate(p.fecha)} · ${esc(p.medioPago||'')}</span><strong>${money(p.monto)}</strong></div>`).join('')}</div></div>`:''}
+    <div class="field"><label>Medio de pago</label><select id="medioPago" onchange="toggleMixedPaymentFields()">${PAGOS.map(x=>`<option ${r.medioPago===x?'selected':''}>${x}</option>`).join('')}</select>${isNew?'':`<div class="hint">Si no cargás una nueva seña / entrega, cambiar este campo corrige el medio del último cobro registrado y la caja se recalcula automáticamente.</div>`}</div>
+    <div id="mixedPaymentFields" class="field full" style="${r.medioPago==='Mixto'?'':'display:none'}"><label>Detalle del pago mixto</label><div class="grid"><div class="field"><label>Efectivo</label><input id="mixtoEfectivo" type="text" inputmode="decimal" value=""></div><div class="field"><label>Tarjeta crédito / débito</label><input id="mixtoTarjeta" type="text" inputmode="decimal" value=""></div></div><div class="hint">Estos dos importes tienen que sumar exactamente la seña / entrega o el saldo que vas a cobrar.</div></div>
+    <div class="field"><label>Saldo</label><input id="saldoPreview" value="${money(balance(r))}" readonly>${isNew?`<button id="collectBalanceBtn" type="button" class="btn success" style="margin-top:8px" disabled>✓ Cobrar saldo</button><div class="hint">Primero guardá el ingreso. Después el botón queda disponible para cancelar el saldo pendiente.</div>`:`<button id="collectBalanceBtn" type="button" class="btn success" style="margin-top:8px" onclick="collectBalance('${esc(r.id)}')">✓ Cobrar saldo</button><div class="hint">Usa la fecha y el medio de pago elegidos arriba. Si cambiaste el monto o cargaste una seña, guardá esos cambios primero.</div>`}</div>
+    ${Array.isArray(r.pagos)&&r.pagos.length?`<div class="field full"><label>Entregas registradas</label><div class="timeline">${r.pagos.filter(p=>Number(p.monto||0)!==0).map(p=>`<div class="timelineitem"><span>${prettyDate(p.fecha)} · ${esc(p.medioPago||'')}${String(p.medioPago||'')==='Mixto'&&(Number(p.efectivo||0)>0||Number(p.tarjeta||0)>0)?` · Efectivo ${money(p.efectivo||0)} + Tarjeta ${money(p.tarjeta||0)}`:''}</span><strong>${money(p.monto)}</strong></div>`).join('')}</div></div>`:''}
     ${Array.isArray(r.repuestosUsados)&&r.repuestosUsados.length?`<div class="field full"><label>Repuestos usados</label><div class="timeline">${r.repuestosUsados.map(x=>`<div class="timelineitem"><span>${prettyDate(x.fecha)} · ${esc(x.nombre)}${Number(x.cantidad||1)>1?' × '+Number(x.cantidad||1):''}</span><span style="display:flex;align-items:center;gap:8px"><strong>${money(Number(x.cantidad||1)*Number(x.costoUnitario||0))}</strong>${!isNew&&x.stockId?`<button type="button" class="btn secondary small" onclick="returnStockUsage('${esc(r.id)}','${esc(x.id)}')">Quitar / devolver</button>`:''}</span></div>`).join('')}</div><div class="hint">El costo es interno y se usa para calcular el margen de la OT.</div></div>`:''}
     <div class="actions full">
       ${isNew?`<button type="button" class="btn secondary" onclick="showView('dashboard')">Cancelar</button>`:`<button type="button" class="btn secondary" onclick="newOrderSameClient('${esc(r.id)}')">＋ Mismo cliente</button><button type="button" class="btn secondary" onclick="printReceipt('${esc(r.id)}')">Comprobante / PDF</button><button type="button" class="btn" style="background:#25D366;color:#fff" onclick="shareReceiptWhatsApp('${esc(r.id)}')"><span aria-hidden="true" style="display:inline-flex;width:18px;height:18px;border:2px solid #fff;border-radius:50%;align-items:center;justify-content:center;font-size:11px;line-height:1">☎</span> Compartir por WhatsApp</button><button type="button" class="btn danger" onclick="deleteOrder('${esc(r.id)}')">Eliminar</button>`}
@@ -751,23 +752,41 @@ function orderForm(r,isNew){
   </form>`;
 }
 
+function toggleMixedPaymentFields(){
+  const medio=document.getElementById('medioPago')?.value||'Pendiente';
+  const box=document.getElementById('mixedPaymentFields');
+  if(box)box.style.display=medio==='Mixto'?'':'none';
+}
+function mixedPaymentSplit(targetAmount){
+  const efectivo=Math.max(0,parseMoneyAR(document.getElementById('mixtoEfectivo')?.value)||0);
+  const tarjeta=Math.max(0,parseMoneyAR(document.getElementById('mixtoTarjeta')?.value)||0);
+  if(efectivo<=0||tarjeta<=0){alert('En pago mixto cargá un importe mayor a cero en Efectivo y en Tarjeta.');return null}
+  if(Math.abs((efectivo+tarjeta)-Number(targetAmount||0))>0.009){alert('El detalle mixto no coincide. Efectivo + Tarjeta debe sumar '+money(targetAmount)+'.');return null}
+  return {efectivo,tarjeta};
+}
 function collectBalance(orderId){
   let rows=load(),i=rows.findIndex(r=>String(r.id)===String(orderId));if(i<0)return;
   let old=rows[i];
   const medioPago=document.getElementById('medioPago')?.value||'Pendiente';
   const fechaPago=document.getElementById('fechaPago')?.value||localISODate();
   const montoForm=Math.max(0,parseMoneyAR(document.getElementById('monto')?.value)||0);
-  if(Math.abs(montoForm-Number(old.monto||0))>0.009){alert('El monto total fue modificado. Primero tocá “Guardar cambios” y después usá “Cobrar saldo”.');return}
+  const nuevaEntrega=Math.max(0,parseMoneyAR(document.getElementById('pagado')?.value)||0);
+  if(Math.abs(montoForm-Number(old.monto||0))>0.009||nuevaEntrega>0){alert('Primero guardá los cambios o la seña / entrega. Después usá “Cobrar saldo”.');return}
   if(medioPago==='Pendiente'){alert('Elegí el medio de pago antes de cobrar el saldo.');return}
   const saldo=Math.max(0,Number(old.monto||0)-Number(old.pagado||0));
   if(saldo<=0){alert('Esta orden no tiene saldo pendiente.');editOrder(old.id);return}
-  if(!confirm('¿Cobrar '+money(saldo)+' por '+medioPago+' y dejar el saldo en cero?'))return;
+  const split=medioPago==='Mixto'?mixedPaymentSplit(saldo):null;
+  if(medioPago==='Mixto'&&!split)return;
+  const detalle=split?' (Efectivo '+money(split.efectivo)+' + Tarjeta '+money(split.tarjeta)+')':'';
+  if(!confirm('¿Cobrar '+money(saldo)+' por '+medioPago+detalle+' y dejar el saldo en cero?'))return;
   const now=nowISO();
   let obj={...old};
   obj.pagos=Array.isArray(old.pagos)?[...old.pagos]:[];
   // Compatibilidad con órdenes antiguas que tenían un total recibido pero no historial detallado.
   const legacyPagado=obj.pagos.length?0:Math.max(0,Number(old.pagado||0));
-  obj.pagos.push({id:'pago-'+Date.now()+'-'+Math.random().toString(36).slice(2),fecha:fechaPago,monto:saldo,medioPago,creado:now});
+  const pago={id:'pago-'+Date.now()+'-'+Math.random().toString(36).slice(2),fecha:fechaPago,monto:saldo,medioPago,creado:now};
+  if(split){pago.efectivo=split.efectivo;pago.tarjeta=split.tarjeta}
+  obj.pagos.push(pago);
   obj.pagado=legacyPagado+obj.pagos.reduce((a,p)=>a+Number(p.monto||0),0);
   obj.medioPago=medioPago;
   obj.actualizado=now;
@@ -798,6 +817,8 @@ function submitOrder(ev,isNew){
   const nuevaEntrega=Math.max(0,parseMoneyAR(document.getElementById('pagado')?.value)||0);
   const fechaPago=document.getElementById('fechaPago')?.value||localISODate();
   const medioPago=document.getElementById('medioPago')?.value||'Pendiente';
+  let splitEntrega=null;
+  if(nuevaEntrega>0&&medioPago==='Mixto'){splitEntrega=mixedPaymentSplit(nuevaEntrega);if(!splitEntrega)return}
   let obj={
     fechaIngreso:document.getElementById('fechaIngreso').value,fechaEntrega,
     cliente:document.getElementById('cliente').value.trim(),telefono:document.getElementById('telefono').value.trim(),
@@ -811,7 +832,7 @@ function submitOrder(ev,isNew){
   if(isNew){
     obj.id=(crypto.randomUUID?crypto.randomUUID():Date.now().toString());obj.numero=nextOrder();obj.clienteNumero=findClientNumber(obj.telefono,obj.cliente);obj.creado=now;
     obj.fechasEstado={'En taller':now};obj.historial=[{fecha:now,estado:'En taller'}];
-    if(nuevaEntrega>0)obj.pagos.push({id:'pago-'+Date.now()+'-'+Math.random().toString(36).slice(2),fecha:fechaPago,monto:nuevaEntrega,medioPago,creado:now});
+    if(nuevaEntrega>0){const pago={id:'pago-'+Date.now()+'-'+Math.random().toString(36).slice(2),fecha:fechaPago,monto:nuevaEntrega,medioPago,creado:now};if(splitEntrega){pago.efectivo=splitEntrega.efectivo;pago.tarjeta=splitEntrega.tarjeta}obj.pagos.push(pago)}
     obj.pagado=obj.pagos.reduce((a,p)=>a+Number(p.monto||0),0);
     if(obj.pagado>obj.monto&&obj.monto>0&&!confirm('La seña / entrega supera el monto total. ¿Guardar igual?'))return;
     const stockChange=prepareStockUsageFromForm(now);if(!stockChange.ok)return;
@@ -827,12 +848,20 @@ function submitOrder(ev,isNew){
     const legacyPagado=obj.pagos.length?0:Math.max(0,Number(old.pagado||0));
     let medioCorregido=false;
     if(nuevaEntrega>0){
-      obj.pagos.push({id:'pago-'+Date.now()+'-'+Math.random().toString(36).slice(2),fecha:fechaPago,monto:nuevaEntrega,medioPago,creado:now});
+      const pago={id:'pago-'+Date.now()+'-'+Math.random().toString(36).slice(2),fecha:fechaPago,monto:nuevaEntrega,medioPago,creado:now};
+      if(splitEntrega){pago.efectivo=splitEntrega.efectivo;pago.tarjeta=splitEntrega.tarjeta}
+      obj.pagos.push(pago);
     }else if(obj.pagos.length&&medioPago!=='Pendiente'&&String(medioPago)!==String(old.medioPago||'Pendiente')){
       // Corrección de un medio cargado por error: cambia el último cobro existente,
       // no crea un movimiento nuevo y por eso no duplica la caja.
-      const idx=obj.pagos.length-1;
-      obj.pagos[idx]={...obj.pagos[idx],medioPago,actualizado:now};
+      const idx=obj.pagos.length-1,last={...obj.pagos[idx]};
+      if(medioPago==='Mixto'){
+        const split=mixedPaymentSplit(Number(last.monto||0));if(!split)return;
+        last.medioPago='Mixto';last.efectivo=split.efectivo;last.tarjeta=split.tarjeta;last.actualizado=now;
+      }else{
+        last.medioPago=medioPago;delete last.efectivo;delete last.tarjeta;last.actualizado=now;
+      }
+      obj.pagos[idx]=last;
       medioCorregido=true;
     }
     obj.pagado=legacyPagado+obj.pagos.reduce((a,p)=>a+Number(p.monto||0),0);
@@ -892,7 +921,7 @@ function editOrder(id){
   document.getElementById('view').innerHTML=`<div class="formlayout"><section class="panel" style="margin-top:0"><div class="panelhead"><div><div class="eyebrow">INGRESÓ ${prettyDate(r.fechaIngreso)}</div><h3>${esc(r.cliente)} · C${fmtClient(r.clienteNumero)}</h3></div><span class="badge ${badgeClass(r)}">${esc(r.estado)}</span></div>${orderForm(r,false)}</section><aside class="sidecard"><div class="eyebrow" style="color:#8fb9ff">RESUMEN</div><div class="summaryrow"><span>Total</span><strong>${money(r.monto)}</strong></div><div class="summaryrow"><span>Pagado</span><strong>${money(r.pagado)}</strong></div><div class="summaryrow"><span>Medio</span><strong>${esc(r.medioPago)}</strong></div><div class="summaryrow total"><span>Saldo</span><strong>${money(balance(r))}</strong></div><div class="summaryrow"><span>Días en taller</span><strong>${daysInShop(r)}</strong></div>${Array.isArray(r.repuestosUsados)&&r.repuestosUsados.length?`<div class="summaryrow"><span>Costo repuestos</span><strong>${money(r.repuestosUsados.reduce((a,x)=>a+Number(x.cantidad||1)*Number(x.costoUnitario||0),0))}</strong></div><div class="summaryrow"><span>Margen bruto</span><strong>${money(Number(r.monto||0)-r.repuestosUsados.reduce((a,x)=>a+Number(x.cantidad||1)*Number(x.costoUnitario||0),0))}</strong></div>`:''}<div class="summaryrow"><span>Estado</span><strong>${esc(r.estado)}</strong></div>${r.estado!=='Entregado'?`<div class="summaryrow"><span>Situación</span><strong>${esc(r.situacionTaller||'En reparación')}</strong></div>`:''}${r.fechaEntrega?`<div class="summaryrow"><span>Entregado</span><strong>${prettyDate(r.fechaEntrega)}</strong></div>`:''}<div style="margin-top:12px;color:#91a5ba;font-size:11px">TELÉFONO</div><div style="font-size:18px;font-weight:800;margin-top:4px">${esc(r.telefono)}</div>${history.length?`<div style="margin-top:18px;color:#91a5ba;font-size:11px">OTRAS ÓRDENES DEL CLIENTE</div><div class="timeline">${history.map(x=>`<div class="timelineitem" style="background:#193652;color:#dce8f5;cursor:pointer" onclick="editOrder('${esc(x.id)}')"><strong>${fmtOrder(x.numero)} ${esc(x.marcaModelo)}</strong><span>${prettyDate(x.fechaIngreso)}</span></div>`).join('')}</div>`:''}</aside></div>`;
   attachBalancePreview();
 }
-function attachBalancePreview(){let m=document.getElementById('monto'),p=document.getElementById('pagado'),a=document.getElementById('pagadoActual'),s=document.getElementById('saldoPreview');if(!m||!p||!s)return;let f=()=>{const mt=parseMoneyAR(m.value),nuevo=parseMoneyAR(p.value),actual=parseMoneyAR(a?.value||'0');s.value=money(Math.max(0,(Number.isFinite(mt)?mt:0)-(Number.isFinite(actual)?actual:0)-(Number.isFinite(nuevo)?nuevo:0)))};m.addEventListener('input',f);p.addEventListener('input',f);f()}
+function attachBalancePreview(){let m=document.getElementById('monto'),p=document.getElementById('pagado'),a=document.getElementById('pagadoActual'),s=document.getElementById('saldoPreview');if(!m||!p||!s)return;let f=()=>{const mt=parseMoneyAR(m.value),nuevo=parseMoneyAR(p.value),actual=parseMoneyAR(a?.value||'0');const saldo=Math.max(0,(Number.isFinite(mt)?mt:0)-(Number.isFinite(actual)?actual:0)-(Number.isFinite(nuevo)?nuevo:0));s.value=money(saldo);const b=document.getElementById('collectBalanceBtn');if(b&&!b.hasAttribute('disabled'))b.style.display=saldo>0?'inline-flex':'none'};m.addEventListener('input',f);p.addEventListener('input',f);f();toggleMixedPaymentFields()}
 function newOrderSameClient(id){let r=load().find(x=>x.id===id);if(r)newOrder({cliente:r.cliente,telefono:r.telefono})}
 function deleteOrder(id){
   let all=load(),order=all.find(r=>String(r.id)===String(id));
@@ -1292,7 +1321,10 @@ window.__nqnLegacyBoot=boot;
           if(medio==='Efectivo')out.efectivo+=monto;
           else if(medio==='Mercado Pago'||medio==='Transferencia')out.mercadoPago+=monto;
           else if(medio==='Tarjeta'||medio==='Tarjeta crédito / débito'||medio==='Tarjeta crédito/débito')out.tarjetas+=monto;
-          else if(medio==='Mixto')out.mixto+=monto;
+          else if(medio==='Mixto'){
+            const ef=Math.max(0,Number(p.efectivo||0)),ta=Math.max(0,Number(p.tarjeta||0));
+            if(ef>0||ta>0){out.efectivo+=ef;out.tarjetas+=ta}else out.mixto+=monto;
+          }
           else return;
           out.cantidad++;
         });
