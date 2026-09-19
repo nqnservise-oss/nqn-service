@@ -137,7 +137,7 @@ input,select,textarea{font-size:16px;line-height:1.4}
 <body>
 <div class="shell">
   <aside class="sidebar">
-    <div class="brand"><div class="brandmark">NQN</div><div><div class="brandname">NQN Service</div><div class="brandsub">Gestión técnica · V9.24 saldo + pago mixto</div></div></div>
+    <div class="brand"><div class="brandmark">NQN</div><div><div class="brandname">NQN Service</div><div class="brandsub">Gestión técnica · V9.25 caja real + Cleris</div></div></div>
     <div class="nav">
       <button id="nav-dashboard" class="active" onclick="showView('dashboard')">⌂ Dashboard</button>
       <button id="nav-nuevo" onclick="newOrder()">＋ Nuevo ingreso</button>
@@ -180,7 +180,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredIns
 window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;updateInstallButton();toast('NQN Service instalada')});
 function updateInstallButton(){let b=document.getElementById('installPwaBtn');if(b)b.classList.toggle('show',!!deferredInstallPrompt)}
 async function installPwa(){if(!deferredInstallPrompt){alert('Si Chrome no muestra la instalación todavía, recargá la página una vez y volvé a intentar.');return}deferredInstallPrompt.prompt();try{await deferredInstallPrompt.userChoice}catch(e){}deferredInstallPrompt=null;updateInstallButton()}
-const OFFLINE_CACHE='nqn-service-v24-saldo-mixto';
+const OFFLINE_CACHE='nqn-service-v25-caja-cleris';
 const OFFLINE_ASSETS=['./','./index.html','./NQN_SERVICE_ESTABLE.html','./manifest.webmanifest','./turnos.js','./icons/icon-192.png','./icons/icon-512.png'];
 let swReloading=false;
 async function ensureOfflineReady(){
@@ -1344,6 +1344,36 @@ window.__nqnLegacyBoot=boot;
     return out;
   }
 
+  function cashFromCleris(fecha){
+    const out={efectivo:0,mercadoPago:0,tarjetas:0,mixto:0,cantidad:0,total:0};
+    const events=(typeof loadEvents==='function'?loadEvents():[]);
+    events.forEach(ev=>{
+      if(!ev||String(ev.fecha||'')!==String(fecha||''))return;
+      const monto=Math.max(0,Number(ev.monto||0));if(!monto)return;
+      const medio=String(ev.medioPago||'').trim();
+      if(medio==='Efectivo')out.efectivo+=monto;
+      else if(medio==='Mercado Pago'||medio==='Transferencia')out.mercadoPago+=monto;
+      else if(medio==='Tarjeta'||medio==='Tarjeta crédito / débito'||medio==='Tarjeta crédito/débito')out.tarjetas+=monto;
+      else if(medio==='Mixto')out.mixto+=monto;
+      else return;
+      out.total+=monto;
+      out.cantidad++;
+    });
+    return out;
+  }
+
+  function cashAutomatic(fecha){
+    const nqn=cashFromOrders(fecha),cleris=cashFromCleris(fecha);
+    return {
+      efectivo:Number(nqn.efectivo||0)+Number(cleris.efectivo||0),
+      mercadoPago:Number(nqn.mercadoPago||0)+Number(cleris.mercadoPago||0),
+      tarjetas:Number(nqn.tarjetas||0)+Number(cleris.tarjetas||0),
+      mixto:Number(nqn.mixto||0)+Number(cleris.mixto||0),
+      cantidad:Number(nqn.cantidad||0)+Number(cleris.cantidad||0),
+      nqn,cleris
+    };
+  }
+
   function normalizeExpense(r,index=0){
     return {
       id:String(r?.id||('gasto-'+Date.now()+'-'+index)),fecha:String(r?.fecha||localDay()),
@@ -1568,11 +1598,13 @@ window.__nqnLegacyBoot=boot;
       if(r?.estado==='Entregado'&&String(r.fechaEntrega||'').slice(0,7)===mk)return a+Math.max(0,Number(r.pagado||0));
       return a;
     },0);
+    const clerisIngresos=(typeof loadEvents==='function'?loadEvents():[]).filter(x=>String(x.fecha||'').slice(0,7)===mk).reduce((a,x)=>a+Math.max(0,Number(x.monto||0)),0);
+    const ingresosCaja=ingresos+clerisIngresos;
     const expenses=(window.loadExpenses?window.loadExpenses():[]).filter(x=>String(x.fecha||'').slice(0,7)===mk&&(isAdmin||operatorOwns(x,owner)));
     const gastos=expenses.reduce((a,x)=>a+Math.max(0,Number(x.monto||0)),0);
     const closings=(window.loadCashClosings?window.loadCashClosings():[]).filter(x=>String(x.fecha||'').slice(0,7)===mk&&(isAdmin||operatorOwns(x,owner)));
     const notas=closings.reduce((a,x)=>a+Math.max(0,Number(x.notaCredito||0)),0);
-    return {ingresos,gastos,notas,neto:ingresos-notas-gastos};
+    return {ingresos:ingresosCaja,ingresosNQN:ingresos,ingresosCleris:clerisIngresos,gastos,notas,neto:ingresosCaja-notas-gastos};
   }
 
   function paintMonthBalance(value){
@@ -1610,20 +1642,20 @@ window.__nqnLegacyBoot=boot;
     const gastosDia=(window.loadExpenses?window.loadExpenses():[]).filter(x=>x.fecha===r.fecha&&operatorOwns(x,owner));
     const gastosTotal=gastosDia.reduce((a,x)=>a+Number(x.monto||0),0);
     const ge=gastosDia.filter(x=>x.medioPago==='Efectivo').reduce((a,x)=>a+Number(x.monto||0),0),gm=gastosDia.filter(x=>x.medioPago==='Mercado Pago').reduce((a,x)=>a+Number(x.monto||0),0);
-    const autoCash=cashFromOrders(r.fecha);
+    const autoCash=cashAutomatic(r.fecha);
     const cajaVista=editId?r:{...r,efectivo:autoCash.efectivo,mercadoPago:autoCash.mercadoPago,tarjetas:autoCash.tarjetas};
     const resumen={...cajaVista,gastos:gastosTotal};
     const tt=cashTotals(resumen);
     const monthNet=monthBalance(r.fecha,owner).neto;
     const visible=window.isAdmin()?all:all.filter(x=>operatorOwns(x,op));
     const sorted=[...visible].sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha))||String(b.actualizado).localeCompare(String(a.actualizado)));
-    document.getElementById('view').innerHTML=`<section class="panel" style="margin-top:0"><div class="panelhead"><div><div class="eyebrow">CIERRE DIARIO</div><h3>${hit?'Cierre del día':'Cargar cierre del día'}</h3></div><span class="badge">Operador: ${e(r.operador)}</span></div><form class="grid" onsubmit="submitCashSummary(event,'${e(hit?.id||'')}')"><div class="field short"><label>Fecha *</label><input id="cashFecha" type="date" value="${e(r.fecha)}" required></div><div class="field"><label>Operador</label><input value="${e(r.operador)}" readonly></div><div class="field"><label>Efectivo</label><input id="cashEfectivo" class="cashNumber" type="text" inputmode="decimal" value="${moneyInput(cajaVista.efectivo)}"></div><div class="field"><label>Mercado Pago / transferencias</label><input id="cashMP" class="cashNumber" type="text" inputmode="decimal" value="${moneyInput(cajaVista.mercadoPago)}"></div><div class="field"><label>Tarjeta crédito / débito</label><input id="cashTarjetas" class="cashNumber" type="text" inputmode="decimal" value="${moneyInput(cajaVista.tarjetas)}"></div><div class="field full"><div id="cashAutoHint" class="hint"><strong>Automático:</strong> toma cada pago registrado en las órdenes en la fecha seleccionada, aunque el equipo siga en taller.${autoCash.mixto>0?` <strong>Atención:</strong> hay ${m(autoCash.mixto)} con medio "Mixto"; revisá manualmente cómo repartirlo entre efectivo y Mercado Pago.`:''}</div></div><div class="field"><label>Nota de crédito</label><input id="cashNC" class="cashNumber" type="text" inputmode="decimal" value="${moneyInput(r.notaCredito)}"></div><div class="field"><label>Gastos del día</label><input id="cashGastos" type="text" value="${moneyInput(gastosTotal)}" readonly><div class="hint">Se carga desde el botón <strong>＋ Gasto</strong>. Efectivo: ${m(ge)} · Mercado Pago: ${m(gm)}</div></div><div class="field full"><label>Observaciones</label><input id="cashObs" value="${e(r.observaciones)}"></div><div class="field full"><div class="stats" style="grid-template-columns:repeat(3,1fr);margin:5px 0"><div class="stat soft"><div class="statlabel">Total cobrado</div><div id="cashTotal" class="statvalue smallmoney">${m(tt.ingresos)}</div></div><div class="stat ${tt.neto<0?'bad':''}"><div class="statlabel">Neto del día</div><div id="cashNeto" class="statvalue smallmoney" style="${tt.neto<0?'color:var(--red)':''}">${m(tt.neto)}</div><div class="stathelp">Cobrado − notas de crédito − gastos</div></div><div id="cashMonthBox" class="stat ${monthNet<0?'bad':'soft'}"><div class="statlabel">Saldo acumulado del mes</div><div id="cashMonthNet" class="statvalue smallmoney" style="${monthNet<0?'color:var(--red)':''}">${m(monthNet)}</div><div class="stathelp">Ingresos cobrados − gastos − notas de crédito</div></div></div></div><div class="actions full"><button type="button" class="btn secondary" onclick="renderExpenses()">＋ Cargar gasto</button><button class="btn primary" type="submit">${hit?'Guardar cambios':'Guardar cierre'}</button></div></form></section><section class="panel"><div class="panelhead"><div><div class="eyebrow">HISTORIAL</div><h3>${window.isAdmin()?'Todos los cierres':'Mis cierres'}</h3></div><span class="badge">${visible.length}</span></div>${sorted.length?`<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Operador</th><th>Total</th><th>Nota crédito</th><th>Gastos</th><th>Neto</th><th></th></tr></thead><tbody>${sorted.slice(0,100).map(x=>{const t=cashTotals(x);return `<tr><td><strong>${dateLabel(x.fecha)}</strong></td><td>${e(x.operador)}</td><td><strong>${m(t.ingresos)}</strong></td><td>${m(x.notaCredito)}</td><td>${m(x.gastos)}</td><td><strong>${m(t.neto)}</strong></td><td class="right nowrap"><button class="btn secondary small" onclick="showCashSummary('${e(x.id)}')">Editar</button>${window.isAdmin()?` <button class="btn danger small" onclick="deleteCashSummary('${e(x.id)}')">Eliminar</button>`:''}</td></tr>`}).join('')}</tbody></table></div>`:'<div class="empty">Todavía no hay cierres de caja.</div>'}</section>`;
+    document.getElementById('view').innerHTML=`<section class="panel" style="margin-top:0"><div class="panelhead"><div><div class="eyebrow">CIERRE DIARIO</div><h3>${hit?'Cierre del día':'Cargar cierre del día'}</h3></div><span class="badge">Operador: ${e(r.operador)}</span></div><form class="grid" onsubmit="submitCashSummary(event,'${e(hit?.id||'')}')"><div class="field short"><label>Fecha *</label><input id="cashFecha" type="date" value="${e(r.fecha)}" required></div><div class="field"><label>Operador</label><input value="${e(r.operador)}" readonly></div><div class="field"><label>Efectivo</label><input id="cashEfectivo" class="cashNumber" type="text" inputmode="decimal" value="${moneyInput(cajaVista.efectivo)}"></div><div class="field"><label>Mercado Pago / transferencias</label><input id="cashMP" class="cashNumber" type="text" inputmode="decimal" value="${moneyInput(cajaVista.mercadoPago)}"></div><div class="field"><label>Tarjeta crédito / débito</label><input id="cashTarjetas" class="cashNumber" type="text" inputmode="decimal" value="${moneyInput(cajaVista.tarjetas)}"></div><div class="field full"><div id="cashAutoHint" class="hint"><strong>Automático:</strong> suma los cobros de NQN Service y los ingresos de Cleris de la fecha seleccionada. Cleris impacta en la caja real, pero no en la facturación ni en los KPIs de NQN.${autoCash.cleris.total>0?` <strong>Cleris:</strong> ${m(autoCash.cleris.total)}.`:''}${autoCash.mixto>0?` <strong>Atención:</strong> hay ${m(autoCash.mixto)} con medio "Mixto"; revisá manualmente cómo repartirlo.`:''}</div></div><div class="field"><label>Nota de crédito</label><input id="cashNC" class="cashNumber" type="text" inputmode="decimal" value="${moneyInput(r.notaCredito)}"></div><div class="field"><label>Gastos del día</label><input id="cashGastos" type="text" value="${moneyInput(gastosTotal)}" readonly><div class="hint">Se carga desde el botón <strong>＋ Gasto</strong>. Efectivo: ${m(ge)} · Mercado Pago: ${m(gm)}</div></div><div class="field full"><label>Observaciones</label><input id="cashObs" value="${e(r.observaciones)}"></div><div class="field full"><div class="stats" style="grid-template-columns:repeat(3,1fr);margin:5px 0"><div class="stat soft"><div class="statlabel">Total cobrado</div><div id="cashTotal" class="statvalue smallmoney">${m(tt.ingresos)}</div></div><div class="stat ${tt.neto<0?'bad':''}"><div class="statlabel">Neto del día</div><div id="cashNeto" class="statvalue smallmoney" style="${tt.neto<0?'color:var(--red)':''}">${m(tt.neto)}</div><div class="stathelp">Cobrado − notas de crédito − gastos</div></div><div id="cashMonthBox" class="stat ${monthNet<0?'bad':'soft'}"><div class="statlabel">Saldo acumulado del mes</div><div id="cashMonthNet" class="statvalue smallmoney" style="${monthNet<0?'color:var(--red)':''}">${m(monthNet)}</div><div class="stathelp">Ingresos cobrados − gastos − notas de crédito</div></div></div></div><div class="actions full"><button type="button" class="btn secondary" onclick="renderExpenses()">＋ Cargar gasto</button><button class="btn primary" type="submit">${hit?'Guardar cambios':'Guardar cierre'}</button></div></form></section><section class="panel"><div class="panelhead"><div><div class="eyebrow">HISTORIAL</div><h3>${window.isAdmin()?'Todos los cierres':'Mis cierres'}</h3></div><span class="badge">${visible.length}</span></div>${sorted.length?`<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Operador</th><th>Total</th><th>Nota crédito</th><th>Gastos</th><th>Neto</th><th></th></tr></thead><tbody>${sorted.slice(0,100).map(x=>{const t=cashTotals(x);return `<tr><td><strong>${dateLabel(x.fecha)}</strong></td><td>${e(x.operador)}</td><td><strong>${m(t.ingresos)}</strong></td><td>${m(x.notaCredito)}</td><td>${m(x.gastos)}</td><td><strong>${m(t.neto)}</strong></td><td class="right nowrap"><button class="btn secondary small" onclick="showCashSummary('${e(x.id)}')">Editar</button>${window.isAdmin()?` <button class="btn danger small" onclick="deleteCashSummary('${e(x.id)}')">Eliminar</button>`:''}</td></tr>`}).join('')}</tbody></table></div>`:'<div class="empty">Todavía no hay cierres de caja.</div>'}</section>`;
     document.querySelectorAll('.cashNumber').forEach(x=>x.addEventListener('input',cashPreview));
     const fechaEl=document.getElementById('cashFecha');if(fechaEl)fechaEl.addEventListener('change',()=>{
-      const fecha=fechaEl.value,auto=cashFromOrders(fecha),total=expenseTotalFor(fecha,owner);
+      const fecha=fechaEl.value,auto=cashAutomatic(fecha),total=expenseTotalFor(fecha,owner);
       const ef=document.getElementById('cashEfectivo'),mp=document.getElementById('cashMP'),ta=document.getElementById('cashTarjetas'),g=document.getElementById('cashGastos'),h=document.getElementById('cashAutoHint');
       if(ef)ef.value=moneyInput(auto.efectivo);if(mp)mp.value=moneyInput(auto.mercadoPago);if(ta)ta.value=moneyInput(auto.tarjetas);if(g)g.value=moneyInput(total);
-      if(h)h.innerHTML=`<strong>Automático:</strong> toma cada pago registrado en las órdenes en la fecha seleccionada, aunque el equipo siga en taller.${auto.mixto>0?` <strong>Atención:</strong> hay ${m(auto.mixto)} con medio "Mixto"; revisá manualmente cómo repartirlo entre efectivo y Mercado Pago.`:''}`;
+      if(h)h.innerHTML=`<strong>Automático:</strong> suma los cobros de NQN Service y los ingresos de Cleris de la fecha seleccionada. Cleris impacta en la caja real, pero no en la facturación ni en los KPIs de NQN.${auto.cleris.total>0?` <strong>Cleris:</strong> ${m(auto.cleris.total)}.`:''}${auto.mixto>0?` <strong>Atención:</strong> hay ${m(auto.mixto)} con medio "Mixto"; revisá manualmente cómo repartirlo.`:''}`;
       cashPreview();
     });
   };
