@@ -6,7 +6,6 @@
 <title>NQN Service</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#10243e">
-<meta name="application-name" content="NQN Service">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -131,20 +130,31 @@ input,select,textarea{font-size:16px;line-height:1.4}
 .appback:hover:not(:disabled){background:var(--soft);border-color:#cbd9ea}.appback:disabled{opacity:.38;cursor:default}
 .topleft{display:flex;align-items:center;gap:12px;min-width:0}.topleft>div{min-width:0}
 @media(max-width:620px){.top{align-items:flex-start;gap:10px;flex-wrap:wrap}.topleft{width:100%}.appback{padding:9px 11px}.top>div:last-child{margin-left:auto}}
-/* ===== RESUMEN DE CAJA V9.27 ===== */
+/* ===== RESUMEN DE CAJA V9.28 · MEJOR LECTURA ===== */
 .cashlines{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#fff}
-.cashline{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:15px 18px;border-bottom:1px solid var(--line)}
+.cashline{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:19px 20px;border-bottom:1px solid var(--line);min-height:76px}
 .cashline:last-child{border-bottom:0}
-.cashline .cashlabel{font-weight:800;color:var(--navy)}
-.cashline .cashamount{font-size:23px;font-weight:900;white-space:nowrap}
+.cashline>div:first-child{flex:1;min-width:0}
+.cashline .cashlabel{font-size:17px;line-height:1.25;font-weight:900;color:var(--navy);letter-spacing:.1px}
+.cashline .cashamount{font-size:26px;line-height:1.1;font-weight:900;white-space:nowrap;flex-shrink:0}
 .cashline.totalday{background:var(--soft)}
+.cashline.totalday .cashlabel{font-size:18px}
+.cashline.totalday .cashamount{font-size:28px}
 .cashline.external{background:#f8fafc;border-top:2px dashed #cfd8e5}
 .cashline.external .cashlabel{color:#53657d}
 .cashline.saldototal{background:#f4f8fd;border-top:2px solid var(--navy)}
-.cashline.saldototal .cashlabel,.cashline.saldototal .cashamount{font-size:25px}
-.cashsub{font-size:12px;color:var(--muted);margin-top:3px}
-@media(max-width:620px){.cashline{padding:13px 14px}.cashline .cashamount{font-size:20px}.cashline.saldototal .cashlabel,.cashline.saldototal .cashamount{font-size:22px}}
-/* ===== FIN RESUMEN DE CAJA V9.27 ===== */
+.cashline.saldototal .cashlabel,.cashline.saldototal .cashamount{font-size:28px}
+.cashsub{font-size:13px;line-height:1.4;color:var(--muted);margin-top:5px}
+@media(max-width:620px){
+  .cashline{gap:12px;padding:16px 14px;min-height:72px}
+  .cashline .cashlabel{font-size:16px;line-height:1.25}
+  .cashline .cashamount{font-size:23px}
+  .cashline.totalday .cashlabel{font-size:17px}
+  .cashline.totalday .cashamount{font-size:24px}
+  .cashline.saldototal .cashlabel,.cashline.saldototal .cashamount{font-size:24px}
+  .cashsub{font-size:12.5px;line-height:1.35;margin-top:4px}
+}
+/* ===== FIN RESUMEN DE CAJA V9.28 ===== */
 /* ===== FIN BOTÓN VOLVER PERSISTENTE ===== */
 /* ===== FIN AJUSTE VISUAL 17-09-2026 ===== */
 </style>
@@ -152,7 +162,7 @@ input,select,textarea{font-size:16px;line-height:1.4}
 <body>
 <div class="shell">
   <aside class="sidebar">
-    <div class="brand"><div class="brandmark">NQN</div><div><div class="brandname">NQN Service</div><div class="brandsub">Gestión técnica · V9.27 caja separada</div></div></div>
+    <div class="brand"><div class="brandmark">NQN</div><div><div class="brandname">NQN Service</div><div class="brandsub">Gestión técnica · V9.28 caja visual</div></div></div>
     <div class="nav">
       <button id="nav-dashboard" class="active" onclick="showView('dashboard')">⌂ Dashboard</button>
       <button id="nav-nuevo" onclick="newOrder()">＋ Nuevo ingreso</button>
@@ -1214,7 +1224,7 @@ window.__nqnLegacyBoot=boot;
 </script>
   <script src="turnos.js"></script>
   <script>
-/* NQN Service V9.27 Completa
+/* NQN Service V9.28 Completa
    Caja diaria + operadores + PIN + roles + sincronización con Drive.
    No guarda PIN en texto plano: almacena un hash.
 */
@@ -1483,7 +1493,7 @@ window.__nqnLegacyBoot=boot;
   }
   function updateAuthBar(){
     const el=document.getElementById('authStatus');if(!el)return;const op=session();
-    if(!op){el.innerHTML='<span class="badge">V9.27 caja separada</span>';return}
+    if(!op){el.innerHTML='<span class="badge">V9.28 caja visual</span>';return}
     el.innerHTML=`<button class="btn secondary small" type="button" onclick="logoutOperator()">👤 ${e(op.nombre)} · Salir</button>`;
   }
   function applyRoleNav(){
@@ -1500,7 +1510,7 @@ window.__nqnLegacyBoot=boot;
     if(!ops.length)return renderFirstAdmin();
     const active=ops.filter(x=>x.activo);
     title('Ingreso de operador');
-    document.getElementById('view').innerHTML=`<section class="panel" style="max-width:560px;margin:40px auto 0"><div class="panelhead"><div><div class="eyebrow">ACCESO</div><h3>Ingresar a NQN Service</h3></div><span class="badge">V9.27 CAJA SEPARADA</span></div>${active.length?`<form class="grid" style="grid-template-columns:1fr" onsubmit="window.loginOperator(event)"><div class="field"><label>Operador</label><select id="loginOperatorId" required>${active.map(o=>`<option value="${e(o.id)}">${e(o.nombre)}</option>`).join('')}</select></div><div class="field"><label>PIN</label><input id="loginPin" type="password" inputmode="numeric" autocomplete="current-password" required autofocus><div class="hint">Si tu PIN anterior tenía guion, también podés ingresar solo los números.</div></div><div class="actions"><button class="btn primary" type="submit">Ingresar</button></div></form>`:'<div class="alert red"><strong>No hay operadores activos</strong><span>Se necesita un administrador activo para continuar.</span></div>'}</section>`;
+    document.getElementById('view').innerHTML=`<section class="panel" style="max-width:560px;margin:40px auto 0"><div class="panelhead"><div><div class="eyebrow">ACCESO</div><h3>Ingresar a NQN Service</h3></div><span class="badge">V9.28 CAJA VISUAL</span></div>${active.length?`<form class="grid" style="grid-template-columns:1fr" onsubmit="window.loginOperator(event)"><div class="field"><label>Operador</label><select id="loginOperatorId" required>${active.map(o=>`<option value="${e(o.id)}">${e(o.nombre)}</option>`).join('')}</select></div><div class="field"><label>PIN</label><input id="loginPin" type="password" inputmode="numeric" autocomplete="current-password" required autofocus><div class="hint">Si tu PIN anterior tenía guion, también podés ingresar solo los números.</div></div><div class="actions"><button class="btn primary" type="submit">Ingresar</button></div></form>`:'<div class="alert red"><strong>No hay operadores activos</strong><span>Se necesita un administrador activo para continuar.</span></div>'}</section>`;
     applyRoleNav();
   }
   function renderFirstAdmin(){
@@ -1871,7 +1881,7 @@ window.__nqnLegacyBoot=boot;
   window.deleteOperator=function(id){let rows=window.loadOperators(),x=rows.find(r=>String(r.id)===String(id));if(!x)return;const current=session();if(current&&String(current.id)===String(id)){alert('No podés eliminar el usuario con el que estás trabajando.');return}if(x.rol==='admin'&&x.activo&&activeAdmins(rows).length<=1){alert('Tiene que quedar al menos un administrador activo.');return}const used=window.loadCashClosings().some(c=>String(c.operadorId||'')===String(x.id)||(!c.operadorId&&String(c.operador||'').toLowerCase()===x.nombre.toLowerCase()));if(used){alert('Este operador tiene historial de caja. No se elimina: desactivalo para conservar el registro.');return}if(!confirm('¿Eliminar definitivamente a '+x.nombre+'?'))return;window.saveOperators(rows.filter(r=>String(r.id)!==String(id)));queueCloudOp('deleteOperator',id,null,now());toast('Operador eliminado');window.renderOperators()};
 
   window.exportData=function(){
-    const payload={app:'NQN Service',version:9.27,edicion:'nqn-separado-cleris-gastos-notas',exportado:now(),ordenes:load(),cleriseventos:loadEvents(),cierrescaja:window.loadCashClosings(),gastos:window.loadExpenses(),stock:window.loadStock(),operadores:window.loadOperators(),settings:{lastSave:getSettings().lastSave||null}};
+    const payload={app:'NQN Service',version:9.28,edicion:'caja-visual-nqn-separado-cleris-gastos-notas',exportado:now(),ordenes:load(),cleriseventos:loadEvents(),cierrescaja:window.loadCashClosings(),gastos:window.loadExpenses(),stock:window.loadStock(),operadores:window.loadOperators(),settings:{lastSave:getSettings().lastSave||null}};
     const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='NQN_SERVICE_BACKUP_'+localDay()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);let s=getSettings();s.lastExternalBackup=now();setSettings(s);toast('Copia externa descargada');setTimeout(()=>window.renderBackup(),300)
   };
   window.importData=function(){
