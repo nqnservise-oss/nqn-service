@@ -130,31 +130,6 @@ input,select,textarea{font-size:16px;line-height:1.4}
 .appback:hover:not(:disabled){background:var(--soft);border-color:#cbd9ea}.appback:disabled{opacity:.38;cursor:default}
 .topleft{display:flex;align-items:center;gap:12px;min-width:0}.topleft>div{min-width:0}
 @media(max-width:620px){.top{align-items:flex-start;gap:10px;flex-wrap:wrap}.topleft{width:100%}.appback{padding:9px 11px}.top>div:last-child{margin-left:auto}}
-/* ===== RESUMEN DE CAJA V9.33 · CORTE TOTAL ===== */
-.cashlines{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#fff}
-.cashline{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:19px 20px;border-bottom:1px solid var(--line);min-height:76px}
-.cashline:last-child{border-bottom:0}
-.cashline>div:first-child{flex:1;min-width:0}
-.cashline .cashlabel{font-size:19px;line-height:1.25;font-weight:900;color:var(--navy);letter-spacing:.1px}
-.cashline .cashamount{font-size:26px;line-height:1.1;font-weight:900;white-space:nowrap;flex-shrink:0}
-.cashline.totalday{background:var(--soft)}
-.cashline.totalday .cashlabel{font-size:20px}
-.cashline.totalday .cashamount{font-size:28px}
-.cashline.adminstart{border-top:3px solid #d9e3ef;background:#fbfdff}.cashline.external{background:#f8fafc;border-top:2px dashed #cfd8e5}
-.cashline.external .cashlabel{color:#53657d}
-.cashline.saldototal{background:#f4f8fd;border-top:2px solid var(--navy)}
-.cashline.saldototal .cashlabel,.cashline.saldototal .cashamount{font-size:28px}
-.cashsub{font-size:13px;line-height:1.4;color:var(--muted);margin-top:5px}
-@media(max-width:620px){
-  .cashline{gap:12px;padding:16px 14px;min-height:72px}
-  .cashline .cashlabel{font-size:18px;line-height:1.25}
-  .cashline .cashamount{font-size:23px}
-  .cashline.totalday .cashlabel{font-size:19px}
-  .cashline.totalday .cashamount{font-size:24px}
-  .cashline.saldototal .cashlabel,.cashline.saldototal .cashamount{font-size:24px}
-  .cashsub{font-size:12.5px;line-height:1.35;margin-top:4px}
-}
-/* ===== FIN RESUMEN DE CAJA V9.33 ===== */
 /* ===== FIN BOTÓN VOLVER PERSISTENTE ===== */
 /* ===== FIN AJUSTE VISUAL 17-09-2026 ===== */
 </style>
@@ -162,7 +137,7 @@ input,select,textarea{font-size:16px;line-height:1.4}
 <body>
 <div class="shell">
   <aside class="sidebar">
-    <div class="brand"><div class="brandmark">NQN</div><div><div class="brandname">NQN Service</div><div class="brandsub">Gestión técnica · V9.33 corte total</div></div></div>
+    <div class="brand"><div class="brandmark">NQN</div><div><div class="brandname">NQN Service</div><div class="brandsub">Gestión técnica · V9.25 caja real + Cleris</div></div></div>
     <div class="nav">
       <button id="nav-dashboard" class="active" onclick="showView('dashboard')">⌂ Dashboard</button>
       <button id="nav-nuevo" onclick="newOrder()">＋ Nuevo ingreso</button>
@@ -205,7 +180,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredIns
 window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;updateInstallButton();toast('NQN Service instalada')});
 function updateInstallButton(){let b=document.getElementById('installPwaBtn');if(b)b.classList.toggle('show',!!deferredInstallPrompt)}
 async function installPwa(){if(!deferredInstallPrompt){alert('Si Chrome no muestra la instalación todavía, recargá la página una vez y volvé a intentar.');return}deferredInstallPrompt.prompt();try{await deferredInstallPrompt.userChoice}catch(e){}deferredInstallPrompt=null;updateInstallButton()}
-const OFFLINE_CACHE='nqn-service-v927-caja-separada';
+const OFFLINE_CACHE='nqn-service-v25-caja-cleris';
 const OFFLINE_ASSETS=['./','./index.html','./NQN_SERVICE_ESTABLE.html','./manifest.webmanifest','./turnos.js','./icons/icon-192.png','./icons/icon-512.png'];
 let swReloading=false;
 async function ensureOfflineReady(){
@@ -1183,18 +1158,18 @@ function downloadReceiptImage(file){
   const url=URL.createObjectURL(file),a=document.createElement('a');a.href=url;a.download=file.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
 }
 async function shareReceiptWhatsApp(id){
-  const r=load().find(x=>x.id===id);if(!r)return;
+  const r=load().find(x=>String(x.id)===String(id));if(!r)return;
+  const n=whatsappNumber(r.telefono);
+  if(!n||n.length<12){alert('Revisá el teléfono del cliente antes de abrir WhatsApp.');return;}
   try{
-    const blob=await receiptCanvasBlob(receiptCanvas(r));
-    const file=new File([blob],'NQN_Service_Orden_'+fmtOrder(r.numero)+'.png',{type:'image/png'});
-    let canShare=!!navigator.share;
-    if(canShare&&navigator.canShare){try{canShare=navigator.canShare({files:[file]})}catch(e){canShare=false}}
-    if(canShare){
-      try{await navigator.share({files:[file],title:'NQN Service · Orden '+fmtOrder(r.numero),text:'Comprobante de ingreso · Orden '+fmtOrder(r.numero)});return}
-      catch(err){if(err&&err.name==='AbortError')return;console.error('No se pudo compartir el comprobante',err)}
-    }
-    downloadReceiptImage(file);
-    alert('La imagen del comprobante quedó guardada. Abrí WhatsApp y adjuntala desde tus archivos o descargas.');
+    // Generar y descargar dentro del clic para que el navegador permita abrir el chat.
+    const a=document.createElement('a');
+    a.href=receiptCanvas(r).toDataURL('image/png');
+    a.download='NQN_Service_Orden_'+fmtOrder(r.numero)+'.png';
+    document.body.appendChild(a);a.click();a.remove();
+    const chat=window.open('https://wa.me/'+n,'_blank');
+    if(chat)chat.opener=null;
+    if(!chat)alert('El comprobante se descargó, pero el navegador bloqueó WhatsApp. Permití las ventanas emergentes y volvé a tocar el botón.');
   }catch(err){console.error('Error al generar comprobante en imagen',err);alert('No se pudo generar la imagen. Podés seguir usando “Comprobante / PDF”.')}
 }
 
@@ -1224,7 +1199,7 @@ window.__nqnLegacyBoot=boot;
 </script>
   <script src="turnos.js"></script>
   <script>
-/* NQN Service V9.33 Completa
+/* NQN Service V9.5 Completa
    Caja diaria + operadores + PIN + roles + sincronización con Drive.
    No guarda PIN en texto plano: almacena un hash.
 */
@@ -1233,7 +1208,6 @@ window.__nqnLegacyBoot=boot;
   const KEY_CASH_MIRROR = 'nqn_service_cash_closings_v2_mirror';
   const KEY_CASH_OLD = 'nqn_service_cash_closings_v1';
   const KEY_CASH_OLD_MIRROR = 'nqn_service_cash_closings_v1_mirror';
-  const CASH_CUT_MARKER = '[CORTE_CAJA_NQN]';
   const KEY_OPERATORS = 'nqn_service_operators_v1';
   const KEY_OPERATORS_MIRROR = 'nqn_service_operators_v1_mirror';
   const KEY_SESSION = 'nqn_service_operator_session_v1';
@@ -1241,8 +1215,6 @@ window.__nqnLegacyBoot=boot;
   const KEY_EXPENSES_MIRROR = 'nqn_service_expenses_v1_mirror';
   const KEY_STOCK = 'nqn_service_stock_v1';
   const KEY_STOCK_MIRROR = 'nqn_service_stock_v1_mirror';
-  const KEY_LAST_ACTIVE_DAY = 'nqn_service_last_active_day_v1';
-  const KEY_REQUIRED_CLOSE_DAY = 'nqn_service_required_close_day_v1';
   const EXPENSE_CATEGORIES = ['Combustible','Repuestos','Herramientas','Alquiler','Luz','Gas','Otro'];
   const EXPENSE_CATEGORIES_VALID = [...EXPENSE_CATEGORIES,'Servicios']; // compatibilidad histórica
   const EXPENSE_PAYMENTS = ['Efectivo','Mercado Pago'];
@@ -1253,7 +1225,6 @@ window.__nqnLegacyBoot=boot;
   const coreRenderKPIs = window.renderKPIs;
   const coreRenderCleris = window.renderCleris;
   const coreRenderBackup = window.renderBackup;
-  const coreNewOrder = window.newOrder;
 
   function parseJSON(text, fallback){ try{return JSON.parse(text)}catch(e){return fallback} }
   function readArray(key){ const x=parseJSON(localStorage.getItem(key)||'[]',[]); return Array.isArray(x)?x:[]; }
@@ -1391,6 +1362,18 @@ window.__nqnLegacyBoot=boot;
     return out;
   }
 
+  function cashAutomatic(fecha){
+    const nqn=cashFromOrders(fecha),cleris=cashFromCleris(fecha);
+    return {
+      efectivo:Number(nqn.efectivo||0)+Number(cleris.efectivo||0),
+      mercadoPago:Number(nqn.mercadoPago||0)+Number(cleris.mercadoPago||0),
+      tarjetas:Number(nqn.tarjetas||0)+Number(cleris.tarjetas||0),
+      mixto:Number(nqn.mixto||0)+Number(cleris.mixto||0),
+      cantidad:Number(nqn.cantidad||0)+Number(cleris.cantidad||0),
+      nqn,cleris
+    };
+  }
+
   function normalizeExpense(r,index=0){
     return {
       id:String(r?.id||('gasto-'+Date.now()+'-'+index)),fecha:String(r?.fecha||localDay()),
@@ -1429,43 +1412,6 @@ window.__nqnLegacyBoot=boot;
   function setSession(op){sessionStorage.setItem(KEY_SESSION,JSON.stringify({id:op.id,at:now()}));updateAuthBar();applyRoleNav()}
   function clearSession(){sessionStorage.removeItem(KEY_SESSION);updateAuthBar();applyRoleNav()}
 
-  function isCashCut(x){return String(x?.observaciones||'').includes(CASH_CUT_MARKER)}
-  function latestCashCut(){
-    const cuts=(window.loadCashClosings?window.loadCashClosings():[]).filter(isCashCut);
-    if(!cuts.length)return null;
-    return [...cuts].sort((a,b)=>String(b.fecha||'').localeCompare(String(a.fecha||''))||String(b.actualizado||'').localeCompare(String(a.actualizado||'')))[0];
-  }
-  function hasCashClosing(fecha){
-    return !!fecha&&(window.loadCashClosings?window.loadCashClosings():[]).some(x=>!isCashCut(x)&&String(x.fecha||'')===String(fecha));
-  }
-  function requiredCloseDay(){
-    const today=localDay();
-    let required=String(localStorage.getItem(KEY_REQUIRED_CLOSE_DAY)||'');
-    if(required){
-      if(hasCashClosing(required)||required>=today){localStorage.removeItem(KEY_REQUIRED_CLOSE_DAY);required=''}
-      else return required;
-    }
-    const last=String(localStorage.getItem(KEY_LAST_ACTIVE_DAY)||'');
-    if(last&&last<today&&!hasCashClosing(last)){
-      localStorage.setItem(KEY_REQUIRED_CLOSE_DAY,last);
-      return last;
-    }
-    return '';
-  }
-  function markTodayActive(){try{localStorage.setItem(KEY_LAST_ACTIVE_DAY,localDay())}catch(e){}}
-  function blockForRequiredClose(showMessage=true){
-    const pending=requiredCloseDay();
-    if(!pending){markTodayActive();return false}
-    if(showMessage)toast('Cierre de caja pendiente del '+dateLabel(pending)+' · cerralo para continuar');
-    window.showCashSummary('',pending,true);
-    return true;
-  }
-  function clearRequiredCloseIfSatisfied(fecha){
-    const required=String(localStorage.getItem(KEY_REQUIRED_CLOSE_DAY)||'');
-    if(required&&String(fecha)===required&&hasCashClosing(required))localStorage.removeItem(KEY_REQUIRED_CLOSE_DAY);
-    markTodayActive();
-  }
-
   function ensureNavExtras(){
     const nav=document.querySelector('.nav');if(!nav)return;
     if(!document.getElementById('nav-stock')){
@@ -1477,21 +1423,13 @@ window.__nqnLegacyBoot=boot;
       const k=document.getElementById('nav-kpis');k?nav.insertBefore(b,k):nav.appendChild(b);
     }
     if(!document.getElementById('nav-caja')){
-      const b=document.createElement('button');b.id='nav-caja';b.innerHTML='▣ Resumen de caja';b.onclick=()=>window.showView('caja');
+      const b=document.createElement('button');b.id='nav-caja';b.innerHTML='▣ Resumen caja';b.onclick=()=>window.showView('caja');
       const k=document.getElementById('nav-kpis');k?nav.insertBefore(b,k):nav.appendChild(b);
     }
     if(!document.getElementById('nav-operadores')){
       const b=document.createElement('button');b.id='nav-operadores';b.innerHTML='♙ Operadores';b.onclick=()=>window.showView('operadores');
       const backup=document.getElementById('nav-backup');backup?nav.insertBefore(b,backup):nav.appendChild(b);
     }
-
-    // Los tres accesos de control quedan juntos al final: Resumen de caja → Dashboard → KPIs.
-    const install=document.getElementById('installPwaBtn');
-    ['nav-caja','nav-dashboard','nav-kpis'].forEach(id=>{
-      const node=document.getElementById(id);
-      if(node)nav.insertBefore(node,install||null);
-    });
-
     const top=document.querySelector('.top > div:last-child');
     if(top&&!document.getElementById('authStatus')){
       const d=document.createElement('div');d.id='authStatus';top.insertBefore(d,top.firstChild);
@@ -1500,7 +1438,7 @@ window.__nqnLegacyBoot=boot;
   }
   function updateAuthBar(){
     const el=document.getElementById('authStatus');if(!el)return;const op=session();
-    if(!op){el.innerHTML='<span class="badge">V9.33 corte total</span>';return}
+    if(!op){el.innerHTML='<span class="badge">V9.17 alerta demorados</span>';return}
     el.innerHTML=`<button class="btn secondary small" type="button" onclick="logoutOperator()">👤 ${e(op.nombre)} · Salir</button>`;
   }
   function applyRoleNav(){
@@ -1517,7 +1455,7 @@ window.__nqnLegacyBoot=boot;
     if(!ops.length)return renderFirstAdmin();
     const active=ops.filter(x=>x.activo);
     title('Ingreso de operador');
-    document.getElementById('view').innerHTML=`<section class="panel" style="max-width:560px;margin:40px auto 0"><div class="panelhead"><div><div class="eyebrow">ACCESO</div><h3>Ingresar a NQN Service</h3></div><span class="badge">V9.33 CORTE TOTAL</span></div>${active.length?`<form class="grid" style="grid-template-columns:1fr" onsubmit="window.loginOperator(event)"><div class="field"><label>Operador</label><select id="loginOperatorId" required>${active.map(o=>`<option value="${e(o.id)}">${e(o.nombre)}</option>`).join('')}</select></div><div class="field"><label>PIN</label><input id="loginPin" type="password" inputmode="numeric" autocomplete="current-password" required autofocus><div class="hint">Si tu PIN anterior tenía guion, también podés ingresar solo los números.</div></div><div class="actions"><button class="btn primary" type="submit">Ingresar</button></div></form>`:'<div class="alert red"><strong>No hay operadores activos</strong><span>Se necesita un administrador activo para continuar.</span></div>'}</section>`;
+    document.getElementById('view').innerHTML=`<section class="panel" style="max-width:560px;margin:40px auto 0"><div class="panelhead"><div><div class="eyebrow">ACCESO</div><h3>Ingresar a NQN Service</h3></div><span class="badge">V9.17 ALERTA DEMORADOS</span></div>${active.length?`<form class="grid" style="grid-template-columns:1fr" onsubmit="window.loginOperator(event)"><div class="field"><label>Operador</label><select id="loginOperatorId" required>${active.map(o=>`<option value="${e(o.id)}">${e(o.nombre)}</option>`).join('')}</select></div><div class="field"><label>PIN</label><input id="loginPin" type="password" inputmode="numeric" autocomplete="current-password" required autofocus><div class="hint">Si tu PIN anterior tenía guion, también podés ingresar solo los números.</div></div><div class="actions"><button class="btn primary" type="submit">Ingresar</button></div></form>`:'<div class="alert red"><strong>No hay operadores activos</strong><span>Se necesita un administrador activo para continuar.</span></div>'}</section>`;
     applyRoleNav();
   }
   function renderFirstAdmin(){
@@ -1566,7 +1504,6 @@ window.__nqnLegacyBoot=boot;
   function afterLogin(){
     ensureNavExtras();applyRoleNav();updateAuthBar();const op=session();
     if(!op)return renderLoginOrSetup();
-    if(blockForRequiredClose(false))return;
     if(op.rol==='admin')window.renderDashboard();else window.newOrder();
   }
 
@@ -1641,20 +1578,8 @@ window.__nqnLegacyBoot=boot;
 
   window.showView=function(v){
     if(!session()){renderLoginOrSetup();return}
-    const pending=requiredCloseDay();
-    if(pending){
-      if(v==='caja')return window.showCashSummary('',pending,true);
-      toast('Primero hay que cerrar la caja del '+dateLabel(pending));
-      return window.showCashSummary('',pending,true);
-    }
-    markTodayActive();
     if(ADMIN_VIEWS.has(v)&&!window.isAdmin()){toast('Esta sección es solo para administrador');window.newOrder();return}
     if(v==='stock')return window.renderStock();if(v==='gastos')return window.renderExpenses();if(v==='caja')return window.showCashSummary();if(v==='operadores')return window.renderOperators();return coreShowView(v);
-  };
-  window.newOrder=function(...args){
-    if(!session()){renderLoginOrSetup();return}
-    if(blockForRequiredClose())return;
-    return coreNewOrder(...args);
   };
   window.renderDashboard=function(){if(!window.isAdmin())return window.newOrder();return coreRenderDashboard()};
   window.renderKPIs=function(){if(!window.isAdmin())return window.newOrder();return coreRenderKPIs()};
@@ -1663,8 +1588,9 @@ window.__nqnLegacyBoot=boot;
 
   function cashValue(id){return document.getElementById(id)?.value??''}function cashNum(id){const n=parseMoneyAR(cashValue(id));return Number.isFinite(n)?Math.max(0,n):0}
 
-  function monthBalance(fecha){
+  function monthBalance(fecha,owner){
     const mk=String(fecha||localDay()).slice(0,7);
+    const isAdmin=window.isAdmin();
     const orders=(typeof load==='function'?load():[]);
     const ingresos=orders.reduce((a,r)=>{
       const pagos=Array.isArray(r?.pagos)?r.pagos:[];
@@ -1672,246 +1598,73 @@ window.__nqnLegacyBoot=boot;
       if(r?.estado==='Entregado'&&String(r.fechaEntrega||'').slice(0,7)===mk)return a+Math.max(0,Number(r.pagado||0));
       return a;
     },0);
-    const expenses=(window.loadExpenses?window.loadExpenses():[]).filter(x=>String(x.fecha||'').slice(0,7)===mk);
+    const clerisIngresos=(typeof loadEvents==='function'?loadEvents():[]).filter(x=>String(x.fecha||'').slice(0,7)===mk).reduce((a,x)=>a+Math.max(0,Number(x.monto||0)),0);
+    const ingresosCaja=ingresos+clerisIngresos;
+    const expenses=(window.loadExpenses?window.loadExpenses():[]).filter(x=>String(x.fecha||'').slice(0,7)===mk&&(isAdmin||operatorOwns(x,owner)));
     const gastos=expenses.reduce((a,x)=>a+Math.max(0,Number(x.monto||0)),0);
-    const closings=(window.loadCashClosings?window.loadCashClosings():[]).filter(x=>String(x.fecha||'').slice(0,7)===mk);
+    const closings=(window.loadCashClosings?window.loadCashClosings():[]).filter(x=>String(x.fecha||'').slice(0,7)===mk&&(isAdmin||operatorOwns(x,owner)));
     const notas=closings.reduce((a,x)=>a+Math.max(0,Number(x.notaCredito||0)),0);
-    return {ingresos,gastos,notas,neto:ingresos-notas-gastos};
+    return {ingresos:ingresosCaja,ingresosNQN:ingresos,ingresosCleris:clerisIngresos,gastos,notas,neto:ingresosCaja-notas-gastos};
   }
 
-  function cashBalanceSnapshot(fecha){
-    const target=String(fecha||localDay()),mk=target.slice(0,7);
-    const cut=latestCashCut(),cutDate=String(cut?.fecha||'');
-    const out={efectivo:0,mercadoPago:0,tarjetas:0,gastosMes:0,notasMes:0,facturadoMes:0};
-    const afterCut=d=>!cutDate||String(d||'')>cutDate;
-    const rows=(typeof load==='function'?load():[]);
-    rows.forEach(r=>{
-      if(!r)return;
-      const pagos=Array.isArray(r.pagos)?r.pagos:[];
-      if(pagos.length){
-        pagos.forEach(p=>{
-          const d=String(p?.fecha||'');if(!d||d>target||!afterCut(d))return;
-          const monto=Math.max(0,Number(p?.monto||0));if(!monto)return;
-          const medio=String(p?.medioPago||'').trim();
-          if(medio==='Efectivo')out.efectivo+=monto;
-          else if(medio==='Mercado Pago'||medio==='Transferencia')out.mercadoPago+=monto;
-          else if(medio==='Tarjeta'||medio==='Tarjeta crédito / débito'||medio==='Tarjeta crédito/débito')out.tarjetas+=monto;
-          else if(medio==='Mixto'){
-            const ef=Math.max(0,Number(p?.efectivo||0)),ta=Math.max(0,Number(p?.tarjeta||0));
-            if(ef>0||ta>0){out.efectivo+=ef;out.tarjetas+=ta}
-          }
-          if(d.slice(0,7)===mk)out.facturadoMes+=monto;
-        });
-        return;
-      }
-      const d=String(r?.fechaEntrega||'');
-      if(r?.estado!=='Entregado'||!d||d>target||!afterCut(d))return;
-      const monto=Math.max(0,Number(r?.pagado||0));if(!monto)return;
-      const medio=String(r?.medioPago||'').trim();
-      if(medio==='Efectivo')out.efectivo+=monto;
-      else if(medio==='Mercado Pago'||medio==='Transferencia')out.mercadoPago+=monto;
-      else if(medio==='Tarjeta'||medio==='Tarjeta crédito / débito'||medio==='Tarjeta crédito/débito')out.tarjetas+=monto;
-      if(d.slice(0,7)===mk)out.facturadoMes+=monto;
-    });
-
-    (window.loadExpenses?window.loadExpenses():[]).forEach(x=>{
-      const d=String(x?.fecha||'');if(!d||d>target||!afterCut(d))return;
-      const monto=Math.max(0,Number(x?.monto||0));
-      if(String(x?.medioPago||'')==='Mercado Pago')out.mercadoPago-=monto;else out.efectivo-=monto;
-      if(d.slice(0,7)===mk)out.gastosMes+=monto;
-    });
-
-    (window.loadCashClosings?window.loadCashClosings():[]).forEach(x=>{
-      if(isCashCut(x))return;
-      const d=String(x?.fecha||'');if(!d||d>target||!afterCut(d))return;
-      const monto=Math.max(0,Number(x?.notaCredito||0));
-      // Por decisión operativa, las notas de crédito/devoluciones salen de efectivo.
-      out.efectivo-=monto;
-      if(d.slice(0,7)===mk)out.notasMes+=monto;
-    });
-    return out;
-  }
-
-  function operationalBalance(fecha){
-    const cut=latestCashCut();
-    if(!cut)return monthBalance(fecha);
-
-    const cutDate=String(cut.fecha||'');
-    const target=String(fecha||localDay());
-    if(target<=cutDate)return {ingresos:0,gastos:0,notas:0,neto:0,cut};
-
-    const orders=(typeof load==='function'?load():[]);
-    const ingresos=orders.reduce((a,r)=>{
-      const pagos=Array.isArray(r?.pagos)?r.pagos:[];
-      if(pagos.length){
-        return a+pagos.filter(p=>{
-          const d=String(p?.fecha||'');
-          return d>cutDate&&d<=target;
-        }).reduce((s,p)=>s+Math.max(0,Number(p?.monto||0)),0);
-      }
-      const d=String(r?.fechaEntrega||'');
-      if(r?.estado==='Entregado'&&d>cutDate&&d<=target)return a+Math.max(0,Number(r?.pagado||0));
-      return a;
-    },0);
-
-    const expenses=(window.loadExpenses?window.loadExpenses():[]).filter(x=>{
-      const d=String(x?.fecha||'');
-      return d>cutDate&&d<=target;
-    });
-    const gastos=expenses.reduce((a,x)=>a+Math.max(0,Number(x?.monto||0)),0);
-
-    const closings=(window.loadCashClosings?window.loadCashClosings():[]).filter(x=>{
-      if(isCashCut(x))return false;
-      const d=String(x?.fecha||'');
-      return d>cutDate&&d<=target;
-    });
-    const notas=closings.reduce((a,x)=>a+Math.max(0,Number(x?.notaCredito||0)),0);
-    return {ingresos,gastos,notas,neto:ingresos-notas-gastos,cut};
-  }
-
-  function paintAdminCashSummary(fecha,notaCreditoDraft=null,savedNotaCredito=0){
-    if(!window.isAdmin())return;
-    const s=cashBalanceSnapshot(fecha);
-    if(notaCreditoDraft!==null){
-      const delta=Math.max(0,Number(notaCreditoDraft||0))-Math.max(0,Number(savedNotaCredito||0));
-      s.efectivo-=delta;
-      s.notasMes+=delta;
-    }
-    const vals={
-      cashAdminEfectivo:s.efectivo,
-      cashAdminMP:s.mercadoPago,
-      cashAdminGastos:s.gastosMes,
-      cashAdminNC:s.notasMes,
-      cashAdminFacturado:s.facturadoMes
-    };
-    Object.entries(vals).forEach(([id,value])=>{const el=document.getElementById(id);if(el){el.textContent=m(value);el.style.color=value<0?'var(--red)':''}});
-  }
-
-  function paintOperationalBalance(value){
-    const el=document.getElementById('cashSaldoTotal');
-    if(!el)return;
+  function paintMonthBalance(value){
+    const box=document.getElementById('cashMonthBox'),el=document.getElementById('cashMonthNet');
+    if(!box||!el)return;
     el.textContent=m(value);
+    box.classList.toggle('bad',value<0);
+    box.classList.toggle('soft',value>=0);
     el.style.color=value<0?'var(--red)':'';
   }
 
   function cashPreview(){
-    const efectivo=cashNum('cashEfectivo'),mercadoPago=cashNum('cashMP'),tarjetas=cashNum('cashTarjetas'),notaCredito=cashNum('cashNC'),gastos=cashNum('cashGastos');
-    const t=cashTotals({efectivo,mercadoPago,tarjetas,notaCredito,gastos});
-    const mpEl=document.getElementById('cashTotalMP'),efEl=document.getElementById('cashTotalEfectivo'),gEl=document.getElementById('cashTotalGastos'),ncEl=document.getElementById('cashTotalNC'),dayEl=document.getElementById('cashTotalDia'),cardHint=document.getElementById('cashCardHint');
-    if(mpEl)mpEl.textContent=m(mercadoPago);
-    if(efEl)efEl.textContent=m(efectivo);
-    if(gEl)gEl.textContent=gastos?'− '+m(gastos):m(0);
-    if(ncEl)ncEl.textContent=notaCredito?'− '+m(notaCredito):m(0);
-    if(dayEl){dayEl.textContent=m(t.neto);dayEl.style.color=t.neto<0?'var(--red)':''}
-    if(cardHint)cardHint.textContent=tarjetas>0?'Incluye tarjeta crédito/débito: '+m(tarjetas):'Mercado Pago + efectivo − gastos − notas de crédito';
-    const fecha=cashValue('cashFecha')||localDay();
-    const savedNote=Math.max(0,Number(document.getElementById('cashNC')?.dataset.saved||0));
-    const ob=operationalBalance(fecha);
-    const cutDate=String(ob.cut?.fecha||'');
-    const editableAfterCut=!cutDate||String(fecha)>cutDate;
-    paintOperationalBalance(ob.neto+(editableAfterCut?savedNote-notaCredito:0));
-    paintAdminCashSummary(fecha,notaCredito,savedNote);
+    const t=cashTotals({efectivo:cashNum('cashEfectivo'),mercadoPago:cashNum('cashMP'),tarjetas:cashNum('cashTarjetas'),notaCredito:cashNum('cashNC'),gastos:cashNum('cashGastos')});
+    const a=document.getElementById('cashTotal'),b=document.getElementById('cashNeto');
+    if(a)a.textContent=m(t.ingresos);
+    if(b){b.textContent=m(t.neto);b.style.color=t.neto<0?'var(--red)':''}
+    const op=session(),fecha=cashValue('cashFecha')||localDay();
+    if(op){
+      const owner={id:op.id,nombre:op.nombre};
+      const mb=monthBalance(fecha,owner);
+      const saved=(window.loadCashClosings?window.loadCashClosings():[]).filter(x=>x.fecha===fecha&&(window.isAdmin()||operatorOwns(x,owner))).reduce((s,x)=>s+Number(x.notaCredito||0),0);
+      paintMonthBalance(mb.neto+saved-cashNum('cashNC'));
+    }
   }
-  window.showCashSummary=function(editId='',forcedDate='',requiredMode=false){
+  window.showCashSummary=function(editId=''){
     rememberCurrentView('caja');
-    const op=session();if(!op)return renderLoginOrSetup();
-    const pending=requiredCloseDay();
-    if(!forcedDate&&pending){forcedDate=pending;requiredMode=true}
-    currentView='caja';editingId=null;setNav('caja');title('Resumen de caja diario');
-    const all=window.loadCashClosings(),targetDate=forcedDate||localDay();
-    let hit=editId?all.find(x=>String(x.id)===String(editId)):all.find(x=>!isCashCut(x)&&x.fecha===targetDate&&operatorOwns(x,op));
-    if(hit&&!window.isAdmin()&&!operatorOwns(hit,op)){toast('No podés editar el cierre de otro operador');return window.showCashSummary('',forcedDate,requiredMode)}
-    const r=hit||{fecha:targetDate,operadorId:op.id,operador:op.nombre,efectivo:0,mercadoPago:0,tarjetas:0,notaCredito:0,gastos:0,observaciones:''};
+    const op=session();if(!op)return renderLoginOrSetup();currentView='caja';editingId=null;setNav('caja');title('Resumen de caja diario');
+    const all=window.loadCashClosings();
+    let hit=editId?all.find(x=>String(x.id)===String(editId)):todaysCashForOperator(all,op);
+    if(hit&&!window.isAdmin()&&!operatorOwns(hit,op)){toast('No podés editar el cierre de otro operador');return window.showCashSummary()}
+    const todayHit=!hit?all.find(x=>x.fecha===localDay()&&operatorOwns(x,op)):null;
+    if(!hit&&todayHit)hit=todayHit;
+    const r=hit||{fecha:localDay(),operadorId:op.id,operador:op.nombre,efectivo:0,mercadoPago:0,tarjetas:0,notaCredito:0,gastos:0,observaciones:''};
     const owner={id:r.operadorId||op.id,nombre:r.operador||op.nombre};
     const gastosDia=(window.loadExpenses?window.loadExpenses():[]).filter(x=>x.fecha===r.fecha&&operatorOwns(x,owner));
     const gastosTotal=gastosDia.reduce((a,x)=>a+Number(x.monto||0),0);
-    const autoCash=cashFromOrders(r.fecha);
-    const cleriscash=cashFromCleris(r.fecha);
-    const cajaVista={...r,efectivo:autoCash.efectivo,mercadoPago:autoCash.mercadoPago,tarjetas:autoCash.tarjetas};
+    const ge=gastosDia.filter(x=>x.medioPago==='Efectivo').reduce((a,x)=>a+Number(x.monto||0),0),gm=gastosDia.filter(x=>x.medioPago==='Mercado Pago').reduce((a,x)=>a+Number(x.monto||0),0);
+    const autoCash=cashAutomatic(r.fecha);
+    const cajaVista=editId?r:{...r,efectivo:autoCash.efectivo,mercadoPago:autoCash.mercadoPago,tarjetas:autoCash.tarjetas};
     const resumen={...cajaVista,gastos:gastosTotal};
     const tt=cashTotals(resumen);
-    const opBalance=operationalBalance(r.fecha),operationalNet=opBalance.neto;
-    const saldoHint=opBalance.cut?'Desde el último corte de caja · '+dateLabel(opBalance.cut.fecha):'Acumulado operativo';
-    const adminSnapshot=window.isAdmin()?cashBalanceSnapshot(r.fecha):null;
-    const visible=window.isAdmin()?all.filter(x=>!isCashCut(x)):[];
+    const monthNet=monthBalance(r.fecha,owner).neto;
+    const visible=window.isAdmin()?all:all.filter(x=>operatorOwns(x,op));
     const sorted=[...visible].sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha))||String(b.actualizado).localeCompare(String(a.actualizado)));
-    const forced=requiredMode||String(r.fecha)===String(pending||'');
-    const forcedNotice=forced?`<div class="alert red" style="margin-bottom:16px"><strong>CIERRE DE CAJA PENDIENTE · ${dateLabel(r.fecha)}</strong><span>Este cierre es obligatorio antes de seguir usando la aplicación. Si no hubo movimientos, guardalo igualmente en $0.</span></div>`:'';
-    const adminBlock=window.isAdmin()?`<div class="cashline adminstart"><div><div class="cashlabel">Efectivo</div></div><div id="cashAdminEfectivo" class="cashamount" style="${adminSnapshot.efectivo<0?'color:var(--red)':''}">${m(adminSnapshot.efectivo)}</div></div><div class="cashline"><div><div class="cashlabel">Mercado Pago</div></div><div id="cashAdminMP" class="cashamount" style="${adminSnapshot.mercadoPago<0?'color:var(--red)':''}">${m(adminSnapshot.mercadoPago)}</div></div><div class="cashline"><div><div class="cashlabel">Gastos del mes</div></div><div id="cashAdminGastos" class="cashamount">${m(adminSnapshot.gastosMes)}</div></div><div class="cashline"><div><div class="cashlabel">Notas de crédito del mes</div></div><div id="cashAdminNC" class="cashamount">${m(adminSnapshot.notasMes)}</div></div><div class="cashline"><div><div class="cashlabel">Total facturado del mes</div></div><div id="cashAdminFacturado" class="cashamount">${m(adminSnapshot.facturadoMes)}</div></div>${cleriscash.total?`<div class="cashline external"><div><div class="cashlabel">Cleris Eventos · separado</div></div><div class="cashamount">${m(cleriscash.total)}</div></div>`:''}<div class="cashline saldototal"><div><div class="cashlabel">Saldo total · NQN Service</div><div class="cashsub">${e(saldoHint)}</div></div><div id="cashSaldoTotal" class="cashamount" style="${operationalNet<0?'color:var(--red)':''}">${m(operationalNet)}</div></div>`:'';
-    const historySection=window.isAdmin()?`<section class="panel"><div class="panelhead"><div><div class="eyebrow">HISTORIAL</div><h3>Todos los cierres</h3></div><span class="badge">${sorted.length}</span></div>${sorted.length?`<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Operador</th><th>Total</th><th>Nota crédito</th><th>Gastos</th><th>Neto</th><th></th></tr></thead><tbody>${sorted.slice(0,100).map(x=>{const t=cashTotals(x);return `<tr><td><strong>${dateLabel(x.fecha)}</strong></td><td>${e(x.operador)}</td><td><strong>${m(t.ingresos)}</strong></td><td>${m(x.notaCredito)}</td><td>${m(x.gastos)}</td><td><strong>${m(t.neto)}</strong></td><td class="right nowrap"><button class="btn secondary small" onclick="showCashSummary('${e(x.id)}')">Editar</button> <button class="btn danger small" onclick="deleteCashSummary('${e(x.id)}')">Eliminar</button></td></tr>`}).join('')}</tbody></table></div>`:'<div class="empty">Todavía no hay cierres de caja.</div>'}</section>`:'';
-    document.getElementById('view').innerHTML=`${forcedNotice}<section class="panel" style="margin-top:0"><div class="panelhead"><div><div class="eyebrow">CIERRE DIARIO</div><h3>${hit?'Cierre del día':'Cargar cierre del día'}</h3></div><span class="badge">Operador: ${e(r.operador)}</span></div><form class="grid" onsubmit="submitCashSummary(event,'${e(hit?.id||'')}')"><div class="field short"><label>Fecha *</label><input id="cashFecha" type="date" value="${e(r.fecha)}" required ${forced?'readonly':''}></div><div class="field"><label>Operador</label><input value="${e(r.operador)}" readonly></div><input id="cashEfectivo" type="hidden" value="${moneyInput(cajaVista.efectivo)}"><input id="cashMP" type="hidden" value="${moneyInput(cajaVista.mercadoPago)}"><input id="cashTarjetas" type="hidden" value="${moneyInput(cajaVista.tarjetas)}"><input id="cashGastos" type="hidden" value="${moneyInput(gastosTotal)}"><div class="field full"><div class="cashlines"><div class="cashline"><div><div class="cashlabel">Mercado Pago hoy</div></div><div id="cashTotalMP" class="cashamount">${m(cajaVista.mercadoPago)}</div></div><div class="cashline"><div><div class="cashlabel">Efectivo hoy</div></div><div id="cashTotalEfectivo" class="cashamount">${m(cajaVista.efectivo)}</div></div><div class="cashline"><div><div class="cashlabel">Gastos hoy</div></div><div id="cashTotalGastos" class="cashamount">${gastosTotal?'− '+m(gastosTotal):m(0)}</div></div><div class="cashline"><div><div class="cashlabel">Notas de crédito hoy</div></div><div id="cashTotalNC" class="cashamount">${Number(r.notaCredito||0)?'− '+m(r.notaCredito||0):m(0)}</div></div><div class="cashline totalday"><div><div class="cashlabel">Total del día · NQN Service</div><div id="cashCardHint" class="cashsub">${Number(cajaVista.tarjetas||0)>0?'Incluye tarjeta crédito/débito: '+m(cajaVista.tarjetas):'Mercado Pago + efectivo − gastos − notas de crédito'}</div></div><div id="cashTotalDia" class="cashamount" style="${tt.neto<0?'color:var(--red)':''}">${m(tt.neto)}</div></div>${adminBlock}</div></div><div class="field"><label>Nota de crédito <span class="muted">(si corresponde)</span></label><input id="cashNC" class="cashNumber" type="text" inputmode="decimal" data-saved="${Number(r.notaCredito||0)}" value="${moneyInput(r.notaCredito)}"><div class="hint">Los gastos se cargan desde <strong>＋ Cargar gasto</strong>; acá solo cargá una devolución o nota de crédito.</div></div><div class="field"><label>Observaciones</label><input id="cashObs" value="${e(r.observaciones)}"></div><div class="actions full"><button type="button" class="btn secondary" onclick="renderExpenses()">＋ Cargar gasto</button>${window.isAdmin()?'<button type="button" class="btn secondary" onclick="performCashCut()">✂ Hacer corte de caja</button>':''}<button class="btn primary" type="submit">${forced?'Guardar cierre y continuar':(hit?'Guardar cambios':'Guardar cierre')}</button></div></form></section>${historySection}`;
+    document.getElementById('view').innerHTML=`<section class="panel" style="margin-top:0"><div class="panelhead"><div><div class="eyebrow">CIERRE DIARIO</div><h3>${hit?'Cierre del día':'Cargar cierre del día'}</h3></div><span class="badge">Operador: ${e(r.operador)}</span></div><form class="grid" onsubmit="submitCashSummary(event,'${e(hit?.id||'')}')"><div class="field short"><label>Fecha *</label><input id="cashFecha" type="date" value="${e(r.fecha)}" required></div><div class="field"><label>Operador</label><input value="${e(r.operador)}" readonly></div><div class="field"><label>Efectivo</label><input id="cashEfectivo" class="cashNumber" type="text" inputmode="decimal" value="${moneyInput(cajaVista.efectivo)}"></div><div class="field"><label>Mercado Pago / transferencias</label><input id="cashMP" class="cashNumber" type="text" inputmode="decimal" value="${moneyInput(cajaVista.mercadoPago)}"></div><div class="field"><label>Tarjeta crédito / débito</label><input id="cashTarjetas" class="cashNumber" type="text" inputmode="decimal" value="${moneyInput(cajaVista.tarjetas)}"></div><div class="field full"><div id="cashAutoHint" class="hint"><strong>Automático:</strong> suma los cobros de NQN Service y los ingresos de Cleris de la fecha seleccionada. Cleris impacta en la caja real, pero no en la facturación ni en los KPIs de NQN.${autoCash.cleris.total>0?` <strong>Cleris:</strong> ${m(autoCash.cleris.total)}.`:''}${autoCash.mixto>0?` <strong>Atención:</strong> hay ${m(autoCash.mixto)} con medio "Mixto"; revisá manualmente cómo repartirlo.`:''}</div></div><div class="field"><label>Nota de crédito</label><input id="cashNC" class="cashNumber" type="text" inputmode="decimal" value="${moneyInput(r.notaCredito)}"></div><div class="field"><label>Gastos del día</label><input id="cashGastos" type="text" value="${moneyInput(gastosTotal)}" readonly><div class="hint">Se carga desde el botón <strong>＋ Gasto</strong>. Efectivo: ${m(ge)} · Mercado Pago: ${m(gm)}</div></div><div class="field full"><label>Observaciones</label><input id="cashObs" value="${e(r.observaciones)}"></div><div class="field full"><div class="stats" style="grid-template-columns:repeat(3,1fr);margin:5px 0"><div class="stat soft"><div class="statlabel">Total cobrado</div><div id="cashTotal" class="statvalue smallmoney">${m(tt.ingresos)}</div></div><div class="stat ${tt.neto<0?'bad':''}"><div class="statlabel">Neto del día</div><div id="cashNeto" class="statvalue smallmoney" style="${tt.neto<0?'color:var(--red)':''}">${m(tt.neto)}</div><div class="stathelp">Cobrado − notas de crédito − gastos</div></div><div id="cashMonthBox" class="stat ${monthNet<0?'bad':'soft'}"><div class="statlabel">Saldo acumulado del mes</div><div id="cashMonthNet" class="statvalue smallmoney" style="${monthNet<0?'color:var(--red)':''}">${m(monthNet)}</div><div class="stathelp">Ingresos cobrados − gastos − notas de crédito</div></div></div></div><div class="actions full"><button type="button" class="btn secondary" onclick="renderExpenses()">＋ Cargar gasto</button><button class="btn primary" type="submit">${hit?'Guardar cambios':'Guardar cierre'}</button></div></form></section><section class="panel"><div class="panelhead"><div><div class="eyebrow">HISTORIAL</div><h3>${window.isAdmin()?'Todos los cierres':'Mis cierres'}</h3></div><span class="badge">${visible.length}</span></div>${sorted.length?`<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Operador</th><th>Total</th><th>Nota crédito</th><th>Gastos</th><th>Neto</th><th></th></tr></thead><tbody>${sorted.slice(0,100).map(x=>{const t=cashTotals(x);return `<tr><td><strong>${dateLabel(x.fecha)}</strong></td><td>${e(x.operador)}</td><td><strong>${m(t.ingresos)}</strong></td><td>${m(x.notaCredito)}</td><td>${m(x.gastos)}</td><td><strong>${m(t.neto)}</strong></td><td class="right nowrap"><button class="btn secondary small" onclick="showCashSummary('${e(x.id)}')">Editar</button>${window.isAdmin()?` <button class="btn danger small" onclick="deleteCashSummary('${e(x.id)}')">Eliminar</button>`:''}</td></tr>`}).join('')}</tbody></table></div>`:'<div class="empty">Todavía no hay cierres de caja.</div>'}</section>`;
     document.querySelectorAll('.cashNumber').forEach(x=>x.addEventListener('input',cashPreview));
-    const fechaEl=document.getElementById('cashFecha');if(fechaEl&&!forced)fechaEl.addEventListener('change',()=>{
-      const fecha=fechaEl.value,auto=cashFromOrders(fecha),total=expenseTotalFor(fecha,owner);
-      const ef=document.getElementById('cashEfectivo'),mp=document.getElementById('cashMP'),ta=document.getElementById('cashTarjetas'),g=document.getElementById('cashGastos');
+    const fechaEl=document.getElementById('cashFecha');if(fechaEl)fechaEl.addEventListener('change',()=>{
+      const fecha=fechaEl.value,auto=cashAutomatic(fecha),total=expenseTotalFor(fecha,owner);
+      const ef=document.getElementById('cashEfectivo'),mp=document.getElementById('cashMP'),ta=document.getElementById('cashTarjetas'),g=document.getElementById('cashGastos'),h=document.getElementById('cashAutoHint');
       if(ef)ef.value=moneyInput(auto.efectivo);if(mp)mp.value=moneyInput(auto.mercadoPago);if(ta)ta.value=moneyInput(auto.tarjetas);if(g)g.value=moneyInput(total);
-      const nc=document.getElementById('cashNC');if(nc){nc.value='';nc.dataset.saved='0'}
+      if(h)h.innerHTML=`<strong>Automático:</strong> suma los cobros de NQN Service y los ingresos de Cleris de la fecha seleccionada. Cleris impacta en la caja real, pero no en la facturación ni en los KPIs de NQN.${auto.cleris.total>0?` <strong>Cleris:</strong> ${m(auto.cleris.total)}.`:''}${auto.mixto>0?` <strong>Atención:</strong> hay ${m(auto.mixto)} con medio "Mixto"; revisá manualmente cómo repartirlo.`:''}`;
       cashPreview();
     });
   };
-  window.performCashCut=async function(){
-    const op=session();
-    if(!op||op.rol!=='admin'){alert('Solo el administrador puede hacer un corte de caja.');return}
-
-    const fecha=localDay();
-    const existing=latestCashCut();
-    if(existing&&String(existing.fecha||'')===fecha){
-      alert('Ya existe un corte de caja para hoy ('+dateLabel(fecha)+').');
-      return;
-    }
-
-    const current=operationalBalance(fecha).neto;
-    const ok=confirm('CORTE DE CAJA · '+dateLabel(fecha)+'\n\nSaldo actual NQN Service: '+m(current)+'\n\nAl confirmar, el bloque del administrador quedará en $0: Efectivo, Mercado Pago, Gastos, Notas de crédito, Total facturado y Saldo total NQN Service.\n\nDesde mañana se acumularán solamente los movimientos nuevos. No se borrarán órdenes, gastos, cierres ni historial.');
-    if(!ok)return;
-
-    const pin=prompt('Ingresá tu PIN de administrador para confirmar el corte de caja:');
-    if(pin===null)return;
-    const digits=String(pin||'').trim().replace(/\D/g,'');
-    const raw=String(pin||'').trim();
-    const candidates=[raw,digits];
-    if(digits.length===4)candidates.push(digits.slice(0,2)+'-'+digits.slice(2));
-    let matched=false;
-    for(const candidate of [...new Set(candidates.filter(Boolean))]){
-      const currentHash=await hashPin(candidate);
-      if(currentHash===op.pinHash||legacyPinHash(candidate)===op.pinHash){matched=true;break}
-    }
-    if(!matched){alert('PIN incorrecto. No se realizó el corte.');return}
-
-    const ts=now();
-    const cut=normalizeCashClosing({
-      id:uid('corte-caja'),
-      fecha,
-      operadorId:'__system__',
-      operador:'Sistema',
-      efectivo:0,
-      mercadoPago:0,
-      tarjetas:0,
-      notaCredito:0,
-      gastos:0,
-      observaciones:CASH_CUT_MARKER+' Saldo anterior: '+String(current)+' · Administrador: '+String(op.nombre||''),
-      creado:ts,
-      actualizado:ts
-    });
-    const rows=window.loadCashClosings();
-    rows.push(cut);
-    window.saveCashClosings(rows);
-    if(typeof queueCloudOp==='function')queueCloudOp('upsertCash',cut.id,cut,cut.actualizado);
-    if(typeof cloudAutoSyncSoon==='function')cloudAutoSyncSoon();
-    toast('Corte de caja realizado · caja NQN Service reiniciada en $0');
-    window.showCashSummary();
-  };
-
   window.submitCashSummary=function(ev,editId=''){
     ev.preventDefault();const op=session();if(!op)return renderLoginOrSetup();let rows=window.loadCashClosings(),old=editId?rows.find(x=>String(x.id)===String(editId)):null;
     if(old&&!window.isAdmin()&&!operatorOwns(old,op)){alert('No podés modificar el cierre de otro operador.');return}
     const owner=old||{operadorId:op.id,operador:op.nombre},ts=now(),fecha=cashValue('cashFecha'),ownerRef={id:owner.operadorId||op.id,nombre:owner.operador||op.nombre},gastosDetalle=expenseTotalFor(fecha,ownerRef),obj=normalizeCashClosing({id:editId||uid('caja'),fecha,operadorId:ownerRef.id,operador:ownerRef.nombre,efectivo:cashNum('cashEfectivo'),mercadoPago:cashNum('cashMP'),tarjetas:cashNum('cashTarjetas'),notaCredito:cashNum('cashNC'),gastos:gastosDetalle,observaciones:String(cashValue('cashObs')||'').trim(),creado:old?.creado||ts,actualizado:ts});
     const dup=rows.find(x=>String(x.id)!==String(editId)&&x.fecha===obj.fecha&&operatorOwns(x,{id:obj.operadorId,nombre:obj.operador}));if(dup&&!confirm('Ya existe un cierre para esta fecha y operador. ¿Guardar otro igualmente?'))return;
-    const wasRequired=String(localStorage.getItem(KEY_REQUIRED_CLOSE_DAY)||'')===String(obj.fecha);
-    if(editId){const i=rows.findIndex(x=>String(x.id)===String(editId));i>=0?rows[i]=obj:rows.push(obj)}else rows.push(obj);
-    window.saveCashClosings(rows);queueCloudOp('upsertCash',obj.id,obj,obj.actualizado);clearRequiredCloseIfSatisfied(obj.fecha);
-    toast(wasRequired?'Cierre guardado · ya podés continuar':(editId?'Cierre actualizado':'Cierre guardado'));
-    if(wasRequired){appViewHistory=[];updateBackButton();if(op.rol==='admin')return window.renderDashboard();return window.newOrder()}
-    window.showCashSummary();
+    if(editId){const i=rows.findIndex(x=>String(x.id)===String(editId));i>=0?rows[i]=obj:rows.push(obj)}else rows.push(obj);window.saveCashClosings(rows);queueCloudOp('upsertCash',obj.id,obj,obj.actualizado);toast(editId?'Cierre actualizado':'Cierre guardado');window.showCashSummary();
   };
 
   function normalizeStockItem(r,index=0){
@@ -2032,7 +1785,7 @@ window.__nqnLegacyBoot=boot;
     const op=session();if(!op)return renderLoginOrSetup();let expenses=window.loadExpenses(),x=expenses.find(r=>String(r.id)===String(id));if(!x)return;if(!window.isAdmin()&&!operatorOwns(x,op)){toast('No podés eliminar un gasto de otro operador');return}if(!confirm('¿Eliminar este gasto de '+m(x.monto)+'?'))return;window.saveExpenses(expenses.filter(r=>String(r.id)!==String(id)));
     let cash=window.loadCashClosings(),c=cash.find(r=>String(r.id)===String(x.cajaId));if(!c)c=cash.find(r=>r.fecha===x.fecha&&operatorOwns(r,{id:x.operadorId,nombre:x.operador}));if(c){c.gastos=Math.max(0,Number(c.gastos||0)-Number(x.monto||0));c.actualizado=now();window.saveCashClosings(cash);queueCloudOp('upsertCash',c.id,c,c.actualizado)}toast('Gasto eliminado');window.renderExpenses();
   };
-  window.deleteCashSummary=function(id){if(!window.isAdmin()){toast('Solo el administrador puede eliminar cierres');return}const rows=window.loadCashClosings(),x=rows.find(r=>String(r.id)===String(id));if(!x)return;if(isCashCut(x)){alert('El corte de caja no se elimina desde el historial.');return}if(!confirm('¿Eliminar el cierre de '+dateLabel(x.fecha)+' de '+x.operador+'?'))return;window.saveCashClosings(rows.filter(r=>String(r.id)!==String(id)));queueCloudOp('deleteCash',id,null,now());toast('Cierre eliminado');window.showCashSummary()};
+  window.deleteCashSummary=function(id){if(!window.isAdmin()){toast('Solo el administrador puede eliminar cierres');return}const rows=window.loadCashClosings(),x=rows.find(r=>String(r.id)===String(id));if(!x)return;if(!confirm('¿Eliminar el cierre de '+dateLabel(x.fecha)+' de '+x.operador+'?'))return;window.saveCashClosings(rows.filter(r=>String(r.id)!==String(id)));queueCloudOp('deleteCash',id,null,now());toast('Cierre eliminado');window.showCashSummary()};
 
   window.renderOperators=function(editId=''){
     rememberCurrentView('operadores');
@@ -2054,7 +1807,7 @@ window.__nqnLegacyBoot=boot;
   window.deleteOperator=function(id){let rows=window.loadOperators(),x=rows.find(r=>String(r.id)===String(id));if(!x)return;const current=session();if(current&&String(current.id)===String(id)){alert('No podés eliminar el usuario con el que estás trabajando.');return}if(x.rol==='admin'&&x.activo&&activeAdmins(rows).length<=1){alert('Tiene que quedar al menos un administrador activo.');return}const used=window.loadCashClosings().some(c=>String(c.operadorId||'')===String(x.id)||(!c.operadorId&&String(c.operador||'').toLowerCase()===x.nombre.toLowerCase()));if(used){alert('Este operador tiene historial de caja. No se elimina: desactivalo para conservar el registro.');return}if(!confirm('¿Eliminar definitivamente a '+x.nombre+'?'))return;window.saveOperators(rows.filter(r=>String(r.id)!==String(id)));queueCloudOp('deleteOperator',id,null,now());toast('Operador eliminado');window.renderOperators()};
 
   window.exportData=function(){
-    const payload={app:'NQN Service',version:9.28,edicion:'caja-visual-nqn-separado-cleris-gastos-notas',exportado:now(),ordenes:load(),cleriseventos:loadEvents(),cierrescaja:window.loadCashClosings(),gastos:window.loadExpenses(),stock:window.loadStock(),operadores:window.loadOperators(),settings:{lastSave:getSettings().lastSave||null}};
+    const payload={app:'NQN Service',version:9,edicion:'completa-caja-operadores',exportado:now(),ordenes:load(),cleriseventos:loadEvents(),cierrescaja:window.loadCashClosings(),gastos:window.loadExpenses(),stock:window.loadStock(),operadores:window.loadOperators(),settings:{lastSave:getSettings().lastSave||null}};
     const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='NQN_SERVICE_BACKUP_'+localDay()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);let s=getSettings();s.lastExternalBackup=now();setSettings(s);toast('Copia externa descargada');setTimeout(()=>window.renderBackup(),300)
   };
   window.importData=function(){
