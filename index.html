@@ -137,7 +137,7 @@ input,select,textarea{font-size:16px;line-height:1.4}
 <body>
 <div class="shell">
   <aside class="sidebar">
-    <div class="brand"><div class="brandmark">NQN</div><div><div class="brandname">NQN Service</div><div class="brandsub">Gestión técnica · V9.25 caja real + Cleris</div></div></div>
+    <div class="brand"><div class="brandmark">NQN</div><div><div class="brandname">NQN Service</div><div class="brandsub">Gestión técnica · V9.26 WhatsApp Fix</div></div></div>
     <div class="nav">
       <button id="nav-dashboard" class="active" onclick="showView('dashboard')">⌂ Dashboard</button>
       <button id="nav-nuevo" onclick="newOrder()">＋ Nuevo ingreso</button>
@@ -180,7 +180,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredIns
 window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;updateInstallButton();toast('NQN Service instalada')});
 function updateInstallButton(){let b=document.getElementById('installPwaBtn');if(b)b.classList.toggle('show',!!deferredInstallPrompt)}
 async function installPwa(){if(!deferredInstallPrompt){alert('Si Chrome no muestra la instalación todavía, recargá la página una vez y volvé a intentar.');return}deferredInstallPrompt.prompt();try{await deferredInstallPrompt.userChoice}catch(e){}deferredInstallPrompt=null;updateInstallButton()}
-const OFFLINE_CACHE='nqn-service-v25-caja-cleris';
+const OFFLINE_CACHE='nqn-service-v26-whatsapp-fix';
 const OFFLINE_ASSETS=['./','./index.html','./NQN_SERVICE_ESTABLE.html','./manifest.webmanifest','./turnos.js','./icons/icon-192.png','./icons/icon-512.png'];
 let swReloading=false;
 async function ensureOfflineReady(){
@@ -1162,41 +1162,23 @@ async function shareReceiptWhatsApp(id){
   const n=whatsappNumber(r.telefono);
   if(!n||n.length<12){alert('Revisá el teléfono del cliente antes de compartir el comprobante.');return;}
   try{
-    const blob=await receiptCanvasBlob(receiptCanvas(r));
+    const canvas=receiptCanvas(r);
+    const blob=await receiptCanvasBlob(canvas);
     const file=new File([blob],'NQN_Service_Orden_'+fmtOrder(r.numero)+'.png',{type:'image/png'});
-    const msg='Hola '+(r.cliente||'')+', te envío el comprobante de ingreso de NQN Service · Orden '+fmtOrder(r.numero)+'.';
-
-    // En Android / Chrome: compartir el archivo real mediante el panel nativo.
-    let canShareFile=!!navigator.share;
-    if(canShareFile&&navigator.canShare){
-      try{canShareFile=navigator.canShare({files:[file]})}catch(e){canShareFile=false}
+    const shareData={files:[file],title:'NQN Service · Orden '+fmtOrder(r.numero),text:'Comprobante NQN Service · Orden '+fmtOrder(r.numero)};
+    if(navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))){
+      await navigator.share(shareData);
+      return;
     }
-
-    if(canShareFile){
-      try{
-        await navigator.share({
-          files:[file],
-          title:'NQN Service · Orden '+fmtOrder(r.numero),
-          text:msg
-        });
-        return;
-      }catch(err){
-        // Si el usuario cancela, no hacemos nada más.
-        if(err&&err.name==='AbortError')return;
-        console.warn('Falló el compartido nativo; uso modo alternativo.',err);
-      }
-    }
-
-    // Respaldo para PC o navegadores que no permiten compartir archivos:
-    // guardar la imagen y abrir directamente el chat del cliente.
     downloadReceiptImage(file);
-    const chatUrl='https://wa.me/'+n+'?text='+encodeURIComponent(msg);
-    const chat=window.open(chatUrl,'_blank');
+    const chat=window.open('https://wa.me/'+n,'_blank');
     if(chat)chat.opener=null;
-    if(!chat)window.location.href=chatUrl;
+    if(!chat)alert('La imagen se descargó. Abrí WhatsApp y adjuntala al cliente.');
+    else alert('La imagen del comprobante se descargó. Adjuntala en el chat de WhatsApp que se abrió.');
   }catch(err){
-    console.error('Error al generar comprobante en imagen',err);
-    alert('No se pudo generar la imagen del comprobante. Podés seguir usando “Comprobante / PDF”.');
+    if(err&&err.name==='AbortError')return;
+    console.error('Error al compartir comprobante',err);
+    alert('No se pudo compartir la imagen. Podés seguir usando “Comprobante / PDF”.');
   }
 }
 
