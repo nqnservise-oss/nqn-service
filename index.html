@@ -1160,17 +1160,44 @@ function downloadReceiptImage(file){
 async function shareReceiptWhatsApp(id){
   const r=load().find(x=>String(x.id)===String(id));if(!r)return;
   const n=whatsappNumber(r.telefono);
-  if(!n||n.length<12){alert('Revisá el teléfono del cliente antes de abrir WhatsApp.');return;}
+  if(!n||n.length<12){alert('Revisá el teléfono del cliente antes de compartir el comprobante.');return;}
   try{
-    // Generar y descargar dentro del clic para que el navegador permita abrir el chat.
-    const a=document.createElement('a');
-    a.href=receiptCanvas(r).toDataURL('image/png');
-    a.download='NQN_Service_Orden_'+fmtOrder(r.numero)+'.png';
-    document.body.appendChild(a);a.click();a.remove();
-    const chat=window.open('https://wa.me/'+n,'_blank');
+    const blob=await receiptCanvasBlob(receiptCanvas(r));
+    const file=new File([blob],'NQN_Service_Orden_'+fmtOrder(r.numero)+'.png',{type:'image/png'});
+    const msg='Hola '+(r.cliente||'')+', te envío el comprobante de ingreso de NQN Service · Orden '+fmtOrder(r.numero)+'.';
+
+    // En Android / Chrome: compartir el archivo real mediante el panel nativo.
+    let canShareFile=!!navigator.share;
+    if(canShareFile&&navigator.canShare){
+      try{canShareFile=navigator.canShare({files:[file]})}catch(e){canShareFile=false}
+    }
+
+    if(canShareFile){
+      try{
+        await navigator.share({
+          files:[file],
+          title:'NQN Service · Orden '+fmtOrder(r.numero),
+          text:msg
+        });
+        return;
+      }catch(err){
+        // Si el usuario cancela, no hacemos nada más.
+        if(err&&err.name==='AbortError')return;
+        console.warn('Falló el compartido nativo; uso modo alternativo.',err);
+      }
+    }
+
+    // Respaldo para PC o navegadores que no permiten compartir archivos:
+    // guardar la imagen y abrir directamente el chat del cliente.
+    downloadReceiptImage(file);
+    const chatUrl='https://wa.me/'+n+'?text='+encodeURIComponent(msg);
+    const chat=window.open(chatUrl,'_blank');
     if(chat)chat.opener=null;
-    if(!chat)alert('El comprobante se descargó, pero el navegador bloqueó WhatsApp. Permití las ventanas emergentes y volvé a tocar el botón.');
-  }catch(err){console.error('Error al generar comprobante en imagen',err);alert('No se pudo generar la imagen. Podés seguir usando “Comprobante / PDF”.')}
+    if(!chat)window.location.href=chatUrl;
+  }catch(err){
+    console.error('Error al generar comprobante en imagen',err);
+    alert('No se pudo generar la imagen del comprobante. Podés seguir usando “Comprobante / PDF”.');
+  }
 }
 
 function printReceipt(id){
