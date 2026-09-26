@@ -137,7 +137,7 @@ input,select,textarea{font-size:16px;line-height:1.4}
 <body>
 <div class="shell">
   <aside class="sidebar">
-    <div class="brand"><div class="brandmark">NQN</div><div><div class="brandname">NQN Service</div><div class="brandsub">Gestión técnica · V9.26 WhatsApp Fix</div></div></div>
+    <div class="brand"><div class="brandmark">NQN</div><div><div class="brandname">NQN Service</div><div class="brandsub">Gestión técnica · V9.31 resumen y compartir</div></div></div>
     <div class="nav">
       <button id="nav-dashboard" class="active" onclick="showView('dashboard')">⌂ Dashboard</button>
       <button id="nav-nuevo" onclick="newOrder()">＋ Nuevo ingreso</button>
@@ -180,7 +180,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredIns
 window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;updateInstallButton();toast('NQN Service instalada')});
 function updateInstallButton(){let b=document.getElementById('installPwaBtn');if(b)b.classList.toggle('show',!!deferredInstallPrompt)}
 async function installPwa(){if(!deferredInstallPrompt){alert('Si Chrome no muestra la instalación todavía, recargá la página una vez y volvé a intentar.');return}deferredInstallPrompt.prompt();try{await deferredInstallPrompt.userChoice}catch(e){}deferredInstallPrompt=null;updateInstallButton()}
-const OFFLINE_CACHE='nqn-service-v26-whatsapp-fix';
+const OFFLINE_CACHE='nqn-service-v31-compartir';
 const OFFLINE_ASSETS=['./','./index.html','./NQN_SERVICE_ESTABLE.html','./manifest.webmanifest','./turnos.js','./icons/icon-192.png','./icons/icon-512.png'];
 let swReloading=false;
 async function ensureOfflineReady(){
@@ -746,7 +746,7 @@ function orderForm(r,isNew){
     ${Array.isArray(r.pagos)&&r.pagos.length?`<div class="field full"><label>Entregas registradas</label><div class="timeline">${r.pagos.filter(p=>Number(p.monto||0)!==0).map(p=>`<div class="timelineitem"><span>${prettyDate(p.fecha)} · ${esc(p.medioPago||'')}${String(p.medioPago||'')==='Mixto'&&(Number(p.efectivo||0)>0||Number(p.tarjeta||0)>0)?` · Efectivo ${money(p.efectivo||0)} + Tarjeta ${money(p.tarjeta||0)}`:''}</span><strong>${money(p.monto)}</strong></div>`).join('')}</div></div>`:''}
     ${Array.isArray(r.repuestosUsados)&&r.repuestosUsados.length?`<div class="field full"><label>Repuestos usados</label><div class="timeline">${r.repuestosUsados.map(x=>`<div class="timelineitem"><span>${prettyDate(x.fecha)} · ${esc(x.nombre)}${Number(x.cantidad||1)>1?' × '+Number(x.cantidad||1):''}</span><span style="display:flex;align-items:center;gap:8px"><strong>${money(Number(x.cantidad||1)*Number(x.costoUnitario||0))}</strong>${!isNew&&x.stockId?`<button type="button" class="btn secondary small" onclick="returnStockUsage('${esc(r.id)}','${esc(x.id)}')">Quitar / devolver</button>`:''}</span></div>`).join('')}</div><div class="hint">El costo es interno y se usa para calcular el margen de la OT.</div></div>`:''}
     <div class="actions full">
-      ${isNew?`<button type="button" class="btn secondary" onclick="showView('dashboard')">Cancelar</button>`:`<button type="button" class="btn secondary" onclick="newOrderSameClient('${esc(r.id)}')">＋ Mismo cliente</button><button type="button" class="btn secondary" onclick="printReceipt('${esc(r.id)}')">Comprobante / PDF</button><button type="button" class="btn" style="background:#25D366;color:#fff" onclick="shareReceiptWhatsApp('${esc(r.id)}')"><span aria-hidden="true" style="display:inline-flex;width:18px;height:18px;border:2px solid #fff;border-radius:50%;align-items:center;justify-content:center;font-size:11px;line-height:1">☎</span> Compartir por WhatsApp</button><button type="button" class="btn danger" onclick="deleteOrder('${esc(r.id)}')">Eliminar</button>`}
+      ${isNew?`<button type="button" class="btn secondary" onclick="showView('dashboard')">Cancelar</button>`:`<button type="button" class="btn secondary" onclick="newOrderSameClient('${esc(r.id)}')">＋ Mismo cliente</button><button type="button" class="btn secondary" onclick="printReceipt('${esc(r.id)}')">Comprobante / PDF</button><button type="button" class="btn" style="background:#25D366;color:#fff" onclick="shareReceiptWhatsApp('${esc(r.id)}')"><span aria-hidden="true" style="display:inline-flex;width:18px;height:18px;border:2px solid #fff;border-radius:50%;align-items:center;justify-content:center;font-size:11px;line-height:1">☎</span> Compartir comprobante</button><button type="button" class="btn danger" onclick="deleteOrder('${esc(r.id)}')">Eliminar</button>`}
       <button class="btn primary" type="submit">${isNew?'Guardar ingreso':'Guardar cambios'}</button>
     </div>
   </form>`;
@@ -1162,23 +1162,41 @@ async function shareReceiptWhatsApp(id){
   const n=whatsappNumber(r.telefono);
   if(!n||n.length<12){alert('Revisá el teléfono del cliente antes de compartir el comprobante.');return;}
   try{
-    const canvas=receiptCanvas(r);
-    const blob=await receiptCanvasBlob(canvas);
+    const blob=await receiptCanvasBlob(receiptCanvas(r));
     const file=new File([blob],'NQN_Service_Orden_'+fmtOrder(r.numero)+'.png',{type:'image/png'});
-    const shareData={files:[file],title:'NQN Service · Orden '+fmtOrder(r.numero),text:'Comprobante NQN Service · Orden '+fmtOrder(r.numero)};
-    if(navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))){
-      await navigator.share(shareData);
-      return;
+    const msg='Hola '+(r.cliente||'')+', te envío el comprobante de ingreso de NQN Service · Orden '+fmtOrder(r.numero)+'.';
+
+    // En Android / Chrome: compartir el archivo real mediante el panel nativo.
+    let canShareFile=!!navigator.share;
+    if(canShareFile&&navigator.canShare){
+      try{canShareFile=navigator.canShare({files:[file]})}catch(e){canShareFile=false}
     }
+
+    if(canShareFile){
+      try{
+        await navigator.share({
+          files:[file],
+          title:'NQN Service · Orden '+fmtOrder(r.numero),
+          text:msg
+        });
+        return;
+      }catch(err){
+        // Si el usuario cancela, no hacemos nada más.
+        if(err&&err.name==='AbortError')return;
+        console.warn('Falló el compartido nativo; uso modo alternativo.',err);
+      }
+    }
+
+    // Respaldo para PC o navegadores que no permiten compartir archivos:
+    // guardar la imagen y abrir directamente el chat del cliente.
     downloadReceiptImage(file);
-    const chat=window.open('https://wa.me/'+n,'_blank');
+    const chatUrl='https://wa.me/'+n+'?text='+encodeURIComponent(msg);
+    const chat=window.open(chatUrl,'_blank');
     if(chat)chat.opener=null;
-    if(!chat)alert('La imagen se descargó. Abrí WhatsApp y adjuntala al cliente.');
-    else alert('La imagen del comprobante se descargó. Adjuntala en el chat de WhatsApp que se abrió.');
+    if(!chat)window.location.href=chatUrl;
   }catch(err){
-    if(err&&err.name==='AbortError')return;
-    console.error('Error al compartir comprobante',err);
-    alert('No se pudo compartir la imagen. Podés seguir usando “Comprobante / PDF”.');
+    console.error('Error al generar comprobante en imagen',err);
+    alert('No se pudo generar la imagen del comprobante. Podés seguir usando “Comprobante / PDF”.');
   }
 }
 
@@ -1299,7 +1317,7 @@ window.__nqnLegacyBoot=boot;
       operadorId:String(r?.operadorId||''),operador:String(r?.operador||'').trim(),
       efectivo:Math.max(0,Number(r?.efectivo||0)),mercadoPago:Math.max(0,Number(r?.mercadoPago||0)),
       tarjetas:Math.max(0,Number(r?.tarjetas||0)),notaCredito:Math.max(0,Number(r?.notaCredito||0)),
-      gastos:Math.max(0,Number(r?.gastos||0)),observaciones:String(r?.observaciones||'').trim(),
+      gastos:Math.max(0,Number(r?.gastos||0)),ajusteEfectivo:Number(r?.ajusteEfectivo||0),ajusteMP:Number(r?.ajusteMP||0),ajusteTotal:Number(r?.ajusteTotal||0),ajusteMotivo:String(r?.ajusteMotivo||'').trim(),observaciones:String(r?.observaciones||'').trim(),
       creado:r?.creado||now(),actualizado:r?.actualizado||r?.creado||now()
     };
   }
@@ -1447,7 +1465,7 @@ window.__nqnLegacyBoot=boot;
   }
   function updateAuthBar(){
     const el=document.getElementById('authStatus');if(!el)return;const op=session();
-    if(!op){el.innerHTML='<span class="badge">V9.17 alerta demorados</span>';return}
+    if(!op){el.innerHTML='<span class="badge">V9.31 resumen y compartir</span>';return}
     el.innerHTML=`<button class="btn secondary small" type="button" onclick="logoutOperator()">👤 ${e(op.nombre)} · Salir</button>`;
   }
   function applyRoleNav(){
@@ -1464,7 +1482,7 @@ window.__nqnLegacyBoot=boot;
     if(!ops.length)return renderFirstAdmin();
     const active=ops.filter(x=>x.activo);
     title('Ingreso de operador');
-    document.getElementById('view').innerHTML=`<section class="panel" style="max-width:560px;margin:40px auto 0"><div class="panelhead"><div><div class="eyebrow">ACCESO</div><h3>Ingresar a NQN Service</h3></div><span class="badge">V9.17 ALERTA DEMORADOS</span></div>${active.length?`<form class="grid" style="grid-template-columns:1fr" onsubmit="window.loginOperator(event)"><div class="field"><label>Operador</label><select id="loginOperatorId" required>${active.map(o=>`<option value="${e(o.id)}">${e(o.nombre)}</option>`).join('')}</select></div><div class="field"><label>PIN</label><input id="loginPin" type="password" inputmode="numeric" autocomplete="current-password" required autofocus><div class="hint">Si tu PIN anterior tenía guion, también podés ingresar solo los números.</div></div><div class="actions"><button class="btn primary" type="submit">Ingresar</button></div></form>`:'<div class="alert red"><strong>No hay operadores activos</strong><span>Se necesita un administrador activo para continuar.</span></div>'}</section>`;
+    document.getElementById('view').innerHTML=`<section class="panel" style="max-width:560px;margin:40px auto 0"><div class="panelhead"><div><div class="eyebrow">ACCESO</div><h3>Ingresar a NQN Service</h3></div><span class="badge">V9.31 RESUMEN Y COMPARTIR</span></div>${active.length?`<form class="grid" style="grid-template-columns:1fr" onsubmit="window.loginOperator(event)"><div class="field"><label>Operador</label><select id="loginOperatorId" required>${active.map(o=>`<option value="${e(o.id)}">${e(o.nombre)}</option>`).join('')}</select></div><div class="field"><label>PIN</label><input id="loginPin" type="password" inputmode="numeric" autocomplete="current-password" required autofocus><div class="hint">Si tu PIN anterior tenía guion, también podés ingresar solo los números.</div></div><div class="actions"><button class="btn primary" type="submit">Ingresar</button></div></form>`:'<div class="alert red"><strong>No hay operadores activos</strong><span>Se necesita un administrador activo para continuar.</span></div>'}</section>`;
     applyRoleNav();
   }
   function renderFirstAdmin(){
@@ -1613,7 +1631,15 @@ window.__nqnLegacyBoot=boot;
     const gastos=expenses.reduce((a,x)=>a+Math.max(0,Number(x.monto||0)),0);
     const closings=(window.loadCashClosings?window.loadCashClosings():[]).filter(x=>String(x.fecha||'').slice(0,7)===mk&&(isAdmin||operatorOwns(x,owner)));
     const notas=closings.reduce((a,x)=>a+Math.max(0,Number(x.notaCredito||0)),0);
-    return {ingresos:ingresosCaja,ingresosNQN:ingresos,ingresosCleris:clerisIngresos,gastos,notas,neto:ingresosCaja-notas-gastos};
+    const ajustesEfectivo=closings.reduce((a,x)=>a+Number(x.ajusteEfectivo||0),0);
+    const ajustesMP=closings.reduce((a,x)=>a+Number(x.ajusteMP||0),0);
+    const ajustesTotal=closings.reduce((a,x)=>a+Number(x.ajusteTotal||0),0);
+    const gastosEfectivo=expenses.filter(x=>x.medioPago==='Efectivo').reduce((a,x)=>a+Number(x.monto||0),0);
+    const gastosMP=expenses.filter(x=>x.medioPago==='Mercado Pago').reduce((a,x)=>a+Number(x.monto||0),0);
+    const cobros={efectivo:0,mercadoPago:0,tarjetas:0};
+    const days=new Set([...orders.flatMap(r=>Array.isArray(r?.pagos)&&r.pagos.length?r.pagos.map(p=>p.fecha):[r.fechaEntrega]),...(typeof loadEvents==='function'?loadEvents():[]).map(x=>x.fecha)].filter(x=>String(x||'').slice(0,7)===mk));
+    days.forEach(day=>{const x=cashAutomatic(day);cobros.efectivo+=x.efectivo;cobros.mercadoPago+=x.mercadoPago;cobros.tarjetas+=x.tarjetas});
+    return {ingresos:ingresosCaja,ingresosNQN:ingresos,ingresosCleris:clerisIngresos,gastos,notas,ajustesEfectivo,ajustesMP,ajustesTotal,efectivo:cobros.efectivo-gastosEfectivo+ajustesEfectivo,mercadoPago:cobros.mercadoPago-gastosMP+ajustesMP,neto:ingresosCaja-notas-gastos+ajustesEfectivo+ajustesMP+ajustesTotal};
   }
 
   function paintMonthBalance(value){
@@ -1655,10 +1681,10 @@ window.__nqnLegacyBoot=boot;
     const cajaVista=editId?r:{...r,efectivo:autoCash.efectivo,mercadoPago:autoCash.mercadoPago,tarjetas:autoCash.tarjetas};
     const resumen={...cajaVista,gastos:gastosTotal};
     const tt=cashTotals(resumen);
-    const monthNet=monthBalance(r.fecha,owner).neto;
+    const month=monthBalance(r.fecha,owner),monthNet=month.neto;
     const visible=window.isAdmin()?all:all.filter(x=>operatorOwns(x,op));
     const sorted=[...visible].sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha))||String(b.actualizado).localeCompare(String(a.actualizado)));
-    document.getElementById('view').innerHTML=`<section class="panel" style="margin-top:0"><div class="panelhead"><div><div class="eyebrow">CIERRE DIARIO</div><h3>${hit?'Cierre del día':'Cargar cierre del día'}</h3></div><span class="badge">Operador: ${e(r.operador)}</span></div><form class="grid" onsubmit="submitCashSummary(event,'${e(hit?.id||'')}')"><div class="field short"><label>Fecha *</label><input id="cashFecha" type="date" value="${e(r.fecha)}" required></div><div class="field"><label>Operador</label><input value="${e(r.operador)}" readonly></div><div class="field"><label>Efectivo</label><input id="cashEfectivo" class="cashNumber" type="text" inputmode="decimal" value="${moneyInput(cajaVista.efectivo)}"></div><div class="field"><label>Mercado Pago / transferencias</label><input id="cashMP" class="cashNumber" type="text" inputmode="decimal" value="${moneyInput(cajaVista.mercadoPago)}"></div><div class="field"><label>Tarjeta crédito / débito</label><input id="cashTarjetas" class="cashNumber" type="text" inputmode="decimal" value="${moneyInput(cajaVista.tarjetas)}"></div><div class="field full"><div id="cashAutoHint" class="hint"><strong>Automático:</strong> suma los cobros de NQN Service y los ingresos de Cleris de la fecha seleccionada. Cleris impacta en la caja real, pero no en la facturación ni en los KPIs de NQN.${autoCash.cleris.total>0?` <strong>Cleris:</strong> ${m(autoCash.cleris.total)}.`:''}${autoCash.mixto>0?` <strong>Atención:</strong> hay ${m(autoCash.mixto)} con medio "Mixto"; revisá manualmente cómo repartirlo.`:''}</div></div><div class="field"><label>Nota de crédito</label><input id="cashNC" class="cashNumber" type="text" inputmode="decimal" value="${moneyInput(r.notaCredito)}"></div><div class="field"><label>Gastos del día</label><input id="cashGastos" type="text" value="${moneyInput(gastosTotal)}" readonly><div class="hint">Se carga desde el botón <strong>＋ Gasto</strong>. Efectivo: ${m(ge)} · Mercado Pago: ${m(gm)}</div></div><div class="field full"><label>Observaciones</label><input id="cashObs" value="${e(r.observaciones)}"></div><div class="field full"><div class="stats" style="grid-template-columns:repeat(3,1fr);margin:5px 0"><div class="stat soft"><div class="statlabel">Total cobrado</div><div id="cashTotal" class="statvalue smallmoney">${m(tt.ingresos)}</div></div><div class="stat ${tt.neto<0?'bad':''}"><div class="statlabel">Neto del día</div><div id="cashNeto" class="statvalue smallmoney" style="${tt.neto<0?'color:var(--red)':''}">${m(tt.neto)}</div><div class="stathelp">Cobrado − notas de crédito − gastos</div></div><div id="cashMonthBox" class="stat ${monthNet<0?'bad':'soft'}"><div class="statlabel">Saldo acumulado del mes</div><div id="cashMonthNet" class="statvalue smallmoney" style="${monthNet<0?'color:var(--red)':''}">${m(monthNet)}</div><div class="stathelp">Ingresos cobrados − gastos − notas de crédito</div></div></div></div><div class="actions full"><button type="button" class="btn secondary" onclick="renderExpenses()">＋ Cargar gasto</button><button class="btn primary" type="submit">${hit?'Guardar cambios':'Guardar cierre'}</button></div></form></section><section class="panel"><div class="panelhead"><div><div class="eyebrow">HISTORIAL</div><h3>${window.isAdmin()?'Todos los cierres':'Mis cierres'}</h3></div><span class="badge">${visible.length}</span></div>${sorted.length?`<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Operador</th><th>Total</th><th>Nota crédito</th><th>Gastos</th><th>Neto</th><th></th></tr></thead><tbody>${sorted.slice(0,100).map(x=>{const t=cashTotals(x);return `<tr><td><strong>${dateLabel(x.fecha)}</strong></td><td>${e(x.operador)}</td><td><strong>${m(t.ingresos)}</strong></td><td>${m(x.notaCredito)}</td><td>${m(x.gastos)}</td><td><strong>${m(t.neto)}</strong></td><td class="right nowrap"><button class="btn secondary small" onclick="showCashSummary('${e(x.id)}')">Editar</button>${window.isAdmin()?` <button class="btn danger small" onclick="deleteCashSummary('${e(x.id)}')">Eliminar</button>`:''}</td></tr>`}).join('')}</tbody></table></div>`:'<div class="empty">Todavía no hay cierres de caja.</div>'}</section>`;
+    document.getElementById('view').innerHTML=`<section class="panel" style="margin-top:0"><div class="panelhead"><div><div class="eyebrow">CIERRE DIARIO</div><h3>${hit?'Cierre del día':'Cargar cierre del día'}</h3></div><span class="badge">Operador: ${e(r.operador)}</span></div><form class="grid" onsubmit="submitCashSummary(event,'${e(hit?.id||'')}')"><div class="field short"><label>Fecha *</label><input id="cashFecha" type="date" value="${e(r.fecha)}" required></div><div class="field"><label>Operador</label><input value="${e(r.operador)}" readonly></div><div class="field"><label>Efectivo</label><input id="cashEfectivo" class="cashNumber" type="text" inputmode="decimal" value="${moneyInput(cajaVista.efectivo)}"></div><div class="field"><label>Mercado Pago / transferencias</label><input id="cashMP" class="cashNumber" type="text" inputmode="decimal" value="${moneyInput(cajaVista.mercadoPago)}"></div><div class="field"><label>Tarjeta crédito / débito</label><input id="cashTarjetas" class="cashNumber" type="text" inputmode="decimal" value="${moneyInput(cajaVista.tarjetas)}"></div><div class="field full"><div id="cashAutoHint" class="hint"><strong>Automático:</strong> suma los cobros de NQN Service y los ingresos de Cleris de la fecha seleccionada. Cleris impacta en la caja real, pero no en la facturación ni en los KPIs de NQN.${autoCash.cleris.total>0?` <strong>Cleris:</strong> ${m(autoCash.cleris.total)}.`:''}${autoCash.mixto>0?` <strong>Atención:</strong> hay ${m(autoCash.mixto)} con medio "Mixto"; revisá manualmente cómo repartirlo.`:''}</div></div><div class="field"><label>Nota de crédito</label><input id="cashNC" class="cashNumber" type="text" inputmode="decimal" value="${moneyInput(r.notaCredito)}"></div><div class="field"><label>Gastos del día</label><input id="cashGastos" type="text" value="${moneyInput(gastosTotal)}" readonly><div class="hint">Se carga desde el botón <strong>＋ Gasto</strong>. Efectivo: ${m(ge)} · Mercado Pago: ${m(gm)}</div></div><div class="field full"><label>Observaciones</label><input id="cashObs" value="${e(r.observaciones)}"></div><div class="field full"><div class="stats" style="grid-template-columns:repeat(2,1fr);margin:5px 0"><div class="stat soft"><div class="statlabel">Total mes efectivo</div><div class="statvalue smallmoney">${m(month.efectivo)}</div></div><div class="stat soft"><div class="statlabel">Total mes Mercado Pago</div><div class="statvalue smallmoney">${m(month.mercadoPago)}</div></div><div class="stat soft"><div class="statlabel">Total mes gastos</div><div class="statvalue smallmoney">${m(month.gastos)}</div></div><div class="stat soft"><div class="statlabel">Total mes notas de crédito</div><div class="statvalue smallmoney">${m(month.notas)}</div></div><div class="stat soft"><div class="statlabel">Total cobrado hoy</div><div id="cashTotal" class="statvalue smallmoney">${m(tt.ingresos)}</div></div><div class="stat ${tt.neto<0?'bad':''}"><div class="statlabel">Neto del día</div><div id="cashNeto" class="statvalue smallmoney" style="${tt.neto<0?'color:var(--red)':''}">${m(tt.neto)}</div><div class="stathelp">Cobrado − notas de crédito − gastos</div></div><div id="cashMonthBox" class="stat ${monthNet<0?'bad':'soft'}"><div class="statlabel">Saldo total del mes</div><div id="cashMonthNet" class="statvalue smallmoney" style="${monthNet<0?'color:var(--red)':''}">${m(monthNet)}</div><div class="stathelp">Ingresos cobrados − gastos − notas de crédito + ajustes documentados</div></div></div></div><div class="actions full">${window.isAdmin()?'<button type="button" class="btn secondary" onclick="ajustarSaldosCaja()">Ajustar saldos reales / poner en cero</button>':''}<button type="button" class="btn secondary" onclick="renderExpenses()">＋ Cargar gasto</button><button class="btn primary" type="submit">${hit?'Guardar cambios':'Guardar cierre'}</button></div></form></section><section class="panel"><div class="panelhead"><div><div class="eyebrow">HISTORIAL</div><h3>${window.isAdmin()?'Todos los cierres':'Mis cierres'}</h3></div><span class="badge">${visible.length}</span></div>${sorted.length?`<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Operador</th><th>Total</th><th>Nota crédito</th><th>Gastos</th><th>Neto</th><th></th></tr></thead><tbody>${sorted.slice(0,100).map(x=>{const t=cashTotals(x);return `<tr><td><strong>${dateLabel(x.fecha)}</strong></td><td>${e(x.operador)}</td><td><strong>${m(t.ingresos)}</strong></td><td>${m(x.notaCredito)}</td><td>${m(x.gastos)}</td><td><strong>${m(t.neto)}</strong></td><td class="right nowrap"><button class="btn secondary small" onclick="showCashSummary('${e(x.id)}')">Editar</button>${window.isAdmin()?` <button class="btn danger small" onclick="deleteCashSummary('${e(x.id)}')">Eliminar</button>`:''}</td></tr>`}).join('')}</tbody></table></div>`:'<div class="empty">Todavía no hay cierres de caja.</div>'}</section>`;
     document.querySelectorAll('.cashNumber').forEach(x=>x.addEventListener('input',cashPreview));
     const fechaEl=document.getElementById('cashFecha');if(fechaEl)fechaEl.addEventListener('change',()=>{
       const fecha=fechaEl.value,auto=cashAutomatic(fecha),total=expenseTotalFor(fecha,owner);
@@ -1668,10 +1694,42 @@ window.__nqnLegacyBoot=boot;
       cashPreview();
     });
   };
+  window.ajustarSaldosCaja=function(){
+    if(!window.isAdmin()){alert('Solo el administrador puede ajustar saldos.');return}
+    const op=session(),fecha=cashValue('cashFecha')||localDay();
+    if(fecha!==localDay()){alert('El ajuste de saldos se registra con la fecha de hoy. Volvé al cierre de hoy.');return}
+    const owner={id:op.id,nombre:op.nombre},actual=monthBalance(fecha,owner);
+    const rawEf=prompt('Efectivo real disponible. Escribí 0 si querés ponerlo en cero:',String(actual.efectivo));
+    if(rawEf===null)return;
+    const rawMP=prompt('Saldo real de Mercado Pago. Escribí 0 si querés ponerlo en cero:',String(actual.mercadoPago));
+    if(rawMP===null)return;
+    const rawTotal=prompt('Saldo TOTAL real del mes. Escribí 0 para ponerlo también en cero:',String(actual.neto));
+    if(rawTotal===null)return;
+    const ef=parseMoneyAR(rawEf),mp=parseMoneyAR(rawMP),total=parseMoneyAR(rawTotal);
+    if(!Number.isFinite(ef)||!Number.isFinite(mp)||!Number.isFinite(total)||ef<0||mp<0||total<0){alert('Ingresá importes válidos mayores o iguales a cero.');return}
+    const motivo=prompt('Motivo del ajuste (obligatorio; por ejemplo, conciliación de caja):','Conciliación de caja');
+    if(motivo===null)return;
+    if(!motivo.trim()){alert('Indicá un motivo para conservar el registro.');return}
+    const deltaEf=ef-actual.efectivo,deltaMP=mp-actual.mercadoPago,deltaTotal=total-(actual.neto+deltaEf+deltaMP);
+    if(!deltaEf&&!deltaMP&&!deltaTotal){alert('Los saldos ya coinciden.');return}
+    if(!confirm('Se registrará un ajuste de efectivo de '+m(deltaEf)+' y de Mercado Pago de '+m(deltaMP)+'. El saldo total quedará en '+m(total)+' (ajuste adicional '+m(deltaTotal)+'). Los cobros y gastos originales se conservan. ¿Guardar ajuste?'))return;
+    const rows=window.loadCashClosings(),ts=now();
+    let c=todaysCashForOperator(rows,op,fecha);
+    if(!c){c=normalizeCashClosing({id:uid('caja'),fecha,operadorId:op.id,operador:op.nombre,creado:ts});rows.push(c)}
+    c.ajusteEfectivo=Number(c.ajusteEfectivo||0)+deltaEf;
+    c.ajusteMP=Number(c.ajusteMP||0)+deltaMP;
+    c.ajusteTotal=Number(c.ajusteTotal||0)+deltaTotal;
+    c.ajusteMotivo=[c.ajusteMotivo,fecha+': '+motivo.trim()+' (efectivo '+m(deltaEf)+', MP '+m(deltaMP)+', total adicional '+m(deltaTotal)+')'].filter(Boolean).join(' | ');
+    c.actualizado=ts;
+    window.saveCashClosings(rows);
+    queueCloudOp('upsertCash',c.id,c,c.actualizado);
+    toast('Ajuste de caja registrado');
+    window.showCashSummary();
+  };
   window.submitCashSummary=function(ev,editId=''){
     ev.preventDefault();const op=session();if(!op)return renderLoginOrSetup();let rows=window.loadCashClosings(),old=editId?rows.find(x=>String(x.id)===String(editId)):null;
     if(old&&!window.isAdmin()&&!operatorOwns(old,op)){alert('No podés modificar el cierre de otro operador.');return}
-    const owner=old||{operadorId:op.id,operador:op.nombre},ts=now(),fecha=cashValue('cashFecha'),ownerRef={id:owner.operadorId||op.id,nombre:owner.operador||op.nombre},gastosDetalle=expenseTotalFor(fecha,ownerRef),obj=normalizeCashClosing({id:editId||uid('caja'),fecha,operadorId:ownerRef.id,operador:ownerRef.nombre,efectivo:cashNum('cashEfectivo'),mercadoPago:cashNum('cashMP'),tarjetas:cashNum('cashTarjetas'),notaCredito:cashNum('cashNC'),gastos:gastosDetalle,observaciones:String(cashValue('cashObs')||'').trim(),creado:old?.creado||ts,actualizado:ts});
+    const owner=old||{operadorId:op.id,operador:op.nombre},ts=now(),fecha=cashValue('cashFecha'),ownerRef={id:owner.operadorId||op.id,nombre:owner.operador||op.nombre},gastosDetalle=expenseTotalFor(fecha,ownerRef),obj=normalizeCashClosing({id:editId||uid('caja'),fecha,operadorId:ownerRef.id,operador:ownerRef.nombre,efectivo:cashNum('cashEfectivo'),mercadoPago:cashNum('cashMP'),tarjetas:cashNum('cashTarjetas'),notaCredito:cashNum('cashNC'),gastos:gastosDetalle,observaciones:String(cashValue('cashObs')||'').trim(),ajusteEfectivo:old?.ajusteEfectivo||0,ajusteMP:old?.ajusteMP||0,ajusteTotal:old?.ajusteTotal||0,ajusteMotivo:old?.ajusteMotivo||'',creado:old?.creado||ts,actualizado:ts});
     const dup=rows.find(x=>String(x.id)!==String(editId)&&x.fecha===obj.fecha&&operatorOwns(x,{id:obj.operadorId,nombre:obj.operador}));if(dup&&!confirm('Ya existe un cierre para esta fecha y operador. ¿Guardar otro igualmente?'))return;
     if(editId){const i=rows.findIndex(x=>String(x.id)===String(editId));i>=0?rows[i]=obj:rows.push(obj)}else rows.push(obj);window.saveCashClosings(rows);queueCloudOp('upsertCash',obj.id,obj,obj.actualizado);toast(editId?'Cierre actualizado':'Cierre guardado');window.showCashSummary();
   };
@@ -1794,7 +1852,7 @@ window.__nqnLegacyBoot=boot;
     const op=session();if(!op)return renderLoginOrSetup();let expenses=window.loadExpenses(),x=expenses.find(r=>String(r.id)===String(id));if(!x)return;if(!window.isAdmin()&&!operatorOwns(x,op)){toast('No podés eliminar un gasto de otro operador');return}if(!confirm('¿Eliminar este gasto de '+m(x.monto)+'?'))return;window.saveExpenses(expenses.filter(r=>String(r.id)!==String(id)));
     let cash=window.loadCashClosings(),c=cash.find(r=>String(r.id)===String(x.cajaId));if(!c)c=cash.find(r=>r.fecha===x.fecha&&operatorOwns(r,{id:x.operadorId,nombre:x.operador}));if(c){c.gastos=Math.max(0,Number(c.gastos||0)-Number(x.monto||0));c.actualizado=now();window.saveCashClosings(cash);queueCloudOp('upsertCash',c.id,c,c.actualizado)}toast('Gasto eliminado');window.renderExpenses();
   };
-  window.deleteCashSummary=function(id){if(!window.isAdmin()){toast('Solo el administrador puede eliminar cierres');return}const rows=window.loadCashClosings(),x=rows.find(r=>String(r.id)===String(id));if(!x)return;if(!confirm('¿Eliminar el cierre de '+dateLabel(x.fecha)+' de '+x.operador+'?'))return;window.saveCashClosings(rows.filter(r=>String(r.id)!==String(id)));queueCloudOp('deleteCash',id,null,now());toast('Cierre eliminado');window.showCashSummary()};
+  window.deleteCashSummary=function(id){if(!window.isAdmin()){toast('Solo el administrador puede eliminar cierres');return}const rows=window.loadCashClosings(),x=rows.find(r=>String(r.id)===String(id));if(!x)return;if(!confirm('¿Eliminar el cierre de '+dateLabel(x.fecha)+' de '+x.operador+'?'+((x.ajusteEfectivo||x.ajusteMP||x.ajusteTotal)?' También se eliminará el ajuste de saldos asociado a este cierre.':'') ))return;window.saveCashClosings(rows.filter(r=>String(r.id)!==String(id)));queueCloudOp('deleteCash',id,null,now());toast('Cierre eliminado');window.showCashSummary()};
 
   window.renderOperators=function(editId=''){
     rememberCurrentView('operadores');
