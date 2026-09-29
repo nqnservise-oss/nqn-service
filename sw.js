@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nqn-service-v927-pwa';
+const CACHE_NAME = 'nqn-service-v934-turnos-visitas';
 const APP_SHELL = [
   './',
   './index.html',
