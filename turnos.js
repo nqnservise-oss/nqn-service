@@ -59,6 +59,9 @@
       direccion:String(t.direccion||t.barrio||''),tipo:TIPOS.includes(t.tipo)?t.tipo:'Retiro',
       estado:toLocalEstado(t.estado),
       obs:String(t.obs||t.observaciones||''),
+      visitaCobrada:!!t.visitaCobrada,
+      visitaMonto:Math.max(0,Number(t.visitaMonto||0)),
+      visitaMedioPago:['Efectivo','Mercado Pago'].includes(String(t.visitaMedioPago||''))?String(t.visitaMedioPago):'',
       ordenId:String(t.ordenId||''),
       ordenNumero:Number(t.ordenNumero||0),
       creado:t.creado||t.updatedAt||t.actualizado||nowIso(),
@@ -71,6 +74,9 @@
       cliente:String(t?.cliente||''),telefono:String(t?.telefono||''),direccion:String(t?.direccion||''),
       tipo:TIPOS.includes(t?.tipo)?t.tipo:'Retiro',motivo:String(t?.tipo||''),
       estado:toCloudEstado(t?.estado),obs:String(t?.obs||''),observaciones:String(t?.obs||''),
+      visitaCobrada:!!t?.visitaCobrada,
+      visitaMonto:Math.max(0,Number(t?.visitaMonto||0)),
+      visitaMedioPago:['Efectivo','Mercado Pago'].includes(String(t?.visitaMedioPago||''))?String(t.visitaMedioPago):'',
       ordenId:String(t?.ordenId||''),ordenNumero:Number(t?.ordenNumero||0),
       creado:t?.creado||t?.updatedAt||nowIso(),
       actualizado:t?.actualizado||t?.updatedAt||nowIso()
@@ -82,7 +88,7 @@
     (Array.isArray(rows)?rows:[]).forEach(r=>{
       const t=normalizeRemoteTurn(r);if(!t)return;
       if(!next[t.fecha])next[t.fecha]={};
-      next[t.fecha][t.hora]={cliente:t.cliente,telefono:t.telefono,direccion:t.direccion,tipo:t.tipo,estado:t.estado,obs:t.obs,ordenId:t.ordenId||'',ordenNumero:Number(t.ordenNumero||0),creado:t.creado,actualizado:t.actualizado,updatedAt:t.actualizado};
+      next[t.fecha][t.hora]={cliente:t.cliente,telefono:t.telefono,direccion:t.direccion,tipo:t.tipo,estado:t.estado,obs:t.obs,visitaCobrada:t.visitaCobrada,visitaMonto:t.visitaMonto,visitaMedioPago:t.visitaMedioPago,ordenId:t.ordenId||'',ordenNumero:Number(t.ordenNumero||0),creado:t.creado,actualizado:t.actualizado,updatedAt:t.actualizado};
     });
     if(pendingIds&&pendingIds.size){
       Object.keys(all).forEach(date=>Object.keys(all[date]||{}).forEach(slot=>{
@@ -174,15 +180,39 @@
     const details=[];if(t.tipo)details.push(esc(t.tipo));if(t.telefono)details.push(esc(t.telefono));
     const address=t.direccion?`<div class="turno-meta" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span><strong>Dirección:</strong> ${esc(t.direccion)}</span><button type="button" class="btn secondary small" onclick="turnosOpenMap('${slot}')">📍 Mapa</button></div>`:'';
     const orderInfo=t.ordenId?`<div class="turno-meta"><strong>Orden creada:</strong> ${t.ordenNumero?'#'+String(t.ordenNumero).padStart(3,'0'):'sí'}</div>`:'';
+    const visitaInfo=t.visitaCobrada?`<div class="turno-meta"><strong>Visita cobrada:</strong> $${Number(t.visitaMonto||30000).toLocaleString('es-AR')} · ${esc(t.visitaMedioPago||'')}</div>`:'';
     const createOrder=t.estado!=='cancelado'&&!t.ordenId?`<button class="btn primary small" onclick="turnosCreateOrder('${slot}')">＋ Crear orden</button>`:'';
-    return `<div class="turno-card"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div class="turno-time">${slot}</div>${statusBadge(t.estado)}</div><div class="turno-client">${esc(t.cliente||'Sin nombre')}</div><div class="turno-meta">${details.join(' · ')||'Sin datos adicionales'}</div>${address}${t.obs?`<div class="turno-meta"><strong>Obs.:</strong> ${esc(t.obs)}</div>`:''}${orderInfo}<div class="turno-actions"><button class="btn secondary small" onclick="turnosEdit('${slot}')">Editar</button>${createOrder}${t.estado!=='confirmado'&&t.estado!=='realizado'?`<button class="btn success small" onclick="turnosStatus('${slot}','confirmado')">Confirmar</button>`:''}${t.estado!=='realizado'?`<button class="btn success small" onclick="turnosStatus('${slot}','realizado')">Realizado</button>`:''}${t.estado!=='cancelado'?`<button class="btn danger small" onclick="turnosStatus('${slot}','cancelado')">Cancelar</button>`:''}<button class="btn secondary small" onclick="turnosDelete('${slot}')">Borrar</button></div></div>`;
+    const whatsapp=t.telefono?`<button class="btn success small" onclick="turnosWhatsApp('${slot}')">💬 WhatsApp</button>`:'';
+    return `<div class="turno-card"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div class="turno-time">${slot}</div>${statusBadge(t.estado)}</div><div class="turno-client">${esc(t.cliente||'Sin nombre')}</div><div class="turno-meta">${details.join(' · ')||'Sin datos adicionales'}</div>${address}${t.obs?`<div class="turno-meta"><strong>Obs.:</strong> ${esc(t.obs)}</div>`:''}${visitaInfo}${orderInfo}<div class="turno-actions">${!t.visitaCobrada&&t.estado!=='cancelado'?`<button class="btn primary small" onclick="turnosEdit('${slot}')">Cobrar tarifa · $30.000</button>`:''}${whatsapp}<button class="btn secondary small" onclick="turnosEdit('${slot}')">Editar</button>${createOrder}${t.estado!=='confirmado'&&t.estado!=='realizado'?`<button class="btn success small" onclick="turnosStatus('${slot}','confirmado')">Confirmar</button>`:''}${t.estado!=='realizado'?`<button class="btn success small" onclick="turnosStatus('${slot}','realizado')">Realizado</button>`:''}${t.estado!=='cancelado'?`<button class="btn danger small" onclick="turnosStatus('${slot}','cancelado')">Cancelar</button>`:''}<button class="btn secondary small" onclick="turnosDelete('${slot}')">Borrar</button></div></div>`;
   }
   function renderEditor(slot,t){
     const host=document.getElementById('turnoEditor');if(!host)return;
-    const data=t||{cliente:'',telefono:'',direccion:'',tipo:'Retiro',obs:'',estado:'pendiente'};
-    host.innerHTML=`<div class="panel turno-form"><div class="panelhead"><div><div class="eyebrow">${t?'EDITAR TURNO':'NUEVO TURNO'}</div><h3>${slot}</h3></div><button class="btn secondary small" onclick="turnosCloseEditor()">Cerrar</button></div><div class="grid"><div class="field"><label>Cliente *</label><input id="turnoCliente" value="${esc(data.cliente)}" placeholder="Nombre y apellido"></div><div class="field"><label>Teléfono</label><input id="turnoTelefono" inputmode="tel" value="${esc(data.telefono)}" placeholder="Ej. 299..."></div><div class="field full"><label>Dirección / barrio</label><input id="turnoDireccion" value="${esc(data.direccion)}" placeholder="Para organizar la salida"></div><div class="field"><label>Tipo</label><select id="turnoTipo">${TIPOS.map(v=>`<option ${data.tipo===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="field"><label>Estado</label><select id="turnoEstado"><option value="pendiente" ${data.estado==='pendiente'?'selected':''}>Pendiente</option><option value="confirmado" ${data.estado==='confirmado'?'selected':''}>Confirmado</option><option value="realizado" ${data.estado==='realizado'?'selected':''}>Realizado</option><option value="cancelado" ${data.estado==='cancelado'?'selected':''}>Cancelado</option></select></div><div class="field full"><label>Observaciones</label><textarea id="turnoObs" rows="3" placeholder="Equipo, referencia o detalle importante">${esc(data.obs)}</textarea></div><div class="actions full"><button class="btn secondary" onclick="turnosCloseEditor()">Cancelar</button><button class="btn primary" onclick="turnosSave('${slot}')">Guardar turno</button></div></div></div>`;
+    const data=t||{cliente:'',telefono:'',direccion:'',tipo:'Retiro',obs:'',estado:'pendiente',visitaCobrada:false,visitaMonto:30000,visitaMedioPago:'Efectivo'};
+    host.innerHTML=`<div class="panel turno-form"><div class="panelhead"><div><div class="eyebrow">${t?'EDITAR TURNO':'NUEVO TURNO'}</div><h3>${slot}</h3></div><button class="btn secondary small" onclick="turnosCloseEditor()">Cerrar</button></div><div class="grid"><div class="field"><label>Cliente *</label><input id="turnoCliente" value="${esc(data.cliente)}" placeholder="Nombre y apellido"></div><div class="field"><label>Teléfono</label><input id="turnoTelefono" inputmode="tel" value="${esc(data.telefono)}" placeholder="Ej. 299..."></div><div class="field full"><label>Dirección / barrio</label><input id="turnoDireccion" value="${esc(data.direccion)}" placeholder="Para organizar la salida"></div><div class="field"><label>Tipo</label><select id="turnoTipo">${TIPOS.map(v=>`<option ${data.tipo===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="field"><label>Estado</label><select id="turnoEstado"><option value="pendiente" ${data.estado==='pendiente'?'selected':''}>Pendiente</option><option value="confirmado" ${data.estado==='confirmado'?'selected':''}>Confirmado</option><option value="realizado" ${data.estado==='realizado'?'selected':''}>Realizado</option><option value="cancelado" ${data.estado==='cancelado'?'selected':''}>Cancelado</option></select></div><div class="field full"><label style="display:flex;align-items:center;gap:10px;cursor:pointer"><input id="turnoVisitaCobrada" type="checkbox" style="width:auto" ${data.visitaCobrada?'checked':''} onchange="turnosToggleVisitaPago()"> Visita cobrada · $30.000</label><div class="hint">Marcá este casillero solamente cuando corresponda registrar el cobro de la visita.</div></div><div id="turnoVisitaPagoWrap" class="field full" style="${data.visitaCobrada?'':'display:none'}"><label>Medio de pago de la visita</label><select id="turnoVisitaMedio"><option value="Efectivo" ${data.visitaMedioPago==='Efectivo'?'selected':''}>Efectivo</option><option value="Mercado Pago" ${data.visitaMedioPago==='Mercado Pago'?'selected':''}>Mercado Pago</option></select></div><div class="field full"><label>Observaciones</label><textarea id="turnoObs" rows="3" placeholder="Equipo, referencia o detalle importante">${esc(data.obs)}</textarea></div><div class="actions full"><button class="btn secondary" onclick="turnosCloseEditor()">Cancelar</button><button class="btn primary" onclick="turnosSave('${slot}')">Guardar turno</button></div></div></div>`;
     setTimeout(()=>document.getElementById('turnoCliente')?.focus(),0);
   }
+
+  function whatsappNumber(phone){
+    let p=String(phone||'').replace(/\D/g,'');
+    if(!p)return '';
+    if(p.startsWith('0054'))p=p.slice(4);
+    if(p.startsWith('54'))p=p.slice(2);
+    if(p.startsWith('0'))p=p.slice(1);
+    if(p.startsWith('29915'))p='299'+p.slice(5);
+    return p.startsWith('9')?'54'+p:'549'+p;
+  }
+
+  window.turnosWhatsApp=function(slot){
+    const t=dayData(selectedDate)[slot];if(!t)return;
+    const n=whatsappNumber(t.telefono);
+    if(!n||n.length<12){window.toast?window.toast('Revisá el teléfono del cliente'):alert('Revisá el teléfono del cliente');return}
+    const nombre=String(t.cliente||'').trim();
+    const cuando=selectedDate===localISODate(new Date())?'hoy':'del '+parseLocalDate(selectedDate).toLocaleDateString('es-AR');
+    const msg=`Hola${nombre?' '+nombre:''}, soy Facundo de NQN Service. Te escribo para confirmar el turno ${cuando}.`;
+    const url='https://wa.me/'+n+'?text='+encodeURIComponent(msg);
+    const w=window.open(url,'_blank','noopener');
+    if(!w)window.location.href=url;
+  };
 
   function mapQuery(address){
     let q=String(address||'').trim();
@@ -230,9 +260,15 @@
   window.turnosToday=function(){selectedDate=localISODate(new Date());editingSlot=null;renderTurnos()};
   window.turnosEdit=function(slot){editingSlot=slot;renderTurnos();setTimeout(()=>document.getElementById('turnoEditor')?.scrollIntoView({behavior:'smooth',block:'start'}),20)};
   window.turnosCloseEditor=function(){editingSlot=null;renderTurnos()};
+  window.turnosToggleVisitaPago=function(){
+    const checked=!!document.getElementById('turnoVisitaCobrada')?.checked;
+    const wrap=document.getElementById('turnoVisitaPagoWrap');if(wrap)wrap.style.display=checked?'flex':'none';
+  };
   window.turnosSave=function(slot){
     const cliente=document.getElementById('turnoCliente')?.value.trim()||'';if(!cliente){window.toast?window.toast('Ingresá el nombre del cliente'):alert('Ingresá el nombre del cliente');return}
-    const turno={cliente,telefono:document.getElementById('turnoTelefono')?.value.trim()||'',direccion:document.getElementById('turnoDireccion')?.value.trim()||'',tipo:document.getElementById('turnoTipo')?.value||'Retiro',estado:document.getElementById('turnoEstado')?.value||'pendiente',obs:document.getElementById('turnoObs')?.value.trim()||''};
+    const visitaCobrada=!!document.getElementById('turnoVisitaCobrada')?.checked;
+    const visitaMedioPago=visitaCobrada?(document.getElementById('turnoVisitaMedio')?.value||'Efectivo'):'';
+    const turno={...(dayData(selectedDate)[slot]||{}),cliente,telefono:document.getElementById('turnoTelefono')?.value.trim()||'',direccion:document.getElementById('turnoDireccion')?.value.trim()||'',tipo:document.getElementById('turnoTipo')?.value||'Retiro',estado:document.getElementById('turnoEstado')?.value||'pendiente',obs:document.getElementById('turnoObs')?.value.trim()||'',visitaCobrada,visitaMonto:visitaCobrada?30000:0,visitaMedioPago};
     setTurno(selectedDate,slot,turno);editingSlot=null;renderTurnos();window.toast&&window.toast(`Turno de ${slot} guardado`);
   };
   window.turnosStatus=function(slot,status){const t=dayData(selectedDate)[slot];if(!t)return;t.estado=status;setTurno(selectedDate,slot,t);renderTurnos()};
