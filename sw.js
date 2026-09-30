@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nqn-service-v938-cierre-z-loader';
+const CACHE_NAME = 'nqn-service-v940-cierre-z-loader';
 const APP_SHELL = [
   './',
   './index.html',
@@ -11,58 +11,41 @@ const APP_SHELL = [
   './icons/icon-maskable-512.png'
 ];
 
-function injectCierreZ(html) {
-  if (html.includes('src="./cierre-z.js"') || html.includes("src='./cierre-z.js'")) return html;
-  if (html.includes('</body>')) {
-    return html.replace('</body>', '<script src="./cierre-z.js"></script>\n</body>');
+const CIERRE_LOADER = `
+/* nqn-cierre-z-loader */
+(function(){
+  function loadCierreZ(){
+    if(document.querySelector('script[data-nqn-cierre-z]')) return;
+    var s=document.createElement('script');
+    s.src='./cierre-z.js?v=940';
+    s.dataset.nqnCierreZ='1';
+    s.defer=true;
+    document.head.appendChild(s);
   }
-  return html + '\n<script src="./cierre-z.js"></script>\n';
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',loadCierreZ);
+  else loadCierreZ();
+})();
+`;
+
+function appendCierreLoader(js){
+  if(js.includes('nqn-cierre-z-loader')) return js;
+  return js + '\n' + CIERRE_LOADER;
 }
 
-async function navigationResponse(request) {
-  try {
-    const response = await fetch(request, { cache: 'no-store' });
-    if (!response || !response.ok) throw new Error('network');
-    const type = response.headers.get('content-type') || '';
-    if (!type.includes('text/html')) return response;
-
-    const html = injectCierreZ(await response.text());
-    const headers = new Headers(response.headers);
-    headers.set('content-type', 'text/html; charset=utf-8');
-
-    const modified = new Response(html, {
-      status: response.status,
-      statusText: response.statusText,
-      headers
-    });
-
-    const cache = await caches.open(CACHE_NAME);
-    cache.put(request, modified.clone()).catch(() => {});
-    cache.put('./index.html', modified.clone()).catch(() => {});
-    return modified;
-  } catch (e) {
-    const cached = await caches.match(request) || await caches.match('./index.html');
-    if (!cached) throw e;
-    const type = cached.headers.get('content-type') || '';
-    if (!type.includes('text/html')) return cached;
-    const html = injectCierreZ(await cached.text());
-    return new Response(html, {
-      status: 200,
-      headers: {'content-type': 'text/html; charset=utf-8'}
-    });
-  }
+async function fetchFresh(request){
+  return fetch(request,{cache:'no-store'});
 }
 
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache =>
-      Promise.all(APP_SHELL.map(async url => {
-        try {
-          const r = await fetch(url, { cache: 'reload' });
-          if (r && r.ok) await cache.put(url, r.clone());
-        } catch (e) {}
-      }))
-    )
+    caches.open(CACHE_NAME).then(async cache => {
+      for(const url of APP_SHELL){
+        try{
+          const r=await fetch(url,{cache:'reload'});
+          if(r && r.ok) await cache.put(url,r.clone());
+        }catch(e){}
+      }
+    })
   );
   self.skipWaiting();
 });
@@ -70,32 +53,54 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys => Promise.all(
-      keys.filter(key => key !== CACHE_NAME && key.startsWith('nqn-service-'))
-          .map(key => caches.delete(key))
+      keys.filter(k => k !== CACHE_NAME && k.startsWith('nqn-service-'))
+          .map(k => caches.delete(k))
     )).then(() => self.clients.claim())
   );
 });
 
 self.addEventListener('fetch', event => {
-  if (event.request.method !== 'GET') return;
+  const req=event.request;
+  if(req.method!=='GET') return;
 
-  const url = new URL(event.request.url);
-  if (url.origin !== self.location.origin) return;
+  const url=new URL(req.url);
+  if(url.origin!==self.location.origin) return;
 
-  if (event.request.mode === 'navigate') {
-    event.respondWith(navigationResponse(event.request));
+  if(url.pathname.endsWith('/turnos.js')){
+    event.respondWith((async()=>{
+      try{
+        const r=await fetchFresh(req);
+        if(!r || !r.ok) throw new Error('network');
+        const js=appendCierreLoader(await r.text());
+        const modified=new Response(js,{
+          status:200,
+          headers:{'content-type':'application/javascript; charset=utf-8'}
+        });
+        const cache=await caches.open(CACHE_NAME);
+        cache.put(req,modified.clone()).catch(()=>{});
+        return modified;
+      }catch(e){
+        const cached=await caches.match(req) || await caches.match('./turnos.js');
+        if(!cached) throw e;
+        const js=appendCierreLoader(await cached.text());
+        return new Response(js,{
+          status:200,
+          headers:{'content-type':'application/javascript; charset=utf-8'}
+        });
+      }
+    })());
     return;
   }
 
   event.respondWith(
-    fetch(event.request, { cache: 'no-store' })
-      .then(response => {
-        if (response && response.ok) {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy)).catch(() => {});
+    fetchFresh(req)
+      .then(r=>{
+        if(r && r.ok){
+          const copy=r.clone();
+          caches.open(CACHE_NAME).then(c=>c.put(req,copy)).catch(()=>{});
         }
-        return response;
+        return r;
       })
-      .catch(() => caches.match(event.request))
+      .catch(()=>caches.match(req))
   );
 });
