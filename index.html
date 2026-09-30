@@ -229,7 +229,7 @@ function cloudConfig(){
 }
 function cloudConfigured(){let c=cloudConfig();return c.enabled&&!!c.token&&/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec(?:\?.*)?$/i.test(c.url)}
 function queueCloudOp(type,id,data=null,at=nowISO()){
-  let low=type.toLowerCase(),entity=low.includes('cash')?'cash':(low.includes('event')?'event':'order');
+  let low=type.toLowerCase(),entity=low.includes('expense')?'expense':(low.includes('cash')?'cash':(low.includes('event')?'event':'order'));
   let q=cloudQueue().filter(op=>!(op.entity===entity&&String(op.id)===String(id)));
   q.push({opId:(crypto.randomUUID?crypto.randomUUID():Date.now()+'-'+Math.random()),type,entity,id:String(id),at,data});
   setCloudQueue(q);
@@ -243,6 +243,7 @@ function bootstrapCloudQueue(){
   load().forEach(r=>{let k='order:'+r.id;if(!seen.has(k)){q.push({opId:'boot-o-'+r.id,type:'upsertOrder',entity:'order',id:String(r.id),at:r.actualizado||r.creado||nowISO(),data:r});seen.add(k)}});
   loadEvents().forEach(e=>{let k='event:'+e.id;if(!seen.has(k)){q.push({opId:'boot-e-'+e.id,type:'upsertEvent',entity:'event',id:String(e.id),at:e.actualizado||e.creado||nowISO(),data:e});seen.add(k)}});
   if(typeof loadCashClosings==='function')loadCashClosings().forEach(c=>{let k='cash:'+c.id;if(!seen.has(k)){q.push({opId:'boot-c-'+c.id,type:'upsertCash',entity:'cash',id:String(c.id),at:c.actualizado||c.creado||nowISO(),data:c});seen.add(k)}});
+  if(typeof window.loadExpenses==='function')window.loadExpenses().forEach(x=>{let k='expense:'+x.id;if(!seen.has(k)){q.push({opId:'boot-x-'+x.id,type:'upsertExpense',entity:'expense',id:String(x.id),at:x.actualizado||x.creado||nowISO(),data:x});seen.add(k)}});
   setCloudQueue(q);
 }
 function cloudAutoSyncSoon(){
@@ -268,7 +269,7 @@ function jsonpPull(url,token){
   });
 }
 function opReflected(op,state){
-  let rows=op.entity==='order'?(state.ordenes||[]):(op.entity==='cash'?(state.cierrescaja||[]):(state.cleriseventos||[]));
+  let rows=op.entity==='order'?(state.ordenes||[]):(op.entity==='cash'?(state.cierrescaja||[]):(op.entity==='expense'?(state.gastos||[]):(state.cleriseventos||[])));
   let hit=rows.find(x=>String(x.id)===String(op.id));
   if(op.type.startsWith('delete'))return !hit;
   if(!hit)return false;
@@ -279,10 +280,13 @@ function applyCloudState(state,pending=[]){
   let pendingOrders=new Set(pending.filter(x=>x.entity==='order').map(x=>String(x.id)));
   let pendingEvents=new Set(pending.filter(x=>x.entity==='event').map(x=>String(x.id)));
   let pendingCash=new Set(pending.filter(x=>x.entity==='cash').map(x=>String(x.id)));
+  let pendingExpenses=new Set(pending.filter(x=>x.entity==='expense').map(x=>String(x.id)));
   let deletedCash=new Set(pending.filter(x=>x.entity==='cash'&&x.type==='deleteCash').map(x=>String(x.id)));
+  let deletedExpenses=new Set(pending.filter(x=>x.entity==='expense'&&x.type==='deleteExpense').map(x=>String(x.id)));
   let remoteOrders=Array.isArray(state.ordenes)?ensureClientNumbers(state.ordenes.map(normalizeOrder)):[];
   let remoteEvents=Array.isArray(state.cleriseventos)?state.cleriseventos:[];
   let remoteCash=Array.isArray(state.cierrescaja)?state.cierrescaja:[];
+  let remoteExpenses=Array.isArray(state.gastos)?state.gastos:[];
   if(pendingOrders.size){
     let map=new Map(remoteOrders.map(r=>[String(r.id),r]));
     load().forEach(r=>{if(pendingOrders.has(String(r.id)))map.set(String(r.id),r)});
@@ -301,6 +305,15 @@ function applyCloudState(state,pending=[]){
       remoteCash=[...map.values()];
     }
     saveCashClosings(remoteCash);
+  }
+  if(typeof window.loadExpenses==='function'&&typeof window.saveExpenses==='function'&&Array.isArray(state.gastos)){
+    if(deletedExpenses.size)remoteExpenses=remoteExpenses.filter(x=>!deletedExpenses.has(String(x.id)));
+    if(pendingExpenses.size){
+      let map=new Map(remoteExpenses.map(x=>[String(x.id),x]));
+      window.loadExpenses().forEach(x=>{if(pendingExpenses.has(String(x.id))&&!deletedExpenses.has(String(x.id)))map.set(String(x.id),x)});
+      remoteExpenses=[...map.values()];
+    }
+    window.saveExpenses(remoteExpenses);
   }
   writeRowsKey(KEY_MIRROR,remoteOrders);writeRowsKey(KEY,remoteOrders);
   saveEvents(remoteEvents);
@@ -1552,23 +1565,29 @@ window.__nqnLegacyBoot=boot;
   }
 
   window.queueCloudOp=function(type,id,data=null,at=(typeof nowISO==='function'?nowISO():now())){
-    let low=String(type||'').toLowerCase(),entity=low.includes('operator')?'operator':(low.includes('cash')?'cash':(low.includes('event')?'event':'order'));
+    let low=String(type||'').toLowerCase(),entity=low.includes('expense')?'expense':(low.includes('operator')?'operator':(low.includes('cash')?'cash':(low.includes('event')?'event':'order')));
     let q=cloudQueue().filter(op=>!(op.entity===entity&&String(op.id)===String(id)));
     q.push({opId:uid('q'),type,entity,id:String(id),at,data});setCloudQueue(q);updateNetworkStatus();cloudAutoSyncSoon();
   };
   window.bootstrapCloudQueue=function(){
-    let s=getSettings();if(s.cloudEverSynced)return;let q=cloudQueue(),seen=new Set(q.map(x=>x.entity+':'+x.id));
-    load().forEach(r=>{let k='order:'+r.id;if(!seen.has(k)){q.push({opId:'boot-o-'+r.id,type:'upsertOrder',entity:'order',id:String(r.id),at:r.actualizado||r.creado||now(),data:r});seen.add(k)}});
-    loadEvents().forEach(r=>{let k='event:'+r.id;if(!seen.has(k)){q.push({opId:'boot-e-'+r.id,type:'upsertEvent',entity:'event',id:String(r.id),at:r.actualizado||r.creado||now(),data:r});seen.add(k)}});
-    window.loadCashClosings().forEach(r=>{let k='cash:'+r.id;if(!seen.has(k)){q.push({opId:'boot-c-'+r.id,type:'upsertCash',entity:'cash',id:String(r.id),at:r.actualizado||r.creado||now(),data:r});seen.add(k)}});
-    window.loadOperators().forEach(r=>{let k='operator:'+r.id;if(!seen.has(k)){q.push({opId:'boot-p-'+r.id,type:'upsertOperator',entity:'operator',id:String(r.id),at:r.actualizado||r.creado||now(),data:r});seen.add(k)}});
-    setCloudQueue(q);
+    let s=getSettings();let q=cloudQueue(),seen=new Set(q.map(x=>x.entity+':'+x.id));
+    const seedCore=!s.cloudEverSynced;
+    if(!seedCore&&s.expensesCloudSeeded)return;
+    if(seedCore){
+      load().forEach(r=>{let k='order:'+r.id;if(!seen.has(k)){q.push({opId:'boot-o-'+r.id,type:'upsertOrder',entity:'order',id:String(r.id),at:r.actualizado||r.creado||now(),data:r});seen.add(k)}});
+      loadEvents().forEach(r=>{let k='event:'+r.id;if(!seen.has(k)){q.push({opId:'boot-e-'+r.id,type:'upsertEvent',entity:'event',id:String(r.id),at:r.actualizado||r.creado||now(),data:r});seen.add(k)}});
+      window.loadCashClosings().forEach(r=>{let k='cash:'+r.id;if(!seen.has(k)){q.push({opId:'boot-c-'+r.id,type:'upsertCash',entity:'cash',id:String(r.id),at:r.actualizado||r.creado||now(),data:r});seen.add(k)}});
+      window.loadOperators().forEach(r=>{let k='operator:'+r.id;if(!seen.has(k)){q.push({opId:'boot-p-'+r.id,type:'upsertOperator',entity:'operator',id:String(r.id),at:r.actualizado||r.creado||now(),data:r});seen.add(k)}});
+    }
+    window.loadExpenses().forEach(r=>{let k='expense:'+r.id;if(!seen.has(k)){q.push({opId:'boot-x-'+r.id,type:'upsertExpense',entity:'expense',id:String(r.id),at:r.actualizado||r.creado||now(),data:r});seen.add(k)}});
+    s.expensesCloudSeeded=true;setSettings(s);setCloudQueue(q);
   };
   window.opReflected=function(op,state){
     let rows=null;
     if(op.entity==='order')rows=Array.isArray(state?.ordenes)?state.ordenes:null;
     else if(op.entity==='cash')rows=Array.isArray(state?.cierrescaja)?state.cierrescaja:null;
     else if(op.entity==='operator')rows=Array.isArray(state?.operadores)?state.operadores:null;
+    else if(op.entity==='expense')rows=Array.isArray(state?.gastos)?state.gastos:null;
     else if(op.entity==='event')rows=Array.isArray(state?.cleriseventos)?state.cleriseventos:null;
     if(!rows)return false;
     const hit=rows.find(x=>String(x.id)===String(op.id));
@@ -1582,6 +1601,8 @@ window.__nqnLegacyBoot=boot;
     const pEvents=new Set(pending.filter(x=>x.entity==='event').map(x=>String(x.id)));
     const pCash=new Set(pending.filter(x=>x.entity==='cash').map(x=>String(x.id)));
     const pOps=new Set(pending.filter(x=>x.entity==='operator').map(x=>String(x.id)));
+    const pExpenses=new Set(pending.filter(x=>x.entity==='expense').map(x=>String(x.id)));
+    const dExpenses=new Set(pending.filter(x=>x.entity==='expense'&&x.type==='deleteExpense').map(x=>String(x.id)));
     const dOrders=new Set(pending.filter(x=>x.entity==='order'&&x.type==='deleteOrder').map(x=>String(x.id)));
     const dEvents=new Set(pending.filter(x=>x.entity==='event'&&x.type==='deleteEvent').map(x=>String(x.id)));
     const dCash=new Set(pending.filter(x=>x.entity==='cash'&&x.type==='deleteCash').map(x=>String(x.id)));
@@ -1604,6 +1625,12 @@ window.__nqnLegacyBoot=boot;
       if(dCash.size)rc=rc.filter(x=>!dCash.has(String(x.id)));
       if(pCash.size){let map=new Map(rc.map(x=>[String(x.id),x]));window.loadCashClosings().forEach(x=>{if(pCash.has(String(x.id))&&!dCash.has(String(x.id)))map.set(String(x.id),x)});rc=[...map.values()]}
       window.saveCashClosings(rc);
+    }
+    if(Array.isArray(state?.gastos)){
+      let rx=state.gastos.map(normalizeExpense);
+      if(dExpenses.size)rx=rx.filter(x=>!dExpenses.has(String(x.id)));
+      if(pExpenses.size){let map=new Map(rx.map(x=>[String(x.id),x]));window.loadExpenses().forEach(x=>{if(pExpenses.has(String(x.id))&&!dExpenses.has(String(x.id)))map.set(String(x.id),x)});rx=[...map.values()]}
+      window.saveExpenses(rx);
     }
     if(Array.isArray(state?.operadores)){
       let rp=state.operadores.map(normalizeOperator);
@@ -1868,7 +1895,7 @@ window.__nqnLegacyBoot=boot;
       if(!linkedOrder){alert('Seleccioná una OT válida para este repuesto.');return}
     }
     const ts=now();let cash=window.loadCashClosings(),c=todaysCashForOperator(cash,op,fecha);if(!c){c=normalizeCashClosing({id:uid('caja'),fecha,operadorId:op.id,operador:op.nombre,efectivo:0,mercadoPago:0,tarjetas:0,notaCredito:0,gastos:0,observaciones:'',creado:ts,actualizado:ts});cash.push(c)}
-    const obj=normalizeExpense({id:uid('gasto'),fecha,operadorId:op.id,operador:op.nombre,monto,medioPago,categoria,observacion,cajaId:c.id,orderId:linkedOrder?.id||'',orderNumero:linkedOrder?.numero||0,orderCliente:linkedOrder?.cliente||'',orderEquipo:linkedOrder?((linkedOrder.tipo||'')+' '+(linkedOrder.marcaModelo||'')).trim():'',creado:ts,actualizado:ts});let expenses=window.loadExpenses();expenses.push(obj);window.saveExpenses(expenses);
+    const obj=normalizeExpense({id:uid('gasto'),fecha,operadorId:op.id,operador:op.nombre,monto,medioPago,categoria,observacion,cajaId:c.id,orderId:linkedOrder?.id||'',orderNumero:linkedOrder?.numero||0,orderCliente:linkedOrder?.cliente||'',orderEquipo:linkedOrder?((linkedOrder.tipo||'')+' '+(linkedOrder.marcaModelo||'')).trim():'',creado:ts,actualizado:ts});let expenses=window.loadExpenses();expenses.push(obj);window.saveExpenses(expenses);queueCloudOp('upsertExpense',obj.id,obj,obj.actualizado);
     c.gastos=Math.max(0,Number(c.gastos||0)+monto);c.actualizado=ts;const ci=cash.findIndex(x=>String(x.id)===String(c.id));if(ci>=0)cash[ci]=c;window.saveCashClosings(cash);queueCloudOp('upsertCash',c.id,c,c.actualizado);toast('Gasto guardado · '+m(monto));window.renderExpenses();
   };
   window.editExpense=function(id){
@@ -1880,12 +1907,12 @@ window.__nqnLegacyBoot=boot;
     const payRaw=prompt('Medio de pago: Efectivo o Mercado Pago',x.medioPago||'Efectivo');if(payRaw===null)return;
     const medioPago=EXPENSE_PAYMENTS.find(c=>c.toLowerCase()===String(payRaw).trim().toLowerCase());if(!medioPago){alert('Elegí Efectivo o Mercado Pago.');return}
     const obsRaw=prompt('Observación:',x.observacion||'');if(obsRaw===null)return;const observacion=String(obsRaw).trim();if(categoria==='Otro'&&!observacion){alert('En “Otro” la observación es obligatoria.');return}
-    const oldMonto=Number(x.monto||0),ts=now();x.monto=monto;x.categoria=categoria;x.medioPago=medioPago;x.observacion=observacion;x.actualizado=ts;window.saveExpenses(expenses);
+    const oldMonto=Number(x.monto||0),ts=now();x.monto=monto;x.categoria=categoria;x.medioPago=medioPago;x.observacion=observacion;x.actualizado=ts;window.saveExpenses(expenses);queueCloudOp('upsertExpense',x.id,x,x.actualizado);
     let cash=window.loadCashClosings(),c=cash.find(r=>String(r.id)===String(x.cajaId));if(!c)c=cash.find(r=>r.fecha===x.fecha&&operatorOwns(r,{id:x.operadorId,nombre:x.operador}));if(c){c.gastos=Math.max(0,Number(c.gastos||0)-oldMonto+monto);c.actualizado=ts;window.saveCashClosings(cash);queueCloudOp('upsertCash',c.id,c,c.actualizado)}
     toast('Gasto actualizado');window.renderExpenses();
   };
   window.deleteExpense=function(id){
-    const op=session();if(!op)return renderLoginOrSetup();let expenses=window.loadExpenses(),x=expenses.find(r=>String(r.id)===String(id));if(!x)return;if(!window.isAdmin()&&!operatorOwns(x,op)){toast('No podés eliminar un gasto de otro operador');return}if(!confirm('¿Eliminar este gasto de '+m(x.monto)+'?'))return;window.saveExpenses(expenses.filter(r=>String(r.id)!==String(id)));
+    const op=session();if(!op)return renderLoginOrSetup();let expenses=window.loadExpenses(),x=expenses.find(r=>String(r.id)===String(id));if(!x)return;if(!window.isAdmin()&&!operatorOwns(x,op)){toast('No podés eliminar un gasto de otro operador');return}if(!confirm('¿Eliminar este gasto de '+m(x.monto)+'?'))return;window.saveExpenses(expenses.filter(r=>String(r.id)!==String(id)));queueCloudOp('deleteExpense',x.id,null,now());
     let cash=window.loadCashClosings(),c=cash.find(r=>String(r.id)===String(x.cajaId));if(!c)c=cash.find(r=>r.fecha===x.fecha&&operatorOwns(r,{id:x.operadorId,nombre:x.operador}));if(c){c.gastos=Math.max(0,Number(c.gastos||0)-Number(x.monto||0));c.actualizado=now();window.saveCashClosings(cash);queueCloudOp('upsertCash',c.id,c,c.actualizado)}toast('Gasto eliminado');window.renderExpenses();
   };
   window.deleteCashSummary=function(id){if(!window.isAdmin()){toast('Solo el administrador puede eliminar cierres');return}const rows=window.loadCashClosings(),x=rows.find(r=>String(r.id)===String(id));if(!x)return;if(!confirm('¿Eliminar el cierre de '+dateLabel(x.fecha)+' de '+x.operador+'?'+((x.ajusteEfectivo||x.ajusteMP||x.ajusteTotal||x.ajusteGastos||x.ajusteNotas)?' También se eliminará el ajuste de saldos asociado a este cierre.':'') ))return;window.saveCashClosings(rows.filter(r=>String(r.id)!==String(id)));queueCloudOp('deleteCash',id,null,now());toast('Cierre eliminado');window.showCashSummary()};
@@ -1917,7 +1944,7 @@ window.__nqnLegacyBoot=boot;
     const f=document.getElementById('importFile')?.files?.[0];if(!f){alert('Elegí un archivo de copia primero.');return}const reader=new FileReader();reader.onload=()=>{try{const x=JSON.parse(reader.result),source=Array.isArray(x)?x:x.ordenes;if(!Array.isArray(source))throw new Error();if(!confirm('¿Reemplazar los datos actuales por esta copia?'))return;save(ensureClientNumbers(source.map(normalizeOrder)),'Antes de importar copia');if(Array.isArray(x.cleriseventos))saveEvents(x.cleriseventos);if(Array.isArray(x.cierrescaja))window.saveCashClosings(x.cierrescaja);if(Array.isArray(x.gastos))window.saveExpenses(x.gastos);if(Array.isArray(x.operadores))window.saveOperators(x.operadores);let s=getSettings();s.cloudEverSynced=false;setSettings(s);setCloudQueue([]);clearSession();toast('Copia restaurada');cloudAutoSyncSoon();renderLoginOrSetup()}catch(err){alert('El archivo no parece ser una copia válida de NQN Service.')}};reader.readAsText(f)
   };
   window.runHealthCheck=function(){
-    const problems=[];if(!storageSelfTest())problems.push('El navegador no permite almacenamiento local.');const primary=readRowsKey(KEY),mirror=readRowsKey(KEY_MIRROR);if(!validRows(primary))problems.push('La copia principal de órdenes no es válida.');if(!validRows(mirror))problems.push('La copia espejo de órdenes no es válida.');if(validRows(primary)&&validRows(mirror)&&primary.length!==mirror.length)problems.push('Principal y espejo de órdenes tienen distinta cantidad.');if(loadEventsKey(KEY_EVENTS).length!==loadEventsKey(KEY_EVENTS_MIRROR).length)problems.push('Las copias de Cleris no coinciden.');if(readArray(KEY_CASH).length!==readArray(KEY_CASH_MIRROR).length)problems.push('Las copias de caja no coinciden.');if(readArray(KEY_EXPENSES).length!==readArray(KEY_EXPENSES_MIRROR).length)problems.push('Las copias de gastos no coinciden.');if(readArray(KEY_STOCK).length!==readArray(KEY_STOCK_MIRROR).length)problems.push('Las copias de stock no coinciden.');if(readArray(KEY_OPERATORS).length!==readArray(KEY_OPERATORS_MIRROR).length)problems.push('Las copias de operadores no coinciden.');if(!activeAdmins(window.loadOperators()).length)problems.push('No hay administrador activo.');if(problems.length){alert('Revisión del sistema\n\n'+problems.join('\n'));return false}alert('Sistema OK.\n\nÓrdenes: '+load().length+'\nCleris: '+loadEvents().length+'\nCierres de caja: '+window.loadCashClosings().length+'\nGastos locales: '+window.loadExpenses().length+'\nStock local: '+window.loadStock().length+'\nOperadores: '+window.loadOperators().length+'\nAdministrador activo: OK\n\nNota: Gastos y Stock quedan guardados localmente en esta versión. Para sincronizarlos entre teléfono y PC también hay que revisar/actualizar Code.gs.');return true
+    const problems=[];if(!storageSelfTest())problems.push('El navegador no permite almacenamiento local.');const primary=readRowsKey(KEY),mirror=readRowsKey(KEY_MIRROR);if(!validRows(primary))problems.push('La copia principal de órdenes no es válida.');if(!validRows(mirror))problems.push('La copia espejo de órdenes no es válida.');if(validRows(primary)&&validRows(mirror)&&primary.length!==mirror.length)problems.push('Principal y espejo de órdenes tienen distinta cantidad.');if(loadEventsKey(KEY_EVENTS).length!==loadEventsKey(KEY_EVENTS_MIRROR).length)problems.push('Las copias de Cleris no coinciden.');if(readArray(KEY_CASH).length!==readArray(KEY_CASH_MIRROR).length)problems.push('Las copias de caja no coinciden.');if(readArray(KEY_EXPENSES).length!==readArray(KEY_EXPENSES_MIRROR).length)problems.push('Las copias de gastos no coinciden.');if(readArray(KEY_STOCK).length!==readArray(KEY_STOCK_MIRROR).length)problems.push('Las copias de stock no coinciden.');if(readArray(KEY_OPERATORS).length!==readArray(KEY_OPERATORS_MIRROR).length)problems.push('Las copias de operadores no coinciden.');if(!activeAdmins(window.loadOperators()).length)problems.push('No hay administrador activo.');if(problems.length){alert('Revisión del sistema\n\n'+problems.join('\n'));return false}alert('Sistema OK.\n\nÓrdenes: '+load().length+'\nCleris: '+loadEvents().length+'\nCierres de caja: '+window.loadCashClosings().length+'\nGastos locales: '+window.loadExpenses().length+'\nStock local: '+window.loadStock().length+'\nOperadores: '+window.loadOperators().length+'\nAdministrador activo: OK\n\nGastos: sincronización entre dispositivos habilitada mediante Google Drive. Stock continúa local en esta versión.');return true
   };
 
   window.secureBoot=async function(){
