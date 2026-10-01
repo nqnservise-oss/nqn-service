@@ -368,7 +368,8 @@
           <div id="zControlEstado" class="muted" style="margin:8px 0 18px">${controlGuardado.guardadoEn?('Último control guardado por '+e(controlGuardado.operador||'Sin registrar')):''}</div>
           <div class="eyebrow">TOTALES DEL DÍA</div>
           <div class="nqn-z-stats">
-            <div class="stat"><div class="statlabel">Efectivo</div><div class="statvalue smallmoney">${m(tot.efectivo)}</div></div>
+            <div class="stat"><div class="statlabel">Efectivo cobrado</div><div class="statvalue smallmoney">${m(tot.efectivo)}</div></div>
+            <div class="stat"><div class="statlabel">Efectivo real en caja</div><div class="statvalue smallmoney">${m(Number(tot.efectivo||0)-Number(tot.gastos||0))}</div></div>
             <div class="stat"><div class="statlabel">Mercado Pago</div><div class="statvalue smallmoney">${m(tot.mp)}</div></div>
             <div class="stat"><div class="statlabel">Débito</div><div class="statvalue smallmoney">${m(tot.debito)}</div></div>
             <div class="stat"><div class="statlabel">Crédito</div><div class="statvalue smallmoney">${m(tot.credito)}</div></div>
