@@ -283,6 +283,8 @@
     const ingresos=rows.filter(x=>x.tipo==='cobro').reduce((a,x)=>a+Number(x.monto||0),0);
     const egresos=Number(tot.gastos||0)+Number(tot.notas||0);
     const neto=ingresos-egresos;
+    const gastosEfectivo=rows.filter(x=>x.tipo==='gasto' && String(x.medio||'').toLowerCase()==='efectivo').reduce((a,x)=>a+Number(x.monto||0),0);
+    const efectivoEsperado=Number(tot.efectivo||0)-gastosEfectivo;
 
     const cierres=safeArray(()=>typeof window.loadCashClosings==='function'?window.loadCashClosings():[])
       .filter(x=>String(x.fecha||'')===fecha);
@@ -358,9 +360,9 @@
         <div class="nqn-z-totals">
           <div class="eyebrow">CONTROL DE CAJA</div>
           <div class="grid" style="grid-template-columns:repeat(2,minmax(180px,260px));margin:10px 0 10px">
-            <div class="stat"><div class="statlabel">Según sistema</div><div class="statvalue smallmoney">${m(tot.efectivo)}</div></div>
+            <div class="stat"><div class="statlabel">Según sistema</div><div class="statvalue smallmoney">${m(efectivoEsperado)}</div></div>
             <div class="field"><label>Efectivo contado</label><input id="zEfectivoContado" type="number" min="0" step="0.01" value="${controlGuardado.efectivoContado??''}" placeholder="Contá los billetes de caja"></div>
-            <div class="stat"><div class="statlabel">Diferencia</div><div id="zDiferenciaEfectivo" class="statvalue smallmoney">${controlGuardado.efectivoContado!=null?m(Number(controlGuardado.efectivoContado)-Number(tot.efectivo||0)):'—'}</div></div>
+            <div class="stat"><div class="statlabel">Diferencia</div><div id="zDiferenciaEfectivo" class="statvalue smallmoney">${controlGuardado.efectivoContado!=null?m(Number(controlGuardado.efectivoContado)-efectivoEsperado):'—'}</div></div>
           </div>
           <button id="zGuardarControl" class="primary" type="button">Comprobar y guardar caja</button>
           <div id="zControlEstado" class="muted" style="margin:8px 0 18px">${controlGuardado.guardadoEn?('Último control guardado por '+e(controlGuardado.operador||'Sin registrar')):''}</div>
@@ -388,7 +390,7 @@
     if(contado && diferencia){
       contado.addEventListener('input',()=>{
         if(contado.value===''){ diferencia.textContent='—'; return; }
-        const dif=Number(contado.value||0)-Number(tot.efectivo||0);
+        const dif=Number(contado.value||0)-efectivoEsperado;
         diferencia.textContent=m(dif);
       });
     }
@@ -400,9 +402,9 @@
         const activo=currentOperator();
         const control={
           fecha,
-          efectivoSistema:Number(tot.efectivo||0),
+          efectivoSistema:efectivoEsperado,
           efectivoContado:Number(contado.value||0),
-          diferencia:Number(contado.value||0)-Number(tot.efectivo||0),
+          diferencia:Number(contado.value||0)-efectivoEsperado,
           operador:String(activo?.nombre||activo?.usuario||'Sin registrar'),
           operadorId:String(activo?.id||''),
           guardadoEn:new Date().toISOString()
