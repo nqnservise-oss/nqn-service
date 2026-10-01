@@ -318,11 +318,17 @@
         .nqn-z-cobro{background:#eef8f2}.nqn-z-gasto{background:#fff3f3}.nqn-z-nota{background:#fff8e8}
         .nqn-z-detail{min-width:0}.nqn-z-amount{text-align:right}
         .nqn-z-totals{margin-top:22px}
-        .nqn-z-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:10px}
+        .nqn-z-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-top:10px}
+        .nqn-z-stats .stat{min-width:0;overflow:hidden}
+        .nqn-z-stats .statvalue{font-size:clamp(18px,2.2vw,28px);line-height:1.1;overflow-wrap:anywhere;word-break:break-word;max-width:100%}
+        .nqn-z-stats .smallmoney{font-size:clamp(17px,2vw,25px)}
         @media(max-width:760px){
           .nqn-z-columns{display:none}
           .nqn-z-row{grid-template-columns:54px 30px minmax(0,1fr);gap:8px}
           .nqn-z-medium{grid-column:3}.nqn-z-amount{grid-column:3;text-align:left;font-size:18px}
+          .nqn-z-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+          .nqn-z-stats .stat{padding:12px 10px}
+          .nqn-z-stats .statvalue,.nqn-z-stats .smallmoney{font-size:clamp(15px,5vw,21px)}
         }
       </style>
       <section class="panel nqn-z-wrap" style="margin-top:0">
