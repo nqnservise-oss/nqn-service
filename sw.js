@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nqn-service-v935-cierrez-control';
+const CACHE_NAME = 'nqn-service-v935-cierrez-gastos';
 const APP_SHELL = [
   './',
   './index.html',
