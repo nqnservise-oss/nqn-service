@@ -277,6 +277,9 @@
     fecha=String(fecha || document.getElementById('zFecha')?.value || localDay());
     const rows=movements(fecha), tot=totals(rows);
     const ops=[...new Set(rows.map(x=>x.operador).filter(x=>x && x!=='Sin registrar'))];
+    const ingresos=rows.filter(x=>x.tipo==='cobro').reduce((a,x)=>a+Number(x.monto||0),0);
+    const egresos=Number(tot.gastos||0)+Number(tot.notas||0);
+    const neto=ingresos-egresos;
 
     const cierres=safeArray(()=>typeof window.loadCashClosings==='function'?window.loadCashClosings():[])
       .filter(x=>String(x.fecha||'')===fecha);
@@ -328,6 +331,7 @@
             <div class="eyebrow">INFORME DIARIO</div>
             <h3 style="margin-bottom:4px">CIERRE Z — ${e(dateLabel(fecha))}</h3>
             <div class="muted">Operadores: ${e(ops.length?ops.join(', '):'Sin movimientos')} · Hora de cierre: ${e(cierreHora)}</div>
+            <div class="muted" style="margin-top:4px">Este informe detalla los movimientos del día. No modifica ni reemplaza el Resumen de caja.</div>
           </div>
           <div class="field short" style="margin:0">
             <label>Fecha</label>
@@ -351,6 +355,8 @@
             <div class="stat"><div class="statlabel">Crédito</div><div class="statvalue smallmoney">${m(tot.credito)}</div></div>
             <div class="stat"><div class="statlabel">Gastos</div><div class="statvalue smallmoney">${m(tot.gastos)}</div></div>
             <div class="stat"><div class="statlabel">Notas de crédito</div><div class="statvalue smallmoney">${m(tot.notas)}</div></div>
+            <div class="stat soft"><div class="statlabel">Total ingresos</div><div class="statvalue smallmoney">${m(ingresos)}</div></div>
+            <div class="stat soft"><div class="statlabel">Neto del día</div><div class="statvalue smallmoney">${m(neto)}</div></div>
           </div>
           ${tot.tarjetaLegacy>0
             ? `<div class="alert amber" style="margin-top:14px"><strong>Tarjetas anteriores sin distinguir débito/crédito: ${m(tot.tarjetaLegacy)}</strong><span>Los cobros nuevos permiten elegir Débito o Crédito por separado. Los registros viejos quedan identificados sin inventar una categoría.</span></div>`
