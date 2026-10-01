@@ -350,7 +350,9 @@
           <div class="eyebrow">CONTROL DE EFECTIVO</div>
           <div class="grid" style="grid-template-columns:repeat(2,minmax(180px,260px));margin:10px 0 18px">
             <div class="field"><label>Efectivo contado</label><input id="zEfectivoContado" type="number" min="0" step="0.01" placeholder="Ingresá el efectivo que tenés"></div>
-            <div class="stat"><div class="statlabel">Diferencia contra sistema</div><div id="zDiferenciaEfectivo" class="statvalue smallmoney">—</div></div>
+            <div class="stat"><div class="statlabel">Diferencia efectivo</div><div id="zDiferenciaEfectivo" class="statvalue smallmoney">—</div></div>
+            <div class="field"><label>Saldo real Mercado Pago</label><input id="zMercadoPagoReal" type="number" min="0" step="0.01" placeholder="Ingresá el saldo que ves en Mercado Pago"></div>
+            <div class="stat"><div class="statlabel">Diferencia Mercado Pago</div><div id="zDiferenciaMP" class="statvalue smallmoney">—</div></div>
           </div>
           <div class="eyebrow">TOTALES DEL DÍA</div>
           <div class="nqn-z-stats">
@@ -378,6 +380,15 @@
         if(contado.value===''){ diferencia.textContent='—'; return; }
         const dif=Number(contado.value||0)-Number(tot.efectivo||0);
         diferencia.textContent=m(dif);
+      });
+    }
+    const mpReal=document.getElementById('zMercadoPagoReal');
+    const mpDif=document.getElementById('zDiferenciaMP');
+    if(mpReal && mpDif){
+      mpReal.addEventListener('input',()=>{
+        if(mpReal.value===''){ mpDif.textContent='—'; return; }
+        const dif=Number(mpReal.value||0)-Number(tot.mp||0);
+        mpDif.textContent=m(dif);
       });
     }
   }
