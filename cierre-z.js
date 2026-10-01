@@ -347,6 +347,11 @@
         </div>
 
         <div class="nqn-z-totals">
+          <div class="eyebrow">CONTROL DE EFECTIVO</div>
+          <div class="grid" style="grid-template-columns:repeat(2,minmax(180px,260px));margin:10px 0 18px">
+            <div class="field"><label>Efectivo contado</label><input id="zEfectivoContado" type="number" min="0" step="0.01" placeholder="Ingresá el efectivo que tenés"></div>
+            <div class="stat"><div class="statlabel">Diferencia contra sistema</div><div id="zDiferenciaEfectivo" class="statvalue smallmoney">—</div></div>
+          </div>
           <div class="eyebrow">TOTALES DEL DÍA</div>
           <div class="nqn-z-stats">
             <div class="stat"><div class="statlabel">Efectivo</div><div class="statvalue smallmoney">${m(tot.efectivo)}</div></div>
@@ -366,6 +371,15 @@
 
     const input=document.getElementById('zFecha');
     if(input) input.addEventListener('change',()=>render(input.value));
+    const contado=document.getElementById('zEfectivoContado');
+    const diferencia=document.getElementById('zDiferenciaEfectivo');
+    if(contado && diferencia){
+      contado.addEventListener('input',()=>{
+        if(contado.value===''){ diferencia.textContent='—'; return; }
+        const dif=Number(contado.value||0)-Number(tot.efectivo||0);
+        diferencia.textContent=m(dif);
+      });
+    }
   }
 
   function ensureNavButton(){
