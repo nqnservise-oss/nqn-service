@@ -323,7 +323,7 @@
         .nqn-z-cobro{background:#eef8f2}.nqn-z-gasto{background:#fff3f3}.nqn-z-nota{background:#fff8e8}
         .nqn-z-detail{min-width:0}.nqn-z-amount{text-align:right}
         .nqn-z-totals{margin-top:22px}
-        .nqn-z-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-top:10px}
+        .nqn-z-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:10px}
         .nqn-z-stats .stat{min-width:0;overflow:hidden}
         .nqn-z-stats .statvalue{font-size:clamp(18px,2.2vw,28px);line-height:1.1;overflow-wrap:anywhere;word-break:break-word;max-width:100%}
         .nqn-z-stats .smallmoney{font-size:clamp(17px,2vw,25px)}
