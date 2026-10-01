@@ -276,6 +276,9 @@
 
     fecha=String(fecha || document.getElementById('zFecha')?.value || localDay());
     const rows=movements(fecha), tot=totals(rows);
+    const controlKey='nqn_cierre_z_control_'+fecha;
+    let controlGuardado={};
+    try{ controlGuardado=JSON.parse(localStorage.getItem(controlKey)||'{}')||{}; }catch(_){}
     const ops=[...new Set(rows.map(x=>x.operador).filter(x=>x && x!=='Sin registrar'))];
     const ingresos=rows.filter(x=>x.tipo==='cobro').reduce((a,x)=>a+Number(x.monto||0),0);
     const egresos=Number(tot.gastos||0)+Number(tot.notas||0);
@@ -353,13 +356,14 @@
         </div>
 
         <div class="nqn-z-totals">
-          <div class="eyebrow">CONTROL DE EFECTIVO</div>
-          <div class="grid" style="grid-template-columns:repeat(2,minmax(180px,260px));margin:10px 0 18px">
-            <div class="field"><label>Efectivo contado</label><input id="zEfectivoContado" type="number" min="0" step="0.01" placeholder="Ingresá el efectivo que tenés"></div>
-            <div class="stat"><div class="statlabel">Diferencia efectivo</div><div id="zDiferenciaEfectivo" class="statvalue smallmoney">—</div></div>
-            <div class="field"><label>Saldo real Mercado Pago</label><input id="zMercadoPagoReal" type="number" min="0" step="0.01" placeholder="Ingresá el saldo que ves en Mercado Pago"></div>
-            <div class="stat"><div class="statlabel">Diferencia Mercado Pago</div><div id="zDiferenciaMP" class="statvalue smallmoney">—</div></div>
+          <div class="eyebrow">CONTROL DE CAJA</div>
+          <div class="grid" style="grid-template-columns:repeat(2,minmax(180px,260px));margin:10px 0 10px">
+            <div class="stat"><div class="statlabel">Según sistema</div><div class="statvalue smallmoney">${m(tot.efectivo)}</div></div>
+            <div class="field"><label>Efectivo contado</label><input id="zEfectivoContado" type="number" min="0" step="0.01" value="${controlGuardado.efectivoContado??''}" placeholder="Contá los billetes de caja"></div>
+            <div class="stat"><div class="statlabel">Diferencia</div><div id="zDiferenciaEfectivo" class="statvalue smallmoney">${controlGuardado.efectivoContado!=null?m(Number(controlGuardado.efectivoContado)-Number(tot.efectivo||0)):'—'}</div></div>
           </div>
+          <button id="zGuardarControl" class="primary" type="button">Comprobar y guardar caja</button>
+          <div id="zControlEstado" class="muted" style="margin:8px 0 18px">${controlGuardado.guardadoEn?('Último control guardado por '+e(controlGuardado.operador||'Sin registrar')):''}</div>
           <div class="eyebrow">TOTALES DEL DÍA</div>
           <div class="nqn-z-stats">
             <div class="stat"><div class="statlabel">Efectivo</div><div class="statvalue smallmoney">${m(tot.efectivo)}</div></div>
@@ -388,13 +392,23 @@
         diferencia.textContent=m(dif);
       });
     }
-    const mpReal=document.getElementById('zMercadoPagoReal');
-    const mpDif=document.getElementById('zDiferenciaMP');
-    if(mpReal && mpDif){
-      mpReal.addEventListener('input',()=>{
-        if(mpReal.value===''){ mpDif.textContent='—'; return; }
-        const dif=Number(mpReal.value||0)-Number(tot.mp||0);
-        mpDif.textContent=m(dif);
+    const guardar=document.getElementById('zGuardarControl');
+    const estado=document.getElementById('zControlEstado');
+    if(guardar && contado){
+      guardar.addEventListener('click',()=>{
+        if(contado.value===''){ if(estado) estado.textContent='Ingresá primero el efectivo contado.'; return; }
+        const activo=currentOperator();
+        const control={
+          fecha,
+          efectivoSistema:Number(tot.efectivo||0),
+          efectivoContado:Number(contado.value||0),
+          diferencia:Number(contado.value||0)-Number(tot.efectivo||0),
+          operador:String(activo?.nombre||activo?.usuario||'Sin registrar'),
+          operadorId:String(activo?.id||''),
+          guardadoEn:new Date().toISOString()
+        };
+        try{ localStorage.setItem(controlKey,JSON.stringify(control)); }catch(_){}
+        if(estado) estado.textContent='Control guardado · '+control.operador+' · diferencia '+m(control.diferencia);
       });
     }
   }
