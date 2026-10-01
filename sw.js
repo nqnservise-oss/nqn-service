@@ -1,10 +1,11 @@
-const CACHE_NAME = 'nqn-service-v934-turnos-visitas';
+const CACHE_NAME = 'nqn-service-v935-cierrez-control';
 const APP_SHELL = [
   './',
   './index.html',
   './NQN_SERVICE_ESTABLE.html',
   './manifest.webmanifest',
   './turnos.js',
+  './cierre-z.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-maskable-512.png'
