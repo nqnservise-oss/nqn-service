@@ -137,7 +137,7 @@ input,select,textarea{font-size:16px;line-height:1.4}
 <body>
 <div class="shell">
   <aside class="sidebar">
-    <div class="brand"><div class="brandmark">NQN</div><div><div class="brandname">NQN Service</div><div class="brandsub">Gestión técnica · V9.35 permisos de caja</div></div></div>
+    <div class="brand"><div class="brandmark">NQN</div><div><div class="brandname">NQN Service</div><div class="brandsub">Gestión técnica · V9.36 transferencias sincronizadas</div></div></div>
     <div class="nav">
       <button id="nav-dashboard" class="active" onclick="showView('dashboard')">⌂ Dashboard</button>
       <button id="nav-nuevo" onclick="newOrder()">＋ Nuevo ingreso</button>
@@ -238,8 +238,13 @@ function queueCloudOp(type,id,data=null,at=nowISO()){
 }
 function bootstrapCloudQueue(){
   let s=getSettings();
-  if(s.cloudEverSynced)return;
   let q=cloudQueue(),seen=new Set(q.map(x=>x.entity+':'+x.id));
+  if(!s.cloudTransfersBootstrappedV1){
+    let transfers=[];try{transfers=JSON.parse(localStorage.getItem('nqn_service_cash_transfers_v1')||'[]')||[]}catch(e){transfers=[]}
+    if(Array.isArray(transfers))transfers.forEach(t=>{let k='cash:'+t.id;if(t&&t.id&&!seen.has(k)){const data={...t,tipo:'transferencia',actualizado:t.actualizado||t.creado||nowISO()};q.push({opId:'boot-t-'+t.id,type:'upsertCash',entity:'cash',id:String(t.id),at:data.actualizado||data.creado||nowISO(),data});seen.add(k)}});
+    s.cloudTransfersBootstrappedV1=true;setSettings(s);
+  }
+  if(s.cloudEverSynced){setCloudQueue(q);return}
   load().forEach(r=>{let k='order:'+r.id;if(!seen.has(k)){q.push({opId:'boot-o-'+r.id,type:'upsertOrder',entity:'order',id:String(r.id),at:r.actualizado||r.creado||nowISO(),data:r});seen.add(k)}});
   loadEvents().forEach(e=>{let k='event:'+e.id;if(!seen.has(k)){q.push({opId:'boot-e-'+e.id,type:'upsertEvent',entity:'event',id:String(e.id),at:e.actualizado||e.creado||nowISO(),data:e});seen.add(k)}});
   if(typeof loadCashClosings==='function')loadCashClosings().forEach(c=>{let k='cash:'+c.id;if(!seen.has(k)){q.push({opId:'boot-c-'+c.id,type:'upsertCash',entity:'cash',id:String(c.id),at:c.actualizado||c.creado||nowISO(),data:c});seen.add(k)}});
@@ -279,13 +284,16 @@ function opReflected(op,state){
 function applyCloudState(state,pending=[]){
   let pendingOrders=new Set(pending.filter(x=>x.entity==='order').map(x=>String(x.id)));
   let pendingEvents=new Set(pending.filter(x=>x.entity==='event').map(x=>String(x.id)));
-  let pendingCash=new Set(pending.filter(x=>x.entity==='cash').map(x=>String(x.id)));
+  let pendingCash=new Set(pending.filter(x=>x.entity==='cash'&&x.data?.tipo!=='transferencia').map(x=>String(x.id)));
+  let pendingTransfers=new Set(pending.filter(x=>x.entity==='cash'&&x.data?.tipo==='transferencia').map(x=>String(x.id)));
   let pendingExpenses=new Set(pending.filter(x=>x.entity==='expense').map(x=>String(x.id)));
-  let deletedCash=new Set(pending.filter(x=>x.entity==='cash'&&x.type==='deleteCash').map(x=>String(x.id)));
+  let deletedCash=new Set(pending.filter(x=>x.entity==='cash'&&x.type==='deleteCash'&&x.data?.tipo!=='transferencia').map(x=>String(x.id)));
   let deletedExpenses=new Set(pending.filter(x=>x.entity==='expense'&&x.type==='deleteExpense').map(x=>String(x.id)));
   let remoteOrders=Array.isArray(state.ordenes)?ensureClientNumbers(state.ordenes.map(normalizeOrder)):[];
   let remoteEvents=Array.isArray(state.cleriseventos)?state.cleriseventos:[];
-  let remoteCash=Array.isArray(state.cierrescaja)?state.cierrescaja:[];
+  let remoteCashAll=Array.isArray(state.cierrescaja)?state.cierrescaja:[];
+  let remoteTransfers=remoteCashAll.filter(x=>x&&x.tipo==='transferencia');
+  let remoteCash=remoteCashAll.filter(x=>!x||x.tipo!=='transferencia');
   let remoteExpenses=Array.isArray(state.gastos)?state.gastos:[];
   if(pendingOrders.size){
     let map=new Map(remoteOrders.map(r=>[String(r.id),r]));
@@ -306,6 +314,13 @@ function applyCloudState(state,pending=[]){
     }
     saveCashClosings(remoteCash);
   }
+  if(pendingTransfers.size){
+    let map=new Map(remoteTransfers.map(t=>[String(t.id),t])),local=[];
+    try{local=JSON.parse(localStorage.getItem('nqn_service_cash_transfers_v1')||'[]')||[]}catch(e){local=[]}
+    if(Array.isArray(local))local.forEach(t=>{if(pendingTransfers.has(String(t.id)))map.set(String(t.id),{...t,tipo:'transferencia'})});
+    remoteTransfers=[...map.values()];
+  }
+  try{localStorage.setItem('nqn_service_cash_transfers_v1',JSON.stringify(remoteTransfers))}catch(e){}
   if(typeof window.loadExpenses==='function'&&typeof window.saveExpenses==='function'&&Array.isArray(state.gastos)){
     if(deletedExpenses.size)remoteExpenses=remoteExpenses.filter(x=>!deletedExpenses.has(String(x.id)));
     if(pendingExpenses.size){
@@ -1497,7 +1512,7 @@ window.__nqnLegacyBoot=boot;
   }
   function updateAuthBar(){
     const el=document.getElementById('authStatus');if(!el)return;const op=session();
-    if(!op){el.innerHTML='<span class="badge">V9.35 permisos de caja</span>';return}
+    if(!op){el.innerHTML='<span class="badge">V9.36 transferencias sincronizadas</span>';return}
     el.innerHTML=`<button class="btn secondary small" type="button" onclick="logoutOperator()">👤 ${e(op.nombre)} · Salir</button>`;
   }
   function applyRoleNav(){
@@ -1754,9 +1769,10 @@ window.__nqnLegacyBoot=boot;
     document.querySelector('#view .panel')?.appendChild(panel);document.getElementById('transferMonto')?.focus();
   };
   window.guardarTransferenciaCaja=function(){
-    const op=session();if(!op)return;const origen=cashValue('transferOrigen'),destino=cashValue('transferDestino'),monto=parseMoneyAR(cashValue('transferMonto')),observacion=String(cashValue('transferObs')||'').trim();
+    const op=session();if(!op)return;const origen=cashValue('transferOrigen'),destino=cashValue('transferDestino'),monto=parseMoneyAR(cashValue('transferMonto')),observacion=String(cashValue('transferObs')||'').trim(),fecha=cashValue('cashFecha')||localDay();
     if(origen===destino){alert('Origen y destino deben ser distintos.');return}if(!Number.isFinite(monto)||monto<=0){alert('Ingresá un monto válido.');return}
-    const rows=readArray(KEY_TRANSFERS),ts=now(),obj={id:uid('transferencia'),fecha:localDay(),origen,destino,monto,observacion,operadorId:op.id,operador:op.nombre,creado:ts};rows.push(obj);localStorage.setItem(KEY_TRANSFERS,JSON.stringify(rows));
+    const rows=readArray(KEY_TRANSFERS),ts=now(),obj={id:uid('transferencia'),tipo:'transferencia',fecha,origen,destino,monto,observacion,operadorId:op.id,operador:op.nombre,creado:ts,actualizado:ts};rows.push(obj);localStorage.setItem(KEY_TRANSFERS,JSON.stringify(rows));
+    if(typeof queueCloudOp==='function')queueCloudOp('upsertCash',obj.id,obj,ts);
     toast('Transferencia registrada · '+m(monto));window.showCashSummary();
   };
   window.ajustarSaldosCaja=function(){
