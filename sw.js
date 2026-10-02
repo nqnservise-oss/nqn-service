@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nqn-service-v935-transferencias';
+const CACHE_NAME = 'nqn-service-v936-transfer-sync';
 const APP_SHELL = [
   './',
   './index.html',
