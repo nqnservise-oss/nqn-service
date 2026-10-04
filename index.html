@@ -1095,18 +1095,26 @@ function renderKPIs(){
   const prevTitle=prevName.charAt(0).toUpperCase()+prevName.slice(1);
 
   const factByMonth=(key)=>rows.filter(r=>r.estado==='Entregado'&&monthKey(r.fechaEntrega)===key).reduce((a,r)=>a+Number(r.monto||0),0);
-  const prevFact=factByMonth(prevKey);
-  const variation=prevFact?((facturacion-prevFact)/prevFact)*100:0;
 
+  // Comparativo acumulado: para el mes actual, comparar solo hasta el día de hoy.
+  // Así no se extiende la línea hacia días futuros ni se compara un mes parcial contra el mes anterior completo.
+  const isCurrentMonth=mk===currentMonthKey();
+  const todayDate=new Date(hoy+'T12:00:00');
+  const compareDays=isCurrentMonth?Math.min(todayDate.getDate(),ultimo):ultimo;
   let curCum=[],prevCum=[],c1=0,c2=0;
   const prevY=prevDate.getFullYear(),prevM=prevDate.getMonth()+1;
-  for(let d=1;d<=ultimo;d++){
+  const prevLastDay=new Date(prevY,prevM,0).getDate();
+  const daysToCompare=Math.min(compareDays,prevLastDay);
+  for(let d=1;d<=daysToCompare;d++){
     const k=`${yy}-${String(mm).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     c1+=factPorDia[k]||0;curCum.push(c1);
     const pk=`${prevY}-${String(prevM).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const pday=rows.filter(r=>r.estado==='Entregado'&&r.fechaEntrega===pk).reduce((a,r)=>a+Number(r.monto||0),0);
     c2+=pday;prevCum.push(c2);
   }
+  const curPeriodFact=curCum.length?curCum[curCum.length-1]:0;
+  const prevPeriodFact=prevCum.length?prevCum[prevCum.length-1]:0;
+  const variation=prevPeriodFact?((curPeriodFact-prevPeriodFact)/prevPeriodFact)*100:0;
 
   const meses=Array.from({length:7},(_,i)=>shiftKey(mk,i-6));
   const evolucion=meses.map(k=>({key:k,value:factByMonth(k)}));
@@ -1166,7 +1174,7 @@ function renderKPIs(){
           ${prevCum.map((v,i)=>i%3===0?`<circle cx="${cmp.x(i)}" cy="${cmp.y(v)}" r="3.5" fill="#9fbfe8"/>`:'').join('')}
           ${curCum.map((v,i)=>i%2===0?`<text x="${cmp.x(i)}" y="${cmp.H-12}" text-anchor="middle" font-size="10" fill="#547395">${i+1}</text>`:'').join('')}
         </svg></div>
-        <div style="text-align:right;margin-top:-6px"><span class="badge ${variation<0?'red':'green'}" style="font-size:18px">${variation>=0?'+':''}${variation.toLocaleString('es-AR',{maximumFractionDigits:1})}%</span><div class="kpi-note">vs. mismo período de ${prevTitle}</div></div>
+        <div style="text-align:right;margin-top:-6px"><span class="badge ${variation<0?'red':'green'}" style="font-size:18px">${variation>=0?'+':''}${variation.toLocaleString('es-AR',{maximumFractionDigits:1})}%</span><div class="kpi-note">vs. mismo período de ${prevTitle} · hasta el día ${daysToCompare}</div></div>
       </div>
 
       <div class="kpi-box">
