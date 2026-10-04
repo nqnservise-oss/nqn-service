@@ -990,12 +990,21 @@ function showClientOrders(phone,clientNumber){let rows=load().filter(r=>(phone&&
 
 function renderKPIs(){
   title('KPIs del taller');setNav('kpis');let rows=load(),mk=currentMonthKey();
-  let ingresos=rows.filter(r=>monthKey(r.fechaIngreso)===mk),entregados=rows.filter(r=>r.estado==='Entregado'&&monthKey(r.fechaEntrega)===mk);
-  let fact=entregados.reduce((a,r)=>a+Number(r.monto||0),0),ticket=entregados.length?fact/entregados.length:0;
-  let avgDays=entregados.length?entregados.reduce((a,r)=>a+daysInShop(r),0)/entregados.length:0,cobrar=rows.reduce((a,r)=>a+balance(r),0);
-  let counts={};ingresos.forEach(r=>{let b=brandOf(r);counts[b]=(counts[b]||0)+1});let ranking=Object.entries(counts).sort((a,b)=>b[1]-a[1]),max=ranking.length?ranking[0][1]:1;
 
-  const META_DIARIA=500000, CERCA_META=400000;
+  const META_DIARIA=500000, META_MENSUAL=10000000, CERCA_META=400000;
+  const ingresos=rows.filter(r=>monthKey(r.fechaIngreso)===mk);
+  const entregados=rows.filter(r=>r.estado==='Entregado'&&monthKey(r.fechaEntrega)===mk);
+  const facturacion=entregados.reduce((a,r)=>a+Number(r.monto||0),0);
+  const costosRepuestos=entregados.reduce((a,r)=>a+(Array.isArray(r.repuestosUsados)?r.repuestosUsados.reduce((s,x)=>s+Number(x.cantidad||1)*Number(x.costoUnitario||0),0):0),0);
+  const gastosMes=(typeof window.loadExpenses==='function'?window.loadExpenses():[])
+    .filter(x=>String(x.fecha||'').slice(0,7)===mk&&String(x.categoria||'')!=='Repuestos')
+    .reduce((a,x)=>a+Math.max(0,Number(x.monto||0)),0);
+  const resultadoNeto=facturacion-costosRepuestos-gastosMes;
+  const cobrar=rows.reduce((a,r)=>a+balance(r),0);
+
+  let counts={};ingresos.forEach(r=>{let b=brandOf(r);counts[b]=(counts[b]||0)+1});
+  let ranking=Object.entries(counts).sort((a,b)=>b[1]-a[1]),max=ranking.length?ranking[0][1]:1;
+
   const hoy=localISODate(), [yy,mm]=mk.split('-').map(Number), ultimo=new Date(yy,mm,0).getDate();
   let factPorDia={};
   entregados.forEach(r=>{if(r.fechaEntrega)factPorDia[r.fechaEntrega]=(factPorDia[r.fechaEntrega]||0)+Number(r.monto||0)});
@@ -1007,17 +1016,69 @@ function renderKPIs(){
     const futuro=fecha>hoy, monto=factPorDia[fecha]||0;
     dias.push({fecha,dt,monto,futuro});
   }
-  const transcurridos=dias.filter(x=>!x.futuro), conFact=transcurridos.filter(x=>x.monto>0).length, enCero=transcurridos.filter(x=>x.monto===0).length;
-  const promedio=transcurridos.length?transcurridos.reduce((a,x)=>a+x.monto,0)/transcurridos.length:0;
+  const transcurridos=dias.filter(x=>!x.futuro);
+  const conFact=transcurridos.filter(x=>x.monto>0).length;
+  const enCero=transcurridos.filter(x=>x.monto===0).length;
   const diaClase=x=>x.futuro?'':(x.monto>=META_DIARIA?'green':x.monto>=CERCA_META?'warn':'bad');
   const diaEstado=x=>x.futuro?'Pendiente':(x.monto>=META_DIARIA?'Meta cumplida':x.monto>=CERCA_META?'Cerca de la meta':x.monto===0?'Sin facturación':'Debajo de la meta');
 
-  document.getElementById('view').innerHTML=`<section class="panel" style="margin-top:0"><div class="panelhead"><div><div class="eyebrow">MES ACTUAL</div><h3>Indicadores que sí sirven</h3></div><span class="badge">${mk}</span></div><div class="kpigrid"><div class="stat soft"><div class="statlabel">Facturación taller</div><div class="statvalue smallmoney">${money(fact)}</div><div class="stathelp">Órdenes entregadas este mes</div></div><div class="stat"><div class="statlabel">Ticket promedio</div><div class="statvalue smallmoney">${money(ticket)}</div><div class="stathelp">Sobre órdenes entregadas</div></div><div class="stat"><div class="statlabel">Ingresos</div><div class="statvalue">${ingresos.length}</div><div class="stathelp">Equipos ingresados este mes</div></div><div class="stat"><div class="statlabel">Entregados</div><div class="statvalue">${entregados.length}</div><div class="stathelp">Equipos cerrados este mes</div></div><div class="stat"><div class="statlabel">Días promedio</div><div class="statvalue">${avgDays.toFixed(1)}</div><div class="stathelp">Ingreso a entrega</div></div><div class="stat ${cobrar?'warn':''}"><div class="statlabel">Por cobrar</div><div class="statvalue smallmoney">${money(cobrar)}</div><div class="stathelp">Saldo abierto total</div></div></div></section>
-  <section class="panel"><div class="panelhead"><div><div class="eyebrow">FACTURACIÓN DIARIA</div><h3>Días hábiles del mes</h3></div><span class="badge">Meta ${money(META_DIARIA)} / día</span></div>
-    <div class="kpigrid" style="margin-bottom:18px"><div class="stat"><div class="statlabel">Días hábiles transcurridos</div><div class="statvalue">${transcurridos.length}</div><div class="stathelp">Sin sábados ni domingos</div></div><div class="stat"><div class="statlabel">Días con facturación</div><div class="statvalue">${conFact}</div></div><div class="stat ${enCero?'bad':''}"><div class="statlabel">Días en $0</div><div class="statvalue">${enCero}</div><div class="stathelp">Días hábiles sin entregas facturadas</div></div><div class="stat"><div class="statlabel">Promedio por día hábil</div><div class="statvalue smallmoney">${money(promedio)}</div><div class="stathelp">Incluye los días en cero</div></div></div>
-    <div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Día</th><th>Facturación</th><th>Resultado</th></tr></thead><tbody>${dias.map(x=>`<tr${x.futuro?' style="opacity:.45"':''}><td><strong>${prettyDate(x.fecha)}</strong></td><td>${x.dt.toLocaleDateString('es-AR',{weekday:'long'})}</td><td><strong>${money(x.monto)}</strong></td><td><span class="badge ${diaClase(x)}">${diaEstado(x)}</span></td></tr>`).join('')}</tbody></table></div>
-    <p class="sectionnote">Verde: ${money(META_DIARIA)} o más. Amarillo: desde ${money(CERCA_META)}. Rojo: menos de ${money(CERCA_META)}. Los días futuros quedan en gris y no afectan los indicadores.</p>
+  const monthShift=(baseKey,delta)=>{
+    const [y,m]=baseKey.split('-').map(Number),d=new Date(y,m-1+delta,1);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  };
+  const netoMes=(key)=>{
+    const ent=rows.filter(r=>r.estado==='Entregado'&&monthKey(r.fechaEntrega)===key);
+    const fac=ent.reduce((a,r)=>a+Number(r.monto||0),0);
+    const costos=ent.reduce((a,r)=>a+(Array.isArray(r.repuestosUsados)?r.repuestosUsados.reduce((s,x)=>s+Number(x.cantidad||1)*Number(x.costoUnitario||0),0):0),0);
+    const gastos=(typeof window.loadExpenses==='function'?window.loadExpenses():[])
+      .filter(x=>String(x.fecha||'').slice(0,7)===key&&String(x.categoria||'')!=='Repuestos')
+      .reduce((a,x)=>a+Math.max(0,Number(x.monto||0)),0);
+    return fac-costos-gastos;
+  };
+  const meses=Array.from({length:6},(_,i)=>monthShift(mk,i-5));
+  const evolucion=meses.map(k=>({key:k,value:netoMes(k)}));
+  const chartW=900,chartH=280,padL=70,padR=28,padT=28,padB=48;
+  const maxValue=Math.max(META_MENSUAL,...evolucion.map(x=>Math.max(0,x.value)),1);
+  const minValue=Math.min(0,...evolucion.map(x=>x.value));
+  const span=Math.max(1,maxValue-minValue);
+  const xPos=i=>padL+(evolucion.length===1?0:i*((chartW-padL-padR)/(evolucion.length-1)));
+  const yPos=v=>padT+(maxValue-v)/span*(chartH-padT-padB);
+  const points=evolucion.map((x,i)=>`${xPos(i)},${yPos(x.value)}`).join(' ');
+  const metaY=yPos(META_MENSUAL);
+  const monthLabel=k=>{const [y,m]=k.split('-').map(Number);return new Date(y,m-1,1).toLocaleDateString('es-AR',{month:'short'}).replace('.','')};
+
+  document.getElementById('view').innerHTML=`
+  <section class="panel" style="margin-top:0">
+    <div class="panelhead"><div><div class="eyebrow">MES ACTUAL</div><h3>Indicadores clave</h3></div><span class="badge">${mk}</span></div>
+    <div class="kpigrid">
+      <div class="stat soft"><div class="statlabel">Resultado neto del mes</div><div class="statvalue smallmoney">${money(resultadoNeto)}</div><div class="stathelp">Facturación − costos de repuestos usados − gastos operativos</div></div>
+      <div class="stat ${cobrar?'warn':''}"><div class="statlabel">Por cobrar</div><div class="statvalue smallmoney">${money(cobrar)}</div><div class="stathelp">Saldo abierto total</div></div>
+      <div class="stat"><div class="statlabel">Ingresos</div><div class="statvalue">${ingresos.length}</div><div class="stathelp">Equipos ingresados este mes</div></div>
+      <div class="stat"><div class="statlabel">Entregados</div><div class="statvalue">${entregados.length}</div><div class="stathelp">Equipos cerrados este mes</div></div>
+      <div class="stat"><div class="statlabel">Días con facturación</div><div class="statvalue">${conFact}</div><div class="stathelp">Días hábiles con entregas facturadas</div></div>
+      <div class="stat ${enCero?'bad':''}"><div class="statlabel">Días en $0</div><div class="statvalue">${enCero}</div><div class="stathelp">Días hábiles sin facturación</div></div>
+    </div>
   </section>
+
+  <section class="panel">
+    <div class="panelhead"><div><div class="eyebrow">DETALLE DIARIO DEL MES</div><h3>Días hábiles</h3></div><span class="badge">Meta ${money(META_DIARIA)} / día</span></div>
+    <div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Día</th><th>Facturación</th><th>Resultado</th></tr></thead><tbody>${dias.map(x=>`<tr${x.futuro?' style="opacity:.45"':''}><td><strong>${prettyDate(x.fecha)}</strong></td><td>${x.dt.toLocaleDateString('es-AR',{weekday:'long'})}</td><td><strong>${money(x.monto)}</strong></td><td><span class="badge ${diaClase(x)}">${diaEstado(x)}</span></td></tr>`).join('')}</tbody></table></div>
+    <p class="sectionnote">Verde: ${money(META_DIARIA)} o más. Amarillo: desde ${money(CERCA_META)}. Rojo: menos de ${money(CERCA_META)}. Los días futuros quedan en gris.</p>
+  </section>
+
+  <section class="panel">
+    <div class="panelhead"><div><div class="eyebrow">EVOLUCIÓN MENSUAL</div><h3>Resultado neto vs meta</h3></div><span class="badge">Meta mensual ${money(META_MENSUAL)}</span></div>
+    <div style="width:100%;overflow-x:auto">
+      <svg viewBox="0 0 ${chartW} ${chartH}" role="img" aria-label="Evolución mensual del resultado neto" style="width:100%;min-width:700px;height:auto;display:block">
+        <line x1="${padL}" x2="${chartW-padR}" y1="${metaY}" y2="${metaY}" stroke="#c78318" stroke-width="3" stroke-dasharray="10 8"></line>
+        <text x="${chartW-padR}" y="${Math.max(18,metaY-8)}" text-anchor="end" font-size="16" font-weight="700" fill="#9a6512">Meta ${money(META_MENSUAL)}</text>
+        <line x1="${padL}" x2="${chartW-padR}" y1="${yPos(0)}" y2="${yPos(0)}" stroke="#dce4ee" stroke-width="2"></line>
+        <polyline points="${points}" fill="none" stroke="#0d5bd8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></polyline>
+        ${evolucion.map((x,i)=>`<g><circle cx="${xPos(i)}" cy="${yPos(x.value)}" r="7" fill="#0d5bd8"></circle><text x="${xPos(i)}" y="${chartH-18}" text-anchor="middle" font-size="16" fill="#5f6f83">${monthLabel(x.key)}</text><text x="${xPos(i)}" y="${Math.max(20,yPos(x.value)-12)}" text-anchor="middle" font-size="14" font-weight="700" fill="#17263a">${money(x.value)}</text></g>`).join('')}
+      </svg>
+    </div>
+  </section>
+
   <section class="panel"><div class="panelhead"><div><div class="eyebrow">MARCAS</div><h3>Marcas que más ingresaron este mes</h3></div></div>${ranking.length?`<div class="brandlist">${ranking.map(([name,count])=>`<div class="brandrow"><strong>${esc(name)}</strong><div class="bartrack"><div class="barfill" style="width:${Math.round(count/max*100)}%"></div></div><div class="right"><strong>${count}</strong></div></div>`).join('')}</div>`:'<div class="empty">Todavía no hay ingresos este mes.</div>'}</section>`;
 }
 
