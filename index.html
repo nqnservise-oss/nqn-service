@@ -1860,6 +1860,7 @@ window.__nqnLegacyBoot=boot;
     const gastos=expenses.reduce((a,x)=>a+Math.max(0,Number(x.monto||0)),0);
     const closings=(window.loadCashClosings?window.loadCashClosings():[]).filter(x=>String(x.fecha||'').slice(0,7)===mk&&(isAdmin||operatorOwns(x,owner)));
     const notas=closings.reduce((a,x)=>a+Math.max(0,Number(x.notaCredito||0)),0);
+    const efectivoZ=closings.reduce((a,x)=>a+Math.max(0,Number(x.efectivo||0)),0);
     const ajusteGastos=closings.reduce((a,x)=>a+Number(x.ajusteGastos||0),0);
     const ajusteNotas=closings.reduce((a,x)=>a+Number(x.ajusteNotas||0),0);
     const ajustesEfectivo=closings.reduce((a,x)=>a+Number(x.ajusteEfectivo||0),0);
@@ -1873,7 +1874,7 @@ window.__nqnLegacyBoot=boot;
     const cobros={efectivo:0,mercadoPago:0,tarjetas:0};
     const days=new Set([...orders.flatMap(r=>Array.isArray(r?.pagos)&&r.pagos.length?r.pagos.map(p=>p.fecha):[r.fechaEntrega]),...Object.keys(turnosAll),...(typeof loadEvents==='function'?loadEvents():[]).map(x=>x.fecha)].filter(x=>String(x||'').slice(0,7)===mk));
     days.forEach(day=>{const x=cashAutomatic(day);cobros.efectivo+=x.efectivo;cobros.mercadoPago+=x.mercadoPago;cobros.tarjetas+=x.tarjetas});
-    return {ingresos:ingresosCaja,ingresosNQN:ingresos+visitasIngresos,ingresosVisitas:visitasIngresos,ingresosCleris:clerisIngresos,gastos:gastos+ajusteGastos,notas:notas+ajusteNotas,ajustesEfectivo,ajustesMP,ajustesTotal,efectivo:cobros.efectivo,gastosEfectivo,cajaFisica:cobros.efectivo-gastosEfectivo+ajustesEfectivo+transferEf,mercadoPago:cobros.mercadoPago-gastosMP+ajustesMP+transferMP,neto:ingresosCaja-notas-gastos+ajustesEfectivo+ajustesMP+ajustesTotal};
+    return {ingresos:ingresosCaja,ingresosNQN:ingresos+visitasIngresos,ingresosVisitas:visitasIngresos,ingresosCleris:clerisIngresos,gastos:gastos+ajusteGastos,notas:notas+ajusteNotas,ajustesEfectivo,ajustesMP,ajustesTotal,efectivo:efectivoZ,gastosEfectivo,cajaFisica:efectivoZ-gastosEfectivo+ajustesEfectivo+transferEf,mercadoPago:cobros.mercadoPago-gastosMP+ajustesMP+transferMP,neto:ingresosCaja-notas-gastos+ajustesEfectivo+ajustesMP+ajustesTotal};
   }
 
   function paintMonthBalance(value){
