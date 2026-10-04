@@ -64,7 +64,7 @@ button,input,select,textarea{font:inherit}.shell{min-height:100vh;display:grid;g
 .kpi-box{background:#fff;border:1px solid #e4eaf2;border-radius:15px;padding:16px 18px}
 .kpi-boxtitle{font-size:18px;font-weight:900;margin:0}.kpi-boxsub{font-size:13px;color:#4f6f99;margin-top:3px}
 .kpi-legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:#56759b;margin:8px 0 2px}
-.kpi-legend span{display:flex;align-items:center;gap:7px}.kpi-dot{width:10px;height:10px;border-radius:50%;background:#0d5bd8}.kpi-dot.light{background:#9fbfe8}
+.kpi-legend span{display:flex;align-items:center;gap:7px}.kpi-dot{width:10px;height:10px;border-radius:50%;background:#0d5bd8}.kpi-dot.light{background:#e58a1f}
 .kpi-svg{width:100%;height:auto;display:block;min-width:520px}.kpi-svgwrap{overflow-x:auto}
 .kpi-daily{margin-top:16px;padding:0;overflow:hidden}.kpi-dailyhead{display:flex;justify-content:space-between;align-items:center;padding:16px 18px 13px}
 .kpi-daily table{min-width:980px}.kpi-daily th{background:#f8fafc;color:#48678e}.kpi-daily td{padding:10px 12px}
@@ -1172,10 +1172,10 @@ function renderKPIs(){
         <div class="kpi-legend"><span><i class="kpi-dot"></i>${monthTitle} (acumulado)</span><span><i class="kpi-dot light"></i>${prevTitle} (acumulado)</span></div>
         <div class="kpi-svgwrap"><svg class="kpi-svg" viewBox="0 0 ${cmp.W} ${cmp.H}" role="img" aria-label="Comparativo acumulado del mes">
           ${[0,.25,.5,.75,1].map(p=>`<g><line x1="${cmp.L}" x2="${cmp.W-cmp.R}" y1="${cmp.T+p*(cmp.H-cmp.T-cmp.B)}" y2="${cmp.T+p*(cmp.H-cmp.T-cmp.B)}" stroke="#e8eef5"/><text x="${cmp.L-8}" y="${cmp.T+p*(cmp.H-cmp.T-cmp.B)+4}" text-anchor="end" font-size="11" fill="#547395">${fmtShort(cmp.max*(1-p))}</text></g>`).join('')}
-          <polyline points="${prevCmpPoints}" fill="none" stroke="#9fbfe8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+          <polyline points="${prevCmpPoints}" fill="none" stroke="#e58a1f" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
           <polyline points="${curCmpPoints}" fill="none" stroke="#0d5bd8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
           ${curCum.map((v,i)=>i%3===0?`<circle cx="${cmpXDay(i+1)}" cy="${cmp.y(v)}" r="4" fill="#0d5bd8"/>`:'').join('')}
-          ${prevCum.map((v,i)=>i%3===0?`<circle cx="${cmpXDay(i+1)}" cy="${cmp.y(v)}" r="3.5" fill="#9fbfe8"/>`:'').join('')}
+          ${prevCum.map((v,i)=>i%3===0?`<circle cx="${cmpXDay(i+1)}" cy="${cmp.y(v)}" r="3.5" fill="#e58a1f"/>`:'').join('')}
           ${Array.from(new Set([1,5,10,15,20,25,ultimo])).filter(d=>d>=1&&d<=ultimo).map(d=>`<text x="${cmpXDay(d)}" y="${cmp.H-12}" text-anchor="middle" font-size="10" fill="#547395">${d}</text>`).join('')}
         </svg></div>
         <div style="text-align:right;margin-top:-6px"><span class="badge ${prevPeriodFact===0?'amber':(variation<0?'red':'green')}" style="font-size:18px">${prevPeriodFact===0?'Sin base':((variation>=0?'+':'')+variation.toLocaleString('es-AR',{maximumFractionDigits:1})+'%')}</span><div class="kpi-note">${prevPeriodFact===0?'El período comparable anterior fue $0':'vs. mismo período de '+prevTitle+' · hasta el día '+daysToCompare}</div></div>
