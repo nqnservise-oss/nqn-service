@@ -441,7 +441,7 @@ function goBackView(){
     if(target.view==='editar'&&target.editingId)return editOrder(target.editingId);
     if(target.view==='demorados')return showLateOrders();
     if(target.view==='nuevo')return newOrder();
-    if(target.view==='caja'&&typeof window.showCashSummary==='function')return window.showCashSummary();
+    if(target.view==='caja')return window.showView('kpis');
     if(target.view==='stock'&&typeof window.renderStock==='function')return window.renderStock();
     if(target.view==='gastos'&&typeof window.renderExpenses==='function')return window.renderExpenses();
     if(target.view==='operadores'&&typeof window.renderOperators==='function')return window.renderOperators();
@@ -1480,10 +1480,6 @@ window.__nqnLegacyBoot=boot;
       const b=document.createElement('button');b.id='nav-gastos';b.innerHTML='＋ Gasto';b.onclick=()=>window.showView('gastos');
       const k=document.getElementById('nav-kpis');k?nav.insertBefore(b,k):nav.appendChild(b);
     }
-    if(!document.getElementById('nav-caja')){
-      const b=document.createElement('button');b.id='nav-caja';b.innerHTML='▣ Resumen caja';b.onclick=()=>window.showView('caja');
-      const k=document.getElementById('nav-kpis');k?nav.insertBefore(b,k):nav.appendChild(b);
-    }
     if(!document.getElementById('nav-operadores')){
       const b=document.createElement('button');b.id='nav-operadores';b.innerHTML='♙ Operadores';b.onclick=()=>window.showView('operadores');
       const backup=document.getElementById('nav-backup');backup?nav.insertBefore(b,backup):nav.appendChild(b);
@@ -1502,7 +1498,7 @@ window.__nqnLegacyBoot=boot;
   function applyRoleNav(){
     const op=session(),admin=!!op&&op.rol==='admin';
     ['nav-dashboard','nav-kpis','nav-cleris','nav-backup','nav-operadores'].forEach(id=>{const x=document.getElementById(id);if(x)x.style.display=admin?'':'none'});
-    ['nav-nuevo','nav-ordenes','nav-clientes','nav-stock','nav-gastos','nav-caja'].forEach(id=>{const x=document.getElementById(id);if(x)x.style.display=op?'':'none'});
+    ['nav-nuevo','nav-ordenes','nav-clientes','nav-stock','nav-gastos'].forEach(id=>{const x=document.getElementById(id);if(x)x.style.display=op?'':'none'});
     const t=document.getElementById('nav-turnos');if(t)t.style.display=op?'':'none';
   }
   window.logoutOperator=function(){clearSession();renderLoginOrSetup()};
@@ -1651,7 +1647,7 @@ window.__nqnLegacyBoot=boot;
   window.showView=function(v){
     if(!session()){renderLoginOrSetup();return}
     if(ADMIN_VIEWS.has(v)&&!window.isAdmin()){toast('Esta sección es solo para administrador');window.newOrder();return}
-    if(v==='stock')return window.renderStock();if(v==='gastos')return window.renderExpenses();if(v==='caja')return window.showCashSummary();if(v==='operadores')return window.renderOperators();return coreShowView(v);
+    if(v==='stock')return window.renderStock();if(v==='gastos')return window.renderExpenses();if(v==='caja')return window.showView('kpis');if(v==='operadores')return window.renderOperators();return coreShowView(v);
   };
   window.renderDashboard=function(){if(!window.isAdmin())return window.newOrder();return coreRenderDashboard()};
   window.renderKPIs=function(){if(!window.isAdmin())return window.newOrder();return coreRenderKPIs()};
