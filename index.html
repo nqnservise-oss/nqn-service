@@ -572,7 +572,7 @@ function normalizeOrder(r,index=0){
     falla:r.falla||'',accesorios:r.accesorios||'',observaciones:r.observaciones||'',estado,
     situacionTaller:r.situacionTaller||'En reparación',
     monto:Number(r.monto||0),pagado:Number(r.pagado||0),medioPago:r.medioPago||'Pendiente',
-    pagos:Array.isArray(r.pagos)?r.pagos.map(p=>({id:String(p?.id||('pago-'+Date.now()+'-'+Math.random().toString(36).slice(2))),fecha:String(p?.fecha||localISODate()),monto:Number(p?.monto||0),medioPago:String(p?.medioPago||r.medioPago||'Pendiente'),creado:p?.creado||creado})):[],
+    pagos:Array.isArray(r.pagos)?r.pagos.map(p=>({id:String(p?.id||('pago-'+Date.now()+'-'+Math.random().toString(36).slice(2))),fecha:String(p?.fecha||localISODate()),monto:Number(p?.monto||0),medioPago:String(p?.medioPago||r.medioPago||'Pendiente'),efectivo:Math.max(0,Number(p?.efectivo||0)),tarjeta:Math.max(0,Number(p?.tarjeta||0)),operadorId:String(p?.operadorId||''),operador:String(p?.operador||'').trim(),creado:p?.creado||creado,actualizado:p?.actualizado||p?.creado||creado})):[],
     repuestosUsados:Array.isArray(r.repuestosUsados)?r.repuestosUsados.map(x=>({id:String(x?.id||('rep-'+Date.now()+'-'+Math.random().toString(36).slice(2))),stockId:String(x?.stockId||''),nombre:String(x?.nombre||''),cantidad:Math.max(1,Number(x?.cantidad||1)),costoUnitario:Math.max(0,Number(x?.costoUnitario||x?.costo||0)),fecha:String(x?.fecha||localISODate()),creado:x?.creado||creado})):[],
     creado,actualizado:r.actualizado||creado,fechasEstado:{'En taller':creado,...(fechaEntrega?{'Entregado':r.actualizado||creado}:{})},historial
   };
