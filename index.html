@@ -1122,12 +1122,13 @@ function renderKPIs(){
 
   const svgLine=(values,opt={})=>{
     const W=760,H=230,L=58,R=20,T=25,B=36,max=Math.max(opt.max||0,...values,1);
-    const x=i=>L+(values.length<=1?0:i*((W-L-R)/(values.length-1)));
+    const totalPoints=Math.max(1,Number(opt.totalPoints||values.length||1));
+    const x=i=>L+(totalPoints<=1?0:i*((W-L-R)/(totalPoints-1)));
     const y=v=>T+(max-v)/max*(H-T-B);
     return {W,H,L,R,T,B,max,x,y,points:values.map((v,i)=>`${x(i)},${y(v)}`).join(' ')};
   };
   const cmpMax=Math.max(...curCum,...prevCum,META_MENSUAL/2,1);
-  const cmp=svgLine(curCum,{max:cmpMax});
+  const cmp=svgLine(curCum,{max:cmpMax,totalPoints:ultimo});
   const evo=svgLine(evolucion.map(x=>x.value),{max:META_MENSUAL});
   const metaY=evo.y(META_MENSUAL);
 
@@ -1172,7 +1173,7 @@ function renderKPIs(){
           <polyline points="${cmp.points}" fill="none" stroke="#0d5bd8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
           ${curCum.map((v,i)=>i%3===0?`<circle cx="${cmp.x(i)}" cy="${cmp.y(v)}" r="4" fill="#0d5bd8"/>`:'').join('')}
           ${prevCum.map((v,i)=>i%3===0?`<circle cx="${cmp.x(i)}" cy="${cmp.y(v)}" r="3.5" fill="#9fbfe8"/>`:'').join('')}
-          ${curCum.map((v,i)=>i%2===0?`<text x="${cmp.x(i)}" y="${cmp.H-12}" text-anchor="middle" font-size="10" fill="#547395">${i+1}</text>`:'').join('')}
+          ${Array.from(new Set([1,5,10,15,20,25,ultimo])).filter(d=>d>=1&&d<=ultimo).map(d=>`<text x="${cmp.x(d-1)}" y="${cmp.H-12}" text-anchor="middle" font-size="10" fill="#547395">${d}</text>`).join('')}
         </svg></div>
         <div style="text-align:right;margin-top:-6px"><span class="badge ${variation<0?'red':'green'}" style="font-size:18px">${variation>=0?'+':''}${variation.toLocaleString('es-AR',{maximumFractionDigits:1})}%</span><div class="kpi-note">vs. mismo período de ${prevTitle} · hasta el día ${daysToCompare}</div></div>
       </div>
