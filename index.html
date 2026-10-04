@@ -32,7 +32,20 @@ button,input,select,textarea{font:inherit}.shell{min-height:100vh;display:grid;g
 .backupbox{display:grid;grid-template-columns:1fr 1fr;gap:15px}.info{background:#f7f9fc;border:1px solid var(--line);border-radius:13px;padding:16px}.info h4{margin:0 0 7px}.info p{font-size:12px;color:var(--muted);line-height:1.5}.backupstatus{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 15px;border-radius:12px;margin-bottom:15px;background:var(--greenbg);border:1px solid #caeadc}.backupstatus.warn,.backupstatus.amber{background:var(--amberbg);border-color:#f3dfb5}.backupstatus.bad,.backupstatus.red{background:var(--redbg);border-color:#f1cccc}.backupstatus div:last-child{font-size:12px;color:var(--muted)}
 .clientmatch{display:none;background:#eef5ff;border:1px solid #d4e4ff;border-radius:10px;padding:11px 12px;font-size:12px}.clientmatch.show{display:block}.timeline{display:flex;flex-direction:column;gap:8px;margin-top:12px}.timelineitem{display:flex;justify-content:space-between;gap:12px;background:#f7f9fc;border-radius:9px;padding:9px 10px;font-size:11px}.timelineitem strong{font-size:11px}.right{text-align:right}.nowrap{white-space:nowrap}
 
-.kpigrid{display:grid;grid-template-columns:repeat(3,1fr);gap:15px}.brandlist{display:flex;flex-direction:column;gap:11px}.brandrow{display:grid;grid-template-columns:150px 1fr 55px;align-items:center;gap:12px}.bartrack{height:10px;background:#edf1f6;border-radius:999px;overflow:hidden}.barfill{height:100%;background:var(--blue);border-radius:999px}.eventgrid{display:grid;grid-template-columns:1fr 1fr;gap:15px}.sectionnote{font-size:12px;color:var(--muted);line-height:1.5}.statushint{padding:10px 12px;border-radius:10px;background:var(--soft);border:1px solid #d4e4ff;font-size:12px;color:#3e5f8e}.statvalue.smallmoney{font-size:22px}
+.kpigrid{display:grid;grid-template-columns:repeat(3,1fr);gap:15px}
+.kpihero{display:grid;grid-template-columns:1.15fr .85fr;gap:16px;margin-bottom:16px}
+.kpihero .stat{min-height:150px;padding:24px 26px;display:flex;flex-direction:column;justify-content:center}
+.kpihero .statlabel{font-size:15px;text-transform:uppercase;letter-spacing:.45px}
+.kpihero .statvalue.smallmoney{font-size:42px;line-height:1;margin:12px 0 8px}
+.kpihero .stathelp{font-size:13px}
+.kpiops{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.kpiops .stat{padding:16px 18px;min-height:112px}
+.kpiops .statlabel{font-size:14px}
+.kpiops .statvalue{font-size:32px;margin:7px 0 3px}
+.kpichart{border:1px solid #e7edf5;border-radius:16px;background:linear-gradient(180deg,#fbfdff 0%,#f7faff 100%);padding:16px 18px 8px}
+.kpichart svg{filter:drop-shadow(0 8px 18px rgba(16,36,62,.04))}
+@media(max-width:950px){.kpihero{grid-template-columns:1fr}.kpiops{grid-template-columns:1fr 1fr}}
+@media(max-width:620px){.kpiops{grid-template-columns:1fr}.kpihero .statvalue.smallmoney{font-size:34px}}.brandlist{display:flex;flex-direction:column;gap:11px}.brandrow{display:grid;grid-template-columns:150px 1fr 55px;align-items:center;gap:12px}.bartrack{height:10px;background:#edf1f6;border-radius:999px;overflow:hidden}.barfill{height:100%;background:var(--blue);border-radius:999px}.eventgrid{display:grid;grid-template-columns:1fr 1fr;gap:15px}.sectionnote{font-size:12px;color:var(--muted);line-height:1.5}.statushint{padding:10px 12px;border-radius:10px;background:var(--soft);border:1px solid #d4e4ff;font-size:12px;color:#3e5f8e}.statvalue.smallmoney{font-size:22px}
 .cloudgrid{display:grid;grid-template-columns:1.35fr .65fr;gap:15px}
 .cloudstatus{display:flex;align-items:center;gap:9px;font-size:12px;font-weight:750}
 .clouddot{width:10px;height:10px;border-radius:50%;background:#9aa6b5;box-shadow:0 0 0 4px rgba(154,166,181,.12)}
@@ -1065,13 +1078,15 @@ function renderKPIs(){
   document.getElementById('view').innerHTML=`
   <section class="panel" style="margin-top:0">
     <div class="panelhead"><div><div class="eyebrow">MES ACTUAL</div><h3>Indicadores clave</h3></div><span class="badge">${mk}</span></div>
-    <div class="kpigrid">
-      <div class="stat soft"><div class="statlabel">Resultado neto del mes</div><div class="statvalue smallmoney">${money(resultadoNeto)}</div><div class="stathelp">Facturación − costos de repuestos usados − gastos operativos</div></div>
-      <div class="stat ${cobrar?'warn':''}"><div class="statlabel">Por cobrar</div><div class="statvalue smallmoney">${money(cobrar)}</div><div class="stathelp">Saldo abierto total</div></div>
-      <div class="stat"><div class="statlabel">Ingresos</div><div class="statvalue">${ingresos.length}</div><div class="stathelp">Equipos ingresados este mes</div></div>
-      <div class="stat"><div class="statlabel">Entregados</div><div class="statvalue">${entregados.length}</div><div class="stathelp">Equipos cerrados este mes</div></div>
-      <div class="stat"><div class="statlabel">Días con facturación</div><div class="statvalue">${conFact}</div><div class="stathelp">Días hábiles con entregas facturadas</div></div>
-      <div class="stat ${enCero?'bad':''}"><div class="statlabel">Días en $0</div><div class="statvalue">${enCero}</div><div class="stathelp">Días hábiles sin facturación</div></div>
+    <div class="kpihero">
+      <div class="stat soft"><div class="statlabel">Resultado neto del mes</div><div class="statvalue smallmoney">${money(resultadoNeto)}</div><div class="stathelp">Lo que realmente deja el taller este mes</div></div>
+      <div class="stat ${cobrar?'warn':''}"><div class="statlabel">Por cobrar</div><div class="statvalue smallmoney">${money(cobrar)}</div><div class="stathelp">Dinero pendiente de entrar</div></div>
+    </div>
+    <div class="kpiops">
+      <div class="stat"><div class="statlabel">Ingresos</div><div class="statvalue">${ingresos.length}</div><div class="stathelp">Equipos ingresados</div></div>
+      <div class="stat"><div class="statlabel">Entregados</div><div class="statvalue">${entregados.length}</div><div class="stathelp">Equipos cerrados</div></div>
+      <div class="stat"><div class="statlabel">Días con facturación</div><div class="statvalue">${conFact}</div><div class="stathelp">Días hábiles con ventas</div></div>
+      <div class="stat ${enCero?'bad':''}"><div class="statlabel">Días en $0</div><div class="statvalue">${enCero}</div><div class="stathelp">Días hábiles sin facturar</div></div>
     </div>
   </section>
 
@@ -1083,7 +1098,7 @@ function renderKPIs(){
 
   <section class="panel">
     <div class="panelhead"><div><div class="eyebrow">EVOLUCIÓN MENSUAL</div><h3>Resultado neto vs meta</h3></div><span class="badge">Meta mensual ${money(META_MENSUAL)}</span></div>
-    <div style="width:100%;overflow-x:auto">
+    <div class="kpichart" style="width:100%;overflow-x:auto">
       <svg viewBox="0 0 ${chartW} ${chartH}" role="img" aria-label="Evolución mensual del resultado neto" style="width:100%;min-width:700px;height:auto;display:block">
         <line x1="${padL}" x2="${chartW-padR}" y1="${metaY}" y2="${metaY}" stroke="#c78318" stroke-width="3" stroke-dasharray="10 8"></line>
         <text x="${chartW-padR}" y="${Math.max(18,metaY-8)}" text-anchor="end" font-size="16" font-weight="700" fill="#9a6512">Meta ${money(META_MENSUAL)}</text>
