@@ -32,20 +32,48 @@ button,input,select,textarea{font:inherit}.shell{min-height:100vh;display:grid;g
 .backupbox{display:grid;grid-template-columns:1fr 1fr;gap:15px}.info{background:#f7f9fc;border:1px solid var(--line);border-radius:13px;padding:16px}.info h4{margin:0 0 7px}.info p{font-size:12px;color:var(--muted);line-height:1.5}.backupstatus{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 15px;border-radius:12px;margin-bottom:15px;background:var(--greenbg);border:1px solid #caeadc}.backupstatus.warn,.backupstatus.amber{background:var(--amberbg);border-color:#f3dfb5}.backupstatus.bad,.backupstatus.red{background:var(--redbg);border-color:#f1cccc}.backupstatus div:last-child{font-size:12px;color:var(--muted)}
 .clientmatch{display:none;background:#eef5ff;border:1px solid #d4e4ff;border-radius:10px;padding:11px 12px;font-size:12px}.clientmatch.show{display:block}.timeline{display:flex;flex-direction:column;gap:8px;margin-top:12px}.timelineitem{display:flex;justify-content:space-between;gap:12px;background:#f7f9fc;border-radius:9px;padding:9px 10px;font-size:11px}.timelineitem strong{font-size:11px}.right{text-align:right}.nowrap{white-space:nowrap}
 
-.kpigrid{display:grid;grid-template-columns:repeat(3,1fr);gap:15px}
-.kpihero{display:grid;grid-template-columns:1.15fr .85fr;gap:16px;margin-bottom:16px}
-.kpihero .stat{min-height:150px;padding:24px 26px;display:flex;flex-direction:column;justify-content:center}
-.kpihero .statlabel{font-size:15px;text-transform:uppercase;letter-spacing:.45px}
-.kpihero .statvalue.smallmoney{font-size:42px;line-height:1;margin:12px 0 8px}
-.kpihero .stathelp{font-size:13px}
-.kpiops{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
-.kpiops .stat{padding:16px 18px;min-height:112px}
-.kpiops .statlabel{font-size:14px}
-.kpiops .statvalue{font-size:32px;margin:7px 0 3px}
-.kpichart{border:1px solid #e7edf5;border-radius:16px;background:linear-gradient(180deg,#fbfdff 0%,#f7faff 100%);padding:16px 18px 8px}
-.kpichart svg{filter:drop-shadow(0 8px 18px rgba(16,36,62,.04))}
-@media(max-width:950px){.kpihero{grid-template-columns:1fr}.kpiops{grid-template-columns:1fr 1fr}}
-@media(max-width:620px){.kpiops{grid-template-columns:1fr}.kpihero .statvalue.smallmoney{font-size:34px}}.brandlist{display:flex;flex-direction:column;gap:11px}.brandrow{display:grid;grid-template-columns:150px 1fr 55px;align-items:center;gap:12px}.bartrack{height:10px;background:#edf1f6;border-radius:999px;overflow:hidden}.barfill{height:100%;background:var(--blue);border-radius:999px}.eventgrid{display:grid;grid-template-columns:1fr 1fr;gap:15px}.sectionnote{font-size:12px;color:var(--muted);line-height:1.5}.statushint{padding:10px 12px;border-radius:10px;background:var(--soft);border:1px solid #d4e4ff;font-size:12px;color:#3e5f8e}.statvalue.smallmoney{font-size:22px}
+
+/* ===== KPIs 04-10-2026 · diseño fiel al boceto ===== */
+.kpi-page{font-size:14px}
+.kpi-toolbar{display:flex;justify-content:space-between;align-items:center;gap:18px;margin:-6px 0 18px}
+.kpi-subtitle{font-size:16px;color:#24364d;margin-top:3px}
+.kpi-monthnav{display:flex;align-items:center;background:#fff;border:1px solid #e4eaf2;border-radius:12px;box-shadow:0 4px 16px rgba(16,36,62,.06);overflow:hidden}
+.kpi-monthnav button{width:46px;height:46px;border:0;background:#fff;color:#10243e;font-size:24px;cursor:pointer}
+.kpi-monthnav button:hover{background:#f4f8ff}
+.kpi-monthnav strong{min-width:190px;text-align:center;padding:0 18px;font-size:15px}
+.kpi-topcards{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.kpi-card{background:#fff;border:1px solid #e4eaf2;border-radius:15px;padding:18px 20px;min-height:144px;box-shadow:0 3px 12px rgba(16,36,62,.025)}
+.kpi-card.blue{background:linear-gradient(135deg,#f4f8ff,#edf5ff);border-color:#cfe0fb}
+.kpi-card.green{background:linear-gradient(135deg,#f1fff7,#e6f9ef);border-color:#c8ecd8}
+.kpi-card.amber{background:linear-gradient(135deg,#fffaf0,#fff3d8);border-color:#f3dfb5}
+.kpi-cardhead{display:flex;align-items:center;gap:12px;font-size:14px;font-weight:800;color:#1e2d43}
+.kpi-icon{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:#fff;color:#0d5bd8;font-size:21px;box-shadow:0 2px 10px rgba(16,36,62,.05)}
+.kpi-card.green .kpi-icon{color:#16875a}.kpi-card.amber .kpi-icon{color:#c78318}
+.kpi-big{font-size:34px;font-weight:900;line-height:1.05;margin:10px 0 6px;color:#111c2d}
+.kpi-note{font-size:12px;color:#66809f}
+.kpi-progress{height:9px;background:#fff;border-radius:999px;overflow:hidden;margin-top:12px;box-shadow:inset 0 0 0 1px #e7edf4}
+.kpi-progress>span{display:block;height:100%;background:#0d5bd8;border-radius:999px}
+.kpi-progressrow{display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:12px;margin-top:5px;color:#5b6f89}
+.kpi-smallcards{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-top:14px}
+.kpi-small{background:#fff;border:1px solid #e4eaf2;border-radius:13px;padding:14px 16px;min-height:112px}
+.kpi-small.danger{background:linear-gradient(135deg,#fff8f8,#fff0f0);border-color:#f1d2d2}
+.kpi-small .kpi-cardhead{font-size:13px}.kpi-small .kpi-icon{width:32px;height:32px;font-size:17px;border-radius:9px;background:#f7faff;box-shadow:none}
+.kpi-small.danger .kpi-icon{color:#d33}
+.kpi-small .kpi-big{font-size:29px;margin:8px 0 5px}
+.kpi-charts{display:grid;grid-template-columns:1.45fr 1fr;gap:16px;margin-top:16px}
+.kpi-box{background:#fff;border:1px solid #e4eaf2;border-radius:15px;padding:16px 18px}
+.kpi-boxtitle{font-size:18px;font-weight:900;margin:0}.kpi-boxsub{font-size:13px;color:#4f6f99;margin-top:3px}
+.kpi-legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:#56759b;margin:8px 0 2px}
+.kpi-legend span{display:flex;align-items:center;gap:7px}.kpi-dot{width:10px;height:10px;border-radius:50%;background:#0d5bd8}.kpi-dot.light{background:#9fbfe8}
+.kpi-svg{width:100%;height:auto;display:block;min-width:520px}.kpi-svgwrap{overflow-x:auto}
+.kpi-daily{margin-top:16px;padding:0;overflow:hidden}.kpi-dailyhead{display:flex;justify-content:space-between;align-items:center;padding:16px 18px 13px}
+.kpi-daily table{min-width:980px}.kpi-daily th{background:#f8fafc;color:#48678e}.kpi-daily td{padding:10px 12px}
+.kpi-day-green{background:#effaf4}.kpi-day-red{background:#fff4f4}.kpi-result-pos{color:#09945d;font-weight:900}.kpi-result-zero{color:#e04444}
+.kpi-refresh{font-size:12px;color:#547395;text-align:right;margin-top:8px}
+@media(max-width:1200px){.kpi-topcards{grid-template-columns:1fr 1fr}.kpi-smallcards{grid-template-columns:repeat(3,1fr)}.kpi-charts{grid-template-columns:1fr}}
+@media(max-width:700px){.kpi-toolbar{align-items:flex-start;flex-direction:column}.kpi-topcards{grid-template-columns:1fr}.kpi-smallcards{grid-template-columns:1fr 1fr}.kpi-monthnav{width:100%;justify-content:space-between}.kpi-monthnav strong{min-width:0;flex:1}.kpi-big{font-size:30px}}
+/* ===== FIN KPIs ===== */
+.brandlist{display:flex;flex-direction:column;gap:11px}.brandrow{display:grid;grid-template-columns:150px 1fr 55px;align-items:center;gap:12px}.bartrack{height:10px;background:#edf1f6;border-radius:999px;overflow:hidden}.barfill{height:100%;background:var(--blue);border-radius:999px}.eventgrid{display:grid;grid-template-columns:1fr 1fr;gap:15px}.sectionnote{font-size:12px;color:var(--muted);line-height:1.5}.statushint{padding:10px 12px;border-radius:10px;background:var(--soft);border:1px solid #d4e4ff;font-size:12px;color:#3e5f8e}.statvalue.smallmoney{font-size:22px}
 .cloudgrid{display:grid;grid-template-columns:1.35fr .65fr;gap:15px}
 .cloudstatus{display:flex;align-items:center;gap:9px;font-size:12px;font-weight:750}
 .clouddot{width:10px;height:10px;border-radius:50%;background:#9aa6b5;box-shadow:0 0 0 4px rgba(154,166,181,.12)}
@@ -1017,99 +1045,149 @@ function renderClients(){
 function showClientOrders(phone,clientNumber){let rows=load().filter(r=>(phone&&normPhone(r.telefono)===phone)||(!phone&&r.clienteNumero===clientNumber)).sort((a,b)=>b.numero-a.numero);if(!rows.length)return;title(rows[0].cliente+' · C'+fmtClient(rows[0].clienteNumero));document.getElementById('view').innerHTML=`<section class="panel" style="margin-top:0"><div class="panelhead"><div><div class="eyebrow">HISTORIAL DEL CLIENTE</div><h3>${rows.length} órdenes</h3></div><button class="btn primary" onclick="newOrderSameClient('${esc(rows[0].id)}')">＋ Nueva orden</button></div>${orderTable(rows)}</section>`}
 
 function renderKPIs(){
-  title('KPIs del taller');setNav('kpis');let rows=load(),mk=currentMonthKey();
+  title('KPIs del taller');setNav('kpis');
+  const rows=load();
+  const META_DIARIA=500000, META_MENSUAL=10000000;
+  window.__kpiMonthOffset=Number(window.__kpiMonthOffset||0);
+  const base=new Date();
+  const selected=new Date(base.getFullYear(),base.getMonth()+window.__kpiMonthOffset,1);
+  const yy=selected.getFullYear(),mm=selected.getMonth()+1;
+  const mk=`${yy}-${String(mm).padStart(2,'0')}`;
+  const monthName=selected.toLocaleDateString('es-AR',{month:'long',year:'numeric'});
+  const monthTitle=monthName.charAt(0).toUpperCase()+monthName.slice(1);
+  window.kpiShiftMonth=function(delta){window.__kpiMonthOffset+=Number(delta||0);renderKPIs()};
+  window.kpiResetMonth=function(){window.__kpiMonthOffset=0;renderKPIs()};
 
-  const META_DIARIA=500000, META_MENSUAL=10000000, CERCA_META=400000;
   const ingresos=rows.filter(r=>monthKey(r.fechaIngreso)===mk);
   const entregados=rows.filter(r=>r.estado==='Entregado'&&monthKey(r.fechaEntrega)===mk);
   const facturacion=entregados.reduce((a,r)=>a+Number(r.monto||0),0);
   const costosRepuestos=entregados.reduce((a,r)=>a+(Array.isArray(r.repuestosUsados)?r.repuestosUsados.reduce((s,x)=>s+Number(x.cantidad||1)*Number(x.costoUnitario||0),0):0),0);
-  const gastosMes=(typeof window.loadExpenses==='function'?window.loadExpenses():[])
-    .filter(x=>String(x.fecha||'').slice(0,7)===mk&&String(x.categoria||'')!=='Repuestos')
-    .reduce((a,x)=>a+Math.max(0,Number(x.monto||0)),0);
+  const gastosRows=(typeof window.loadExpenses==='function'?window.loadExpenses():[]).filter(x=>String(x.fecha||'').slice(0,7)===mk&&String(x.categoria||'')!=='Repuestos');
+  const gastosMes=gastosRows.reduce((a,x)=>a+Math.max(0,Number(x.monto||0)),0);
   const resultadoNeto=facturacion-costosRepuestos-gastosMes;
   const cobrar=rows.reduce((a,r)=>a+balance(r),0);
+  const ticket=entregados.length?facturacion/entregados.length:0;
 
-  let counts={};ingresos.forEach(r=>{let b=brandOf(r);counts[b]=(counts[b]||0)+1});
-  let ranking=Object.entries(counts).sort((a,b)=>b[1]-a[1]),max=ranking.length?ranking[0][1]:1;
-
-  const hoy=localISODate(), [yy,mm]=mk.split('-').map(Number), ultimo=new Date(yy,mm,0).getDate();
-  let factPorDia={};
-  entregados.forEach(r=>{if(r.fechaEntrega)factPorDia[r.fechaEntrega]=(factPorDia[r.fechaEntrega]||0)+Number(r.monto||0)});
+  const ultimo=new Date(yy,mm,0).getDate();
+  const hoy=localISODate();
+  let factPorDia={},ingPorDia={},entPorDia={},gastoPorDia={};
+  entregados.forEach(r=>{if(r.fechaEntrega){factPorDia[r.fechaEntrega]=(factPorDia[r.fechaEntrega]||0)+Number(r.monto||0);entPorDia[r.fechaEntrega]=(entPorDia[r.fechaEntrega]||0)+1}});
+  ingresos.forEach(r=>{if(r.fechaIngreso)ingPorDia[r.fechaIngreso]=(ingPorDia[r.fechaIngreso]||0)+1});
+  gastosRows.forEach(x=>{if(x.fecha)gastoPorDia[x.fecha]=(gastoPorDia[x.fecha]||0)+Number(x.monto||0)});
   let dias=[];
   for(let d=1;d<=ultimo;d++){
     const fecha=`${yy}-${String(mm).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const dt=new Date(yy,mm-1,d,12,0,0), dow=dt.getDay();
+    const dt=new Date(yy,mm-1,d,12),dow=dt.getDay();
     if(dow===0||dow===6)continue;
-    const futuro=fecha>hoy, monto=factPorDia[fecha]||0;
-    dias.push({fecha,dt,monto,futuro});
+    const futuro=fecha>hoy&&mk===currentMonthKey();
+    dias.push({fecha,dt,futuro,fact:factPorDia[fecha]||0,ing:ingPorDia[fecha]||0,ent:entPorDia[fecha]||0,gasto:gastoPorDia[fecha]||0});
   }
   const transcurridos=dias.filter(x=>!x.futuro);
-  const conFact=transcurridos.filter(x=>x.monto>0).length;
-  const enCero=transcurridos.filter(x=>x.monto===0).length;
-  const diaClase=x=>x.futuro?'':(x.monto>=META_DIARIA?'green':x.monto>=CERCA_META?'warn':'bad');
-  const diaEstado=x=>x.futuro?'Pendiente':(x.monto>=META_DIARIA?'Meta cumplida':x.monto>=CERCA_META?'Cerca de la meta':x.monto===0?'Sin facturación':'Debajo de la meta');
+  const conFact=transcurridos.filter(x=>x.fact>0).length;
+  const enCero=transcurridos.filter(x=>x.fact===0).length;
+  const promedioHabiles=transcurridos.length?facturacion/transcurridos.length:0;
+  const pctMeta=Math.min(100,Math.max(0,(facturacion/META_MENSUAL)*100));
 
-  const monthShift=(baseKey,delta)=>{
-    const [y,m]=baseKey.split('-').map(Number),d=new Date(y,m-1+delta,1);
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-  };
-  const netoMes=(key)=>{
-    const ent=rows.filter(r=>r.estado==='Entregado'&&monthKey(r.fechaEntrega)===key);
-    const fac=ent.reduce((a,r)=>a+Number(r.monto||0),0);
-    const costos=ent.reduce((a,r)=>a+(Array.isArray(r.repuestosUsados)?r.repuestosUsados.reduce((s,x)=>s+Number(x.cantidad||1)*Number(x.costoUnitario||0),0):0),0);
-    const gastos=(typeof window.loadExpenses==='function'?window.loadExpenses():[])
-      .filter(x=>String(x.fecha||'').slice(0,7)===key&&String(x.categoria||'')!=='Repuestos')
-      .reduce((a,x)=>a+Math.max(0,Number(x.monto||0)),0);
-    return fac-costos-gastos;
-  };
-  const meses=Array.from({length:6},(_,i)=>monthShift(mk,i-5));
-  const evolucion=meses.map(k=>({key:k,value:netoMes(k)}));
-  const chartW=900,chartH=280,padL=70,padR=28,padT=28,padB=48;
-  const maxValue=Math.max(META_MENSUAL,...evolucion.map(x=>Math.max(0,x.value)),1);
-  const minValue=Math.min(0,...evolucion.map(x=>x.value));
-  const span=Math.max(1,maxValue-minValue);
-  const xPos=i=>padL+(evolucion.length===1?0:i*((chartW-padL-padR)/(evolucion.length-1)));
-  const yPos=v=>padT+(maxValue-v)/span*(chartH-padT-padB);
-  const points=evolucion.map((x,i)=>`${xPos(i)},${yPos(x.value)}`).join(' ');
-  const metaY=yPos(META_MENSUAL);
+  const shiftKey=(key,delta)=>{const [y,m]=key.split('-').map(Number),d=new Date(y,m-1+delta,1);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`};
+  const prevKey=shiftKey(mk,-1);
+  const prevDate=new Date(yy,mm-2,1);
+  const prevName=prevDate.toLocaleDateString('es-AR',{month:'long',year:'numeric'});
+  const prevTitle=prevName.charAt(0).toUpperCase()+prevName.slice(1);
+
+  const factByMonth=(key)=>rows.filter(r=>r.estado==='Entregado'&&monthKey(r.fechaEntrega)===key).reduce((a,r)=>a+Number(r.monto||0),0);
+  const prevFact=factByMonth(prevKey);
+  const variation=prevFact?((facturacion-prevFact)/prevFact)*100:0;
+
+  let curCum=[],prevCum=[],c1=0,c2=0;
+  const prevY=prevDate.getFullYear(),prevM=prevDate.getMonth()+1;
+  for(let d=1;d<=ultimo;d++){
+    const k=`${yy}-${String(mm).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    c1+=factPorDia[k]||0;curCum.push(c1);
+    const pk=`${prevY}-${String(prevM).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const pday=rows.filter(r=>r.estado==='Entregado'&&r.fechaEntrega===pk).reduce((a,r)=>a+Number(r.monto||0),0);
+    c2+=pday;prevCum.push(c2);
+  }
+
+  const meses=Array.from({length:7},(_,i)=>shiftKey(mk,i-6));
+  const evolucion=meses.map(k=>({key:k,value:factByMonth(k)}));
   const monthLabel=k=>{const [y,m]=k.split('-').map(Number);return new Date(y,m-1,1).toLocaleDateString('es-AR',{month:'short'}).replace('.','')};
 
+  const svgLine=(values,opt={})=>{
+    const W=760,H=230,L=58,R=20,T=25,B=36,max=Math.max(opt.max||0,...values,1);
+    const x=i=>L+(values.length<=1?0:i*((W-L-R)/(values.length-1)));
+    const y=v=>T+(max-v)/max*(H-T-B);
+    return {W,H,L,R,T,B,max,x,y,points:values.map((v,i)=>`${x(i)},${y(v)}`).join(' ')};
+  };
+  const cmpMax=Math.max(...curCum,...prevCum,META_MENSUAL/2,1);
+  const cmp=svgLine(curCum,{max:cmpMax});
+  const evo=svgLine(evolucion.map(x=>x.value),{max:META_MENSUAL});
+  const metaY=evo.y(META_MENSUAL);
+
+  const fmtM=v=>money(v);
+  const fmtShort=v=>{const n=Number(v||0);if(Math.abs(n)>=1000000)return '$'+(n/1000000).toLocaleString('es-AR',{maximumFractionDigits:1})+' M';if(Math.abs(n)>=1000)return '$'+(n/1000).toLocaleString('es-AR',{maximumFractionDigits:0})+'k';return money(n)};
+  const lastSync=getSettings().lastCloudSync||nowISO();
+
   document.getElementById('view').innerHTML=`
-  <section class="panel" style="margin-top:0">
-    <div class="panelhead"><div><div class="eyebrow">MES ACTUAL</div><h3>Indicadores clave</h3></div><span class="badge">${mk}</span></div>
-    <div class="kpihero">
-      <div class="stat soft"><div class="statlabel">Resultado neto del mes</div><div class="statvalue smallmoney">${money(resultadoNeto)}</div><div class="stathelp">Lo que realmente deja el taller este mes</div></div>
-      <div class="stat ${cobrar?'warn':''}"><div class="statlabel">Por cobrar</div><div class="statvalue smallmoney">${money(cobrar)}</div><div class="stathelp">Dinero pendiente de entrar</div></div>
+  <div class="kpi-page">
+    <div class="kpi-toolbar">
+      <div><div class="kpi-subtitle">Resumen y evolución de la facturación</div></div>
+      <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;justify-content:flex-end">
+        <div class="kpi-monthnav"><button onclick="kpiShiftMonth(-1)" title="Mes anterior">‹</button><strong>${monthTitle}</strong><button onclick="kpiShiftMonth(1)" title="Mes siguiente">›</button></div>
+        <div class="kpi-refresh">Última actualización<br><strong>${prettyDateTime(lastSync)}</strong></div>
+        <button class="btn secondary" onclick="kpiResetMonth()" title="Volver al mes actual">↻</button>
+      </div>
     </div>
-    <div class="kpiops">
-      <div class="stat"><div class="statlabel">Ingresos</div><div class="statvalue">${ingresos.length}</div><div class="stathelp">Equipos ingresados</div></div>
-      <div class="stat"><div class="statlabel">Entregados</div><div class="statvalue">${entregados.length}</div><div class="stathelp">Equipos cerrados</div></div>
-      <div class="stat"><div class="statlabel">Días con facturación</div><div class="statvalue">${conFact}</div><div class="stathelp">Días hábiles con ventas</div></div>
-      <div class="stat ${enCero?'bad':''}"><div class="statlabel">Días en $0</div><div class="statvalue">${enCero}</div><div class="stathelp">Días hábiles sin facturar</div></div>
-    </div>
-  </section>
 
-  <section class="panel">
-    <div class="panelhead"><div><div class="eyebrow">DETALLE DIARIO DEL MES</div><h3>Días hábiles</h3></div><span class="badge">Meta ${money(META_DIARIA)} / día</span></div>
-    <div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Día</th><th>Facturación</th><th>Resultado</th></tr></thead><tbody>${dias.map(x=>`<tr${x.futuro?' style="opacity:.45"':''}><td><strong>${prettyDate(x.fecha)}</strong></td><td>${x.dt.toLocaleDateString('es-AR',{weekday:'long'})}</td><td><strong>${money(x.monto)}</strong></td><td><span class="badge ${diaClase(x)}">${diaEstado(x)}</span></td></tr>`).join('')}</tbody></table></div>
-    <p class="sectionnote">Verde: ${money(META_DIARIA)} o más. Amarillo: desde ${money(CERCA_META)}. Rojo: menos de ${money(CERCA_META)}. Los días futuros quedan en gris.</p>
-  </section>
+    <section class="kpi-topcards">
+      <div class="kpi-card blue"><div class="kpi-cardhead"><span class="kpi-icon">▥</span><span>Facturación del mes</span></div><div class="kpi-big">${fmtM(facturacion)}</div><div class="kpi-note">Objetivo: ${fmtM(META_MENSUAL)}</div><div class="kpi-progress"><span style="width:${pctMeta}%"></span></div><div class="kpi-progressrow"><span></span><strong>${pctMeta.toLocaleString('es-AR',{maximumFractionDigits:1})}%</strong></div></div>
+      <div class="kpi-card green"><div class="kpi-cardhead"><span class="kpi-icon">▣</span><span>Gastos del mes</span></div><div class="kpi-big">${fmtM(gastosMes)}</div><div class="kpi-note">${facturacion?((gastosMes/facturacion)*100).toLocaleString('es-AR',{maximumFractionDigits:1}):'0'}% de la facturación</div></div>
+      <div class="kpi-card"><div class="kpi-cardhead"><span class="kpi-icon">▥</span><span>Resultado neto del mes</span></div><div class="kpi-big">${fmtM(resultadoNeto)}</div><div class="kpi-note">Facturación − costos − gastos</div></div>
+      <div class="kpi-card amber"><div class="kpi-cardhead"><span class="kpi-icon">◷</span><span>Por cobrar</span></div><div class="kpi-big">${fmtM(cobrar)}</div><div class="kpi-note">Equipos ingresados sin cobrar</div></div>
+    </section>
 
-  <section class="panel">
-    <div class="panelhead"><div><div class="eyebrow">EVOLUCIÓN MENSUAL</div><h3>Resultado neto vs meta</h3></div><span class="badge">Meta mensual ${money(META_MENSUAL)}</span></div>
-    <div class="kpichart" style="width:100%;overflow-x:auto">
-      <svg viewBox="0 0 ${chartW} ${chartH}" role="img" aria-label="Evolución mensual del resultado neto" style="width:100%;min-width:700px;height:auto;display:block">
-        <line x1="${padL}" x2="${chartW-padR}" y1="${metaY}" y2="${metaY}" stroke="#c78318" stroke-width="3" stroke-dasharray="10 8"></line>
-        <text x="${chartW-padR}" y="${Math.max(18,metaY-8)}" text-anchor="end" font-size="16" font-weight="700" fill="#9a6512">Meta ${money(META_MENSUAL)}</text>
-        <line x1="${padL}" x2="${chartW-padR}" y1="${yPos(0)}" y2="${yPos(0)}" stroke="#dce4ee" stroke-width="2"></line>
-        <polyline points="${points}" fill="none" stroke="#0d5bd8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></polyline>
-        ${evolucion.map((x,i)=>`<g><circle cx="${xPos(i)}" cy="${yPos(x.value)}" r="7" fill="#0d5bd8"></circle><text x="${xPos(i)}" y="${chartH-18}" text-anchor="middle" font-size="16" fill="#5f6f83">${monthLabel(x.key)}</text><text x="${xPos(i)}" y="${Math.max(20,yPos(x.value)-12)}" text-anchor="middle" font-size="14" font-weight="700" fill="#17263a">${money(x.value)}</text></g>`).join('')}
-      </svg>
-    </div>
-  </section>
+    <section class="kpi-smallcards">
+      <div class="kpi-small"><div class="kpi-cardhead"><span class="kpi-icon">◇</span><span>Ingresos</span></div><div class="kpi-big">${ingresos.length}</div><div class="kpi-note">Equipos ingresados este mes</div></div>
+      <div class="kpi-small"><div class="kpi-cardhead"><span class="kpi-icon">✓</span><span>Entregados</span></div><div class="kpi-big">${entregados.length}</div><div class="kpi-note">Equipos entregados este mes</div></div>
+      <div class="kpi-small"><div class="kpi-cardhead"><span class="kpi-icon">◇</span><span>Ticket promedio</span></div><div class="kpi-big">${fmtM(ticket)}</div><div class="kpi-note">Sobre órdenes entregadas</div></div>
+      <div class="kpi-small"><div class="kpi-cardhead"><span class="kpi-icon">▣</span><span>Días con facturación</span></div><div class="kpi-big">${conFact}</div><div class="kpi-note">de ${transcurridos.length} días hábiles</div></div>
+      <div class="kpi-small danger"><div class="kpi-cardhead"><span class="kpi-icon">▣</span><span>Días en cero</span></div><div class="kpi-big">${enCero}</div><div class="kpi-note">de ${transcurridos.length} días hábiles</div></div>
+      <div class="kpi-small"><div class="kpi-cardhead"><span class="kpi-icon">▥</span><span>Promedio por día hábil</span></div><div class="kpi-big">${fmtM(promedioHabiles)}</div><div class="kpi-note">Incluye días en cero</div></div>
+    </section>
 
-  <section class="panel"><div class="panelhead"><div><div class="eyebrow">MARCAS</div><h3>Marcas que más ingresaron este mes</h3></div></div>${ranking.length?`<div class="brandlist">${ranking.map(([name,count])=>`<div class="brandrow"><strong>${esc(name)}</strong><div class="bartrack"><div class="barfill" style="width:${Math.round(count/max*100)}%"></div></div><div class="right"><strong>${count}</strong></div></div>`).join('')}</div>`:'<div class="empty">Todavía no hay ingresos este mes.</div>'}</section>`;
+    <section class="kpi-charts">
+      <div class="kpi-box">
+        <h3 class="kpi-boxtitle">Comparativo del mes (acumulado por día)</h3><div class="kpi-boxsub">${monthTitle} vs ${prevTitle}</div>
+        <div class="kpi-legend"><span><i class="kpi-dot"></i>${monthTitle} (acumulado)</span><span><i class="kpi-dot light"></i>${prevTitle} (acumulado)</span></div>
+        <div class="kpi-svgwrap"><svg class="kpi-svg" viewBox="0 0 ${cmp.W} ${cmp.H}" role="img" aria-label="Comparativo acumulado del mes">
+          ${[0,.25,.5,.75,1].map(p=>`<g><line x1="${cmp.L}" x2="${cmp.W-cmp.R}" y1="${cmp.T+p*(cmp.H-cmp.T-cmp.B)}" y2="${cmp.T+p*(cmp.H-cmp.T-cmp.B)}" stroke="#e8eef5"/><text x="${cmp.L-8}" y="${cmp.T+p*(cmp.H-cmp.T-cmp.B)+4}" text-anchor="end" font-size="11" fill="#547395">${fmtShort(cmp.max*(1-p))}</text></g>`).join('')}
+          <polyline points="${prevCum.map((v,i)=>`${cmp.x(i)},${cmp.y(v)}`).join(' ')}" fill="none" stroke="#9fbfe8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+          <polyline points="${cmp.points}" fill="none" stroke="#0d5bd8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+          ${curCum.map((v,i)=>i%3===0?`<circle cx="${cmp.x(i)}" cy="${cmp.y(v)}" r="4" fill="#0d5bd8"/>`:'').join('')}
+          ${prevCum.map((v,i)=>i%3===0?`<circle cx="${cmp.x(i)}" cy="${cmp.y(v)}" r="3.5" fill="#9fbfe8"/>`:'').join('')}
+          ${curCum.map((v,i)=>i%2===0?`<text x="${cmp.x(i)}" y="${cmp.H-12}" text-anchor="middle" font-size="10" fill="#547395">${i+1}</text>`:'').join('')}
+        </svg></div>
+        <div style="text-align:right;margin-top:-6px"><span class="badge ${variation<0?'red':'green'}" style="font-size:18px">${variation>=0?'+':''}${variation.toLocaleString('es-AR',{maximumFractionDigits:1})}%</span><div class="kpi-note">vs. mismo período de ${prevTitle}</div></div>
+      </div>
+
+      <div class="kpi-box">
+        <h3 class="kpi-boxtitle">Evolución mensual</h3><div class="kpi-boxsub">Total facturado por mes (últimos 7 meses)</div>
+        <div class="kpi-svgwrap"><svg class="kpi-svg" viewBox="0 0 ${evo.W} ${evo.H}" role="img" aria-label="Evolución mensual">
+          ${[0,.25,.5,.75,1].map(p=>`<line x1="${evo.L}" x2="${evo.W-evo.R}" y1="${evo.T+p*(evo.H-evo.T-evo.B)}" y2="${evo.T+p*(evo.H-evo.T-evo.B)}" stroke="#e8eef5"/>`).join('')}
+          <line x1="${evo.L}" x2="${evo.W-evo.R}" y1="${metaY}" y2="${metaY}" stroke="#c78318" stroke-width="2" stroke-dasharray="7 6"/>
+          <text x="${evo.W-evo.R}" y="${Math.max(14,metaY-7)}" text-anchor="end" font-size="10" fill="#a86d13">Meta ${fmtShort(META_MENSUAL)}</text>
+          <polyline points="${evo.points}" fill="none" stroke="#0d5bd8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+          ${evolucion.map((x,i)=>`<g><circle cx="${evo.x(i)}" cy="${evo.y(x.value)}" r="5" fill="#0d5bd8"/><text x="${evo.x(i)}" y="${Math.max(14,evo.y(x.value)-10)}" text-anchor="middle" font-size="11" font-weight="700" fill="#17345a">${fmtShort(x.value)}</text><text x="${evo.x(i)}" y="${evo.H-12}" text-anchor="middle" font-size="11" fill="#547395">${monthLabel(x.key)}</text></g>`).join('')}
+        </svg></div>
+      </div>
+    </section>
+
+    <section class="kpi-box kpi-daily">
+      <div class="kpi-dailyhead"><div><h3 class="kpi-boxtitle">Detalle diario del mes</h3><div class="kpi-boxsub">Facturación, ingresos, entregas y resultado por día hábil</div></div><div class="kpi-note">Días hábiles del mes: <strong>${dias.length}</strong></div></div>
+      <div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Día</th><th>Facturación</th><th>Ingresos</th><th>Entregas</th><th>Gastos</th><th>Resultado</th></tr></thead><tbody>
+        ${dias.map(x=>{const res=x.fact-x.gasto;const cls=x.futuro?'':(x.fact>0?'kpi-day-green':'kpi-day-red');return `<tr class="${cls}"${x.futuro?' style="opacity:.55"':''}><td><strong>${prettyDate(x.fecha)}</strong></td><td>${x.dt.toLocaleDateString('es-AR',{weekday:'long'})}</td><td><strong>${fmtM(x.fact)}</strong></td><td>${x.ing||'-'}</td><td>${x.ent||'-'}</td><td>${fmtM(x.gasto)}</td><td class="${res>0?'kpi-result-pos':'kpi-result-zero'}">${fmtM(res)}</td></tr>`}).join('')}
+      </tbody></table></div>
+    </section>
+  </div>`;
 }
 
 function renderCleris(){
