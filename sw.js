@@ -1,11 +1,11 @@
-const CACHE_NAME = 'nqn-service-v941-cierre-z-definitivo';
+const CACHE_NAME = 'nqn-service-v942-cierre-z-cache-bust';
 const APP_SHELL = [
   './',
   './index.html',
   './NQN_SERVICE_ESTABLE.html',
   './manifest.webmanifest',
   './turnos.js',
-  './cierre-z.js',
+  './cierre-z.js?v=942',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-maskable-512.png'
