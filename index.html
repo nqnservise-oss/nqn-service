@@ -1533,10 +1533,13 @@ window.__nqnLegacyBoot=boot;
   function normalizeCashClosing(r,index=0){
     return {
       id:String(r?.id||('caja-'+Date.now()+'-'+index)),fecha:String(r?.fecha||localDay()),
+      tipo:String(r?.tipo||'caja'),estado:String(r?.estado||''),periodo:String(r?.periodo||''),
       operadorId:String(r?.operadorId||''),operador:String(r?.operador||'').trim(),
       efectivo:Math.max(0,Number(r?.efectivo||0)),mercadoPago:Math.max(0,Number(r?.mercadoPago||0)),
       tarjetas:Math.max(0,Number(r?.tarjetas||0)),notaCredito:Math.max(0,Number(r?.notaCredito||0)),
       gastos:Math.max(0,Number(r?.gastos||0)),ajusteEfectivo:Number(r?.ajusteEfectivo||0),ajusteMP:Number(r?.ajusteMP||0),ajusteTotal:Number(r?.ajusteTotal||0),ajusteGastos:Number(r?.ajusteGastos||0),ajusteNotas:Number(r?.ajusteNotas||0),ajusteMotivo:String(r?.ajusteMotivo||'').trim(),observaciones:String(r?.observaciones||'').trim(),
+      desde:String(r?.desde||''),hasta:String(r?.hasta||''),ejecutadoEn:String(r?.ejecutadoEn||''),
+      snapshot:(r?.snapshot&&typeof r.snapshot==='object')?r.snapshot:{},
       creado:r?.creado||now(),actualizado:r?.actualizado||r?.creado||now()
     };
   }
@@ -1660,7 +1663,12 @@ window.__nqnLegacyBoot=boot;
     return rows;
   };
   function operatorOwns(x,op){return String(x?.operadorId||'')===String(op?.id||'')||(!x?.operadorId&&String(x?.operador||'').toLowerCase()===String(op?.nombre||'').toLowerCase())}
-  function todaysCashForOperator(rows,op,fecha=localDay()){return rows.find(x=>x.fecha===fecha&&operatorOwns(x,op))||null}
+  function todaysCashForOperator(rows,op,fecha=localDay()){return rows.find(x=>x.fecha===fecha&&x.tipo!=='cierre_z'&&operatorOwns(x,op))||null}
+  function cierreZForDate(rows,fecha,op){
+    return (Array.isArray(rows)?rows:[]).filter(x=>x&&x.tipo==='cierre_z'&&x.estado==='cerrado'&&x.fecha===fecha&&(!op||x.periodo==='dia'||operatorOwns(x,op)))
+      .sort((a,b)=>String(b.ejecutadoEn||b.actualizado||'').localeCompare(String(a.ejecutadoEn||a.actualizado||'')))[0]||null;
+  }
+  window.cierreZForDate=cierreZForDate;
   function expenseTotalFor(fecha,owner){
     const rows=(window.loadExpenses?window.loadExpenses():[]).filter(x=>x.fecha===fecha&&operatorOwns(x,owner));
     return rows.reduce((a,x)=>a+Number(x.monto||0),0);
@@ -1924,7 +1932,8 @@ window.__nqnLegacyBoot=boot;
   window.showCashSummary=function(editId=''){
     rememberCurrentView('caja');
     const op=session();if(!op)return renderLoginOrSetup();currentView='caja';editingId=null;setNav('caja');title('Resumen de caja diario');
-    const all=window.loadCashClosings();
+    const allCash=window.loadCashClosings();
+    const all=allCash.filter(x=>x?.tipo!=='cierre_z');
     let hit=editId?all.find(x=>String(x.id)===String(editId)):todaysCashForOperator(all,op);
     if(hit&&!window.isAdmin()&&!operatorOwns(hit,op)){toast('No podés editar el cierre de otro operador');return window.showCashSummary()}
     const todayHit=!hit?all.find(x=>x.fecha===localDay()&&operatorOwns(x,op)):null;
@@ -2013,6 +2022,9 @@ window.__nqnLegacyBoot=boot;
   };
   window.submitCashSummary=function(ev,editId=''){
     ev.preventDefault();const op=session();if(!op)return renderLoginOrSetup();let rows=window.loadCashClosings(),old=editId?rows.find(x=>String(x.id)===String(editId)):null;
+    const fechaObjetivo=old?.fecha||cashValue('cashFecha')||localDay();
+    const zLock=cierreZForDate(rows,fechaObjetivo,old||op);
+    if(zLock){alert('Este período ya tiene un Cierre Z ejecutado y quedó bloqueado. Los movimientos nuevos deben registrarse en un cierre posterior.');return}
     if(old&&!window.isAdmin()&&!operatorOwns(old,op)){alert('No podés modificar el cierre de otro operador.');return}
     const owner=old||{operadorId:op.id,operador:op.nombre},ts=now(),fecha=cashValue('cashFecha'),ownerRef={id:owner.operadorId||op.id,nombre:owner.operador||op.nombre},gastosDetalle=expenseTotalFor(fecha,ownerRef),obj=normalizeCashClosing({id:editId||uid('caja'),fecha,operadorId:ownerRef.id,operador:ownerRef.nombre,efectivo:cashNum('cashEfectivo'),mercadoPago:cashNum('cashMP'),tarjetas:cashNum('cashTarjetas'),notaCredito:cashNum('cashNC'),gastos:gastosDetalle,observaciones:String(cashValue('cashObs')||'').trim(),ajusteEfectivo:old?.ajusteEfectivo||0,ajusteMP:old?.ajusteMP||0,ajusteTotal:old?.ajusteTotal||0,ajusteGastos:old?.ajusteGastos||0,ajusteNotas:old?.ajusteNotas||0,ajusteMotivo:old?.ajusteMotivo||'',creado:old?.creado||ts,actualizado:ts});
     const dup=rows.find(x=>String(x.id)!==String(editId)&&x.fecha===obj.fecha&&operatorOwns(x,{id:obj.operadorId,nombre:obj.operador}));if(dup&&!confirm('Ya existe un cierre para esta fecha y operador. ¿Guardar otro igualmente?'))return;
@@ -2137,7 +2149,7 @@ window.__nqnLegacyBoot=boot;
     const op=session();if(!op)return renderLoginOrSetup();let expenses=window.loadExpenses(),x=expenses.find(r=>String(r.id)===String(id));if(!x)return;if(!window.isAdmin()&&!operatorOwns(x,op)){toast('No podés eliminar un gasto de otro operador');return}if(!confirm('¿Eliminar este gasto de '+m(x.monto)+'?'))return;window.saveExpenses(expenses.filter(r=>String(r.id)!==String(id)));queueCloudOp('deleteExpense',x.id,null,now());
     let cash=window.loadCashClosings(),c=cash.find(r=>String(r.id)===String(x.cajaId));if(!c)c=cash.find(r=>r.fecha===x.fecha&&operatorOwns(r,{id:x.operadorId,nombre:x.operador}));if(c){c.gastos=Math.max(0,Number(c.gastos||0)-Number(x.monto||0));c.actualizado=now();window.saveCashClosings(cash);queueCloudOp('upsertCash',c.id,c,c.actualizado)}toast('Gasto eliminado');window.renderExpenses();
   };
-  window.deleteCashSummary=function(id){if(!window.isAdmin()){toast('Solo el administrador puede eliminar cierres');return}const rows=window.loadCashClosings(),x=rows.find(r=>String(r.id)===String(id));if(!x)return;if(!confirm('¿Eliminar el cierre de '+dateLabel(x.fecha)+' de '+x.operador+'?'+((x.ajusteEfectivo||x.ajusteMP||x.ajusteTotal||x.ajusteGastos||x.ajusteNotas)?' También se eliminará el ajuste de saldos asociado a este cierre.':'') ))return;window.saveCashClosings(rows.filter(r=>String(r.id)!==String(id)));queueCloudOp('deleteCash',id,null,now());toast('Cierre eliminado');window.showCashSummary()};
+  window.deleteCashSummary=function(id){if(!window.isAdmin()){toast('Solo el administrador puede eliminar cierres');return}const rows=window.loadCashClosings(),x=rows.find(r=>String(r.id)===String(id));if(!x)return;const zLock=cierreZForDate(rows,x.fecha,x);if(zLock){alert('No se puede eliminar: ese período ya tiene un Cierre Z ejecutado y quedó bloqueado.');return}if(!confirm('¿Eliminar el cierre de '+dateLabel(x.fecha)+' de '+x.operador+'?'+((x.ajusteEfectivo||x.ajusteMP||x.ajusteTotal||x.ajusteGastos||x.ajusteNotas)?' También se eliminará el ajuste de saldos asociado a este cierre.':'') ))return;window.saveCashClosings(rows.filter(r=>String(r.id)!==String(id)));queueCloudOp('deleteCash',id,null,now());toast('Cierre eliminado');window.showCashSummary()};
 
   window.renderOperators=function(editId=''){
     rememberCurrentView('operadores');
