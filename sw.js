@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nqn-service-v940-clientes-buscador-whatsapp';
+const CACHE_NAME = 'nqn-service-v941-cierre-z-definitivo';
 const APP_SHELL = [
   './',
   './index.html',
