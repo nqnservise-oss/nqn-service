@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nqn-service-v936-transfer-sync';
+const CACHE_NAME = 'nqn-service-v940-clientes-buscador-whatsapp';
 const APP_SHELL = [
   './',
   './index.html',
