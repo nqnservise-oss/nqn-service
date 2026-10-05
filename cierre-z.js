@@ -275,8 +275,15 @@
     try{ if(typeof title==='function') title('Cierre Z'); }catch(_){}
 
     fecha=String(fecha || document.getElementById('zFecha')?.value || localDay());
-    const rows=movements(fecha), tot=totals(rows);
-    const controlKey='nqn_cierre_z_control_'+fecha;
+    const allRows=movements(fecha);
+    const cierresZ=safeArray(()=>typeof window.loadCashClosings==='function'?window.loadCashClosings():[])
+      .filter(x=>x&&x.tipo==='cierre_z'&&x.estado==='cerrado'&&String(x.fecha||'')===fecha)
+      .sort((a,b)=>String(a.ejecutadoEn||a.actualizado||'').localeCompare(String(b.ejecutadoEn||b.actualizado||'')));
+    const ultimoZ=cierresZ[cierresZ.length-1]||null;
+    const corteTs=ultimoZ?new Date(ultimoZ.hasta||ultimoZ.ejecutadoEn||ultimoZ.actualizado||0).getTime():0;
+    const rows=allRows.filter(x=>!corteTs||Number(x.ts||0)>corteTs);
+    const tot=totals(rows);
+    const controlKey='nqn_cierre_z_control_'+fecha+'_'+String(corteTs||0);
     let controlGuardado={};
     try{ controlGuardado=JSON.parse(localStorage.getItem(controlKey)||'{}')||{}; }catch(_){}
     const ops=[...new Set(rows.map(x=>x.operador).filter(x=>x && x!=='Sin registrar'))];
@@ -287,7 +294,7 @@
     const efectivoEsperado=Number(tot.efectivo||0)-gastosEfectivo;
 
     const cierres=safeArray(()=>typeof window.loadCashClosings==='function'?window.loadCashClosings():[])
-      .filter(x=>String(x.fecha||'')===fecha);
+      .filter(x=>String(x.fecha||'')===fecha && x?.tipo!=='cierre_z');
     const cierreTs=cierres.map(x=>new Date(x.actualizado||x.creado||'').getTime())
       .filter(Number.isFinite).sort((a,b)=>b-a)[0]||0;
     const cierreHora=cierreTs
@@ -341,8 +348,8 @@
           <div>
             <div class="eyebrow">INFORME DIARIO</div>
             <h3 style="margin-bottom:4px">CIERRE Z — ${e(dateLabel(fecha))}</h3>
-            <div class="muted">Operadores: ${e(ops.length?ops.join(', '):'Sin movimientos')} · Hora de cierre: ${e(cierreHora)}</div>
-            <div class="muted" style="margin-top:4px">Este informe detalla los movimientos del día. No modifica ni reemplaza el Resumen de caja.</div>
+            <div class="muted">Operadores: ${e(ops.length?ops.join(', '):'Sin movimientos')} · Hora de cierre de caja: ${e(cierreHora)}</div>
+            <div class="muted" style="margin-top:4px">${ultimoZ?('Último Cierre Z: '+e(new Date(ultimoZ.ejecutadoEn||ultimoZ.actualizado).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}))+' · mostrando movimientos posteriores'):'Período abierto: todavía no se ejecutó un Cierre Z.'}</div>
           </div>
           <div class="field short" style="margin:0">
             <label>Fecha</label>
@@ -365,8 +372,13 @@
             <div class="stat"><div class="statlabel">Diferencia</div><div id="zDiferenciaEfectivo" class="statvalue smallmoney">${controlGuardado.efectivoContado!=null?m(Number(controlGuardado.efectivoContado)-efectivoEsperado):'—'}</div></div>
           </div>
           <button id="zGuardarControl" class="primary" type="button">Comprobar y guardar caja</button>
-          <div id="zControlEstado" class="muted" style="margin:8px 0 18px">${controlGuardado.guardadoEn?('Último control guardado por '+e(controlGuardado.operador||'Sin registrar')):''}</div>
-          <div class="eyebrow">TOTALES DEL DÍA</div>
+          <div id="zControlEstado" class="muted" style="margin:8px 0 12px">${controlGuardado.guardadoEn?('Último control guardado por '+e(controlGuardado.operador||'Sin registrar')):''}</div>
+          <div class="grid" style="grid-template-columns:minmax(180px,260px) minmax(180px,260px);align-items:end;margin:0 0 18px">
+            <div class="field"><label>Tipo de cierre</label><select id="zTipoCierre"><option value="turno">Cerrar turno</option><option value="dia">Cerrar día</option></select></div>
+            <button id="zEjecutarCierre" class="primary" type="button" ${controlGuardado.guardadoEn?'':'disabled'}>Ejecutar cierre Z</button>
+          </div>
+          <div id="zCierreEstado" class="muted" style="margin:-8px 0 18px">${ultimoZ?('Último Z cerrado por '+e(ultimoZ.operador||'Sin registrar')):''}</div>
+          <div class="eyebrow">TOTALES DEL PERÍODO ABIERTO</div>
           <div class="nqn-z-stats">
             <div class="stat"><div class="statlabel">Efectivo cobrado</div><div class="statvalue smallmoney">${m(tot.efectivo)}</div></div>
             <div class="stat"><div class="statlabel">Efectivo real en caja</div><div class="statvalue smallmoney">${m(Number(tot.efectivo||0)-Number(tot.gastos||0))}</div></div>
@@ -403,6 +415,7 @@
         const activo=currentOperator();
         const control={
           fecha,
+          desde:corteTs?new Date(corteTs).toISOString():'',
           efectivoSistema:efectivoEsperado,
           efectivoContado:Number(contado.value||0),
           diferencia:Number(contado.value||0)-efectivoEsperado,
@@ -412,6 +425,76 @@
         };
         try{ localStorage.setItem(controlKey,JSON.stringify(control)); }catch(_){}
         if(estado) estado.textContent='Control guardado · '+control.operador+' · diferencia '+m(control.diferencia);
+        const ejecutar=document.getElementById('zEjecutarCierre');
+        if(ejecutar) ejecutar.disabled=false;
+      });
+    }
+
+    const ejecutar=document.getElementById('zEjecutarCierre');
+    const tipoCierre=document.getElementById('zTipoCierre');
+    const cierreEstado=document.getElementById('zCierreEstado');
+    if(ejecutar){
+      ejecutar.addEventListener('click',()=>{
+        let control={};
+        try{ control=JSON.parse(localStorage.getItem(controlKey)||'{}')||{}; }catch(_){}
+        if(!control.guardadoEn){
+          if(cierreEstado) cierreEstado.textContent='Primero comprobá y guardá la caja.';
+          return;
+        }
+        const activo=currentOperator();
+        if(!activo){
+          if(cierreEstado) cierreEstado.textContent='No hay un operador activo.';
+          return;
+        }
+        const periodo=String(tipoCierre?.value||'turno');
+        const hasta=new Date().toISOString();
+        const mensaje='Vas a ejecutar el Cierre Z de '+(periodo==='dia'?'DÍA':'TURNO')+'. El arqueo y los totales de este período quedarán bloqueados. ¿Continuar?';
+        if(!confirm(mensaje)) return;
+
+        const cierre={
+          id:'cierre-z-'+Date.now()+'-'+Math.random().toString(36).slice(2,8),
+          tipo:'cierre_z',
+          estado:'cerrado',
+          periodo,
+          fecha,
+          operadorId:String(activo.id||''),
+          operador:String(activo.nombre||activo.usuario||'Sin registrar'),
+          desde:corteTs?new Date(corteTs).toISOString():'',
+          hasta,
+          ejecutadoEn:hasta,
+          efectivo:0,mercadoPago:0,tarjetas:0,notaCredito:0,gastos:0,
+          snapshot:{
+            efectivoSistema:efectivoEsperado,
+            efectivoContado:Number(control.efectivoContado||0),
+            diferencia:Number(control.diferencia||0),
+            efectivoCobrado:Number(tot.efectivo||0),
+            mercadoPago:Number(tot.mp||0),
+            debito:Number(tot.debito||0),
+            credito:Number(tot.credito||0),
+            tarjetaLegacy:Number(tot.tarjetaLegacy||0),
+            gastos:Number(tot.gastos||0),
+            notas:Number(tot.notas||0),
+            ingresos:Number(ingresos||0),
+            neto:Number(neto||0),
+            movimientos:rows.length
+          },
+          observaciones:'Cierre Z ejecutado',
+          creado:hasta,
+          actualizado:hasta
+        };
+
+        try{
+          const cierres=typeof window.loadCashClosings==='function'?window.loadCashClosings():[];
+          cierres.push(cierre);
+          if(typeof window.saveCashClosings==='function') window.saveCashClosings(cierres);
+          if(typeof window.queueCloudOp==='function') window.queueCloudOp('upsertCash',cierre.id,cierre,cierre.actualizado);
+          try{ localStorage.removeItem(controlKey); }catch(_){}
+          if(typeof window.toast==='function') window.toast('Cierre Z ejecutado · período bloqueado');
+          render(fecha);
+        }catch(err){
+          console.error('No se pudo ejecutar Cierre Z',err);
+          if(cierreEstado) cierreEstado.textContent='No se pudo ejecutar el cierre. Los datos no fueron bloqueados.';
+        }
       });
     }
   }
