@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nqn-service-v942-cierre-z-cache-bust';
+const CACHE_NAME = 'nqn-service-v943-historial-cierres-z';
 const APP_SHELL = [
   './',
   './index.html',
