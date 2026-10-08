@@ -1121,7 +1121,7 @@ function renderKPIs(){
   const expectedToDate=totalBusinessDays?META_MENSUAL*elapsedBusinessDays/totalBusinessDays:0;
   const onPace=facturacion>=expectedToDate;
   const variationText=factVariation===null?'Sin base comparable':`${factVariation>=0?'+':''}${factVariation.toLocaleString('es-AR',{maximumFractionDigits:1})}% vs. mes anterior (mismo período)`;
-  const paceText=`${onPace?'🟢 En ritmo':'🔴 Bajo el ritmo'} · esperado a la fecha: ${fmtM(expectedToDate)}`;
+  const paceText=`${onPace?'🟢 En ritmo':'🔴 Bajo el ritmo'} · esperado a la fecha: ${money(expectedToDate)}`;
 
   const shiftKey=(key,delta)=>{const [y,m]=key.split('-').map(Number),d=new Date(y,m-1+delta,1);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`};
   const prevKey=shiftKey(mk,-1);
