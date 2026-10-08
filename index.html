@@ -1110,6 +1110,18 @@ function renderKPIs(){
   const enCero=transcurridos.filter(x=>x.fact===0).length;
   const promedioHabiles=transcurridos.length?facturacion/transcurridos.length:0;
   const pctMeta=Math.min(100,Math.max(0,(facturacion/META_MENSUAL)*100));
+  const prevMonthDate=new Date(yy,mm-2,1);
+  const prevMonthKey=`${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth()+1).padStart(2,'0')}`;
+  const isCurrentKpiMonth=mk===currentMonthKey();
+  const cutoffDay=isCurrentKpiMonth?Number(hoy.slice(8,10)):ultimo;
+  const prevFactSamePeriod=rows.filter(r=>r.estado==='Entregado'&&monthKey(r.fechaEntrega)===prevMonthKey&&Number(String(r.fechaEntrega).slice(8,10))<=cutoffDay).reduce((sum,r)=>sum+Number(r.monto||0),0);
+  const factVariation=prevFactSamePeriod>0?(facturacion/prevFactSamePeriod-1)*100:null;
+  const elapsedBusinessDays=transcurridos.length;
+  const totalBusinessDays=dias.length;
+  const expectedToDate=totalBusinessDays?META_MENSUAL*elapsedBusinessDays/totalBusinessDays:0;
+  const onPace=facturacion>=expectedToDate;
+  const variationText=factVariation===null?'Sin base comparable':`${factVariation>=0?'+':''}${factVariation.toLocaleString('es-AR',{maximumFractionDigits:1})}% vs. mes anterior (mismo período)`;
+  const paceText=`${onPace?'🟢 En ritmo':'🔴 Bajo el ritmo'} · esperado a la fecha: ${fmtM(expectedToDate)}`;
 
   const shiftKey=(key,delta)=>{const [y,m]=key.split('-').map(Number),d=new Date(y,m-1+delta,1);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`};
   const prevKey=shiftKey(mk,-1);
@@ -1174,7 +1186,7 @@ function renderKPIs(){
     </div>
 
     <section class="kpi-topcards">
-      <div class="kpi-card blue"><div class="kpi-cardhead"><span class="kpi-icon">▥</span><span>Facturación del mes</span></div><div class="kpi-big">${fmtM(facturacion)}</div><div class="kpi-note">Objetivo: ${fmtM(META_MENSUAL)}</div><div class="kpi-progress"><span style="width:${pctMeta}%"></span></div><div class="kpi-progressrow"><span></span><strong>${pctMeta.toLocaleString('es-AR',{maximumFractionDigits:1})}%</strong></div></div>
+      <div class="kpi-card blue"><div class="kpi-cardhead"><span class="kpi-icon">▥</span><span>Facturación del mes</span></div><div class="kpi-big">${fmtM(facturacion)}</div><div class="kpi-note">Objetivo: ${fmtM(META_MENSUAL)}</div><div class="kpi-note">${variationText}</div><div class="kpi-note">${paceText}</div><div class="kpi-progress"><span style="width:${pctMeta}%"></span></div><div class="kpi-progressrow"><span>Meta cumplida</span><strong>${pctMeta.toLocaleString('es-AR',{maximumFractionDigits:1})}%</strong></div></div>
       <div class="kpi-card green"><div class="kpi-cardhead"><span class="kpi-icon">▣</span><span>Gastos del mes</span></div><div class="kpi-big">${fmtM(gastosMes)}</div><div class="kpi-note">${facturacion?((gastosMes/facturacion)*100).toLocaleString('es-AR',{maximumFractionDigits:1}):'0'}% de la facturación</div></div>
       <div class="kpi-card"><div class="kpi-cardhead"><span class="kpi-icon">▥</span><span>Resultado neto del mes</span></div><div class="kpi-big">${fmtM(resultadoNeto)}</div><div class="kpi-note">Facturación − costos − gastos</div></div>
       <div class="kpi-card amber"><div class="kpi-cardhead"><span class="kpi-icon">◷</span><span>Por cobrar</span></div><div class="kpi-big">${fmtM(cobrar)}</div><div class="kpi-note">Equipos ingresados sin cobrar</div></div>
