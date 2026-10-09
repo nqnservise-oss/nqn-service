@@ -1549,7 +1549,7 @@ window.__nqnLegacyBoot=boot;
       operadorId:String(r?.operadorId||''),operador:String(r?.operador||'').trim(),
       efectivo:Math.max(0,Number(r?.efectivo||0)),mercadoPago:Math.max(0,Number(r?.mercadoPago||0)),
       tarjetas:Math.max(0,Number(r?.tarjetas||0)),notaCredito:Math.max(0,Number(r?.notaCredito||0)),
-      gastos:Math.max(0,Number(r?.gastos||0)),ajusteEfectivo:Number(r?.ajusteEfectivo||0),ajusteMP:Number(r?.ajusteMP||0),ajusteTotal:Number(r?.ajusteTotal||0),ajusteGastos:Number(r?.ajusteGastos||0),ajusteNotas:Number(r?.ajusteNotas||0),ajusteMotivo:String(r?.ajusteMotivo||'').trim(),observaciones:String(r?.observaciones||'').trim(),
+      gastos:Math.max(0,Number(r?.gastos||0)),ajusteEfectivo:Number(r?.ajusteEfectivo||0),ajusteMP:Number(r?.ajusteMP||0),ajusteTotal:Number(r?.ajusteTotal||0),ajusteGastos:Number(r?.ajusteGastos||0),ajusteNotas:Number(r?.ajusteNotas||0),ajusteMotivo:String(r?.ajusteMotivo||'').trim(),saldoRealSnapshot:r?.saldoRealSnapshot&&typeof r.saldoRealSnapshot==='object'?r.saldoRealSnapshot:null,observaciones:String(r?.observaciones||'').trim(),
       desde:String(r?.desde||''),hasta:String(r?.hasta||''),ejecutadoEn:String(r?.ejecutadoEn||''),
       snapshot:(r?.snapshot&&typeof r.snapshot==='object')?r.snapshot:{},
       creado:r?.creado||now(),actualizado:r?.actualizado||r?.creado||now()
@@ -1916,7 +1916,15 @@ window.__nqnLegacyBoot=boot;
     const cobros={efectivo:0,mercadoPago:0,tarjetas:0};
     const days=new Set([...orders.flatMap(r=>Array.isArray(r?.pagos)&&r.pagos.length?r.pagos.map(p=>p.fecha):[r.fechaEntrega]),...Object.keys(turnosAll)].filter(x=>String(x||'').slice(0,7)===mk));
     days.forEach(day=>{const x=cashAutomatic(day);cobros.efectivo+=x.efectivo;cobros.mercadoPago+=x.mercadoPago;cobros.tarjetas+=x.tarjetas});
-    return {ingresos:ingresosCaja,ingresosNQN:ingresos+visitasIngresos,ingresosVisitas:visitasIngresos,ingresosCleris:clerisIngresos,gastos:gastos+ajusteGastos,notas:notas+ajusteNotas,ajustesEfectivo,ajustesMP,ajustesTotal,efectivo:cobros.efectivo,gastosEfectivo,cajaFisica:cobros.efectivo-gastosEfectivo+ajustesEfectivo+transferEf,mercadoPago:cobros.mercadoPago-gastosMP+ajustesMP+transferMP,neto:ingresosCaja-notas-gastos+ajustesEfectivo+ajustesMP+ajustesTotal};
+    const rawEf=cobros.efectivo-gastosEfectivo+ajustesEfectivo+transferEf;
+    const rawMP=cobros.mercadoPago-gastosMP+ajustesMP+transferMP;
+    // La última conciliación absoluta es un punto de partida; los movimientos posteriores
+    // se agregan una sola vez. Nunca modifica ingresos, gastos ni resultado mensual.
+    const latest=closings.filter(x=>x.saldoRealSnapshot&&x.tipo!=='cierre_z')
+      .sort((a,b)=>String(b.saldoRealSnapshot?.at||'').localeCompare(String(a.saldoRealSnapshot?.at||'')))[0]?.saldoRealSnapshot;
+    const cajaReal=latest?Number(latest.ef)+rawEf-Number(latest.rawEf):rawEf;
+    const mpReal=latest?Number(latest.mp)+rawMP-Number(latest.rawMP):rawMP;
+    return {ingresos:ingresosCaja,ingresosNQN:ingresos+visitasIngresos,ingresosVisitas:visitasIngresos,ingresosCleris:clerisIngresos,gastos:gastos+ajusteGastos,notas:notas+ajusteNotas,ajustesEfectivo,ajustesMP,ajustesTotal,efectivo:cobros.efectivo,gastosEfectivo,cajaFisica:cajaReal,mercadoPago:mpReal,neto:ingresosCaja-notas-gastos+ajustesEfectivo+ajustesMP+ajustesTotal};
   }
 
   function paintMonthBalance(value){
@@ -2031,6 +2039,15 @@ window.__nqnLegacyBoot=boot;
     c.ajusteNotas=Number(c.ajusteNotas||0)+deltaNotas;
     c.ajusteMotivo=[c.ajusteMotivo,fecha+': '+motivo.trim()+' (efectivo '+m(deltaEf)+', MP '+m(deltaMP)+', total adicional '+m(deltaTotal)+(resetAll?', gastos y notas reiniciados':'')+')'].filter(Boolean).join(' | ');
     c.actualizado=ts;
+    // Guardar el saldo físico confirmado como referencia absoluta, sin sumar dos veces
+    // conciliaciones previas. Capturar el cálculo bruto después del ajuste.
+    const afterRawEf=actual.cajaFisica+deltaEf;
+    const afterRawMP=actual.mercadoPago+deltaMP;
+    const prevSnapshot=rows.filter(x=>x.saldoRealSnapshot&&x.tipo!=='cierre_z')
+      .sort((a,b)=>String(b.saldoRealSnapshot?.at||'').localeCompare(String(a.saldoRealSnapshot?.at||'')))[0]?.saldoRealSnapshot;
+    const rawEf=prevSnapshot?Number(prevSnapshot.rawEf)+(afterRawEf-Number(prevSnapshot.ef)):afterRawEf;
+    const rawMP=prevSnapshot?Number(prevSnapshot.rawMP)+(afterRawMP-Number(prevSnapshot.mp)):afterRawMP;
+    c.saldoRealSnapshot={at:ts,ef,mp,rawEf,rawMP};
     window.saveCashClosings(rows);
     queueCloudOp('upsertCash',c.id,c,c.actualizado);
     toast('Ajuste de caja registrado');
