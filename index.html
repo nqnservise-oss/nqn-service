@@ -2016,7 +2016,7 @@ window.__nqnLegacyBoot=boot;
     if(!Number.isFinite(ef)||!Number.isFinite(mp)||!Number.isFinite(total)||ef<0||mp<0||total<0){alert('Ingresá importes válidos mayores o iguales a cero.');return}
     const motivo=cashValue('adjustMotivo').trim();
     if(!motivo){alert('Indicá un motivo para conservar el registro.');return}
-    const deltaEf=ef-actual.efectivo,deltaMP=mp-actual.mercadoPago,deltaTotal=-deltaEf-deltaMP;
+    const deltaEf=ef-actual.cajaFisica,deltaMP=mp-actual.mercadoPago,deltaTotal=-deltaEf-deltaMP;
     const resetAll=document.getElementById('cashAdjustPanel')?.dataset.resetAll==='1';
     const deltaGastos=resetAll?-actual.gastos:0,deltaNotas=resetAll?-actual.notas:0;
     if(!deltaEf&&!deltaMP&&!deltaTotal&&!deltaGastos&&!deltaNotas){alert('Los totales ya están en cero.');return}
