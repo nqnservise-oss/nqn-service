@@ -490,53 +490,36 @@ let appViewHistory=[];
 let appForwardHistory=[];
 let appNavRestoring=false;
 function navState(){return {view:currentView||'dashboard',editingId:editingId||''}}
+function menuViewIds(){
+  return Array.from(document.querySelectorAll('.sidebar .nav button[id^="nav-"]'))
+    .filter(button=>button.getClientRects().length>0 && !button.disabled)
+    .map(button=>button.id.slice(4));
+}
+function currentMenuIndex(ids){
+  const selected=ids.indexOf(currentView);
+  if(selected>=0)return selected;
+  const active=document.querySelector('.sidebar .nav button.active[id^="nav-"]');
+  return active?ids.indexOf(active.id.slice(4)):-1;
+}
 function updateBackButton(){
- const b=document.getElementById('appBackBtn'),f=document.getElementById('appForwardBtn');
- if(b)b.disabled=appViewHistory.length===0;
- if(f)f.disabled=appForwardHistory.length===0;
+  const ids=menuViewIds(),i=currentMenuIndex(ids);
+  const b=document.getElementById('appBackBtn'),f=document.getElementById('appForwardBtn');
+  if(b)b.disabled=i<=0;
+  if(f)f.disabled=i<0||i>=ids.length-1;
 }
 function rememberCurrentView(nextView,nextId=''){
-  if(appNavRestoring)return;
-  const state=navState();
-  if(state.view===nextView&&(!nextId||String(state.editingId)===String(nextId)))return;
-  appForwardHistory=[];
-  const last=appViewHistory[appViewHistory.length-1];
-  if(!last||last.view!==state.view||String(last.editingId||'')!==String(state.editingId||''))appViewHistory.push(state);
-  if(appViewHistory.length>30)appViewHistory.shift();
+  // Conservamos la función por compatibilidad; las flechas ahora siguen el orden del menú.
   updateBackButton();
 }
-function goBackView(){
-  const target=appViewHistory.pop();
-  if(!target){updateBackButton();return}
-  appForwardHistory.push(navState());
-  appNavRestoring=true;
-  try{
-    if(target.view==='editar'&&target.editingId)return editOrder(target.editingId);
-    if(target.view==='demorados')return showLateOrders();
-    if(target.view==='nuevo')return newOrder();
-    if(target.view==='caja'&&typeof window.showCashSummary==='function')return window.showCashSummary();
-    if(target.view==='stock'&&typeof window.renderStock==='function')return window.renderStock();
-    if(target.view==='gastos'&&typeof window.renderExpenses==='function')return window.renderExpenses();
-    if(target.view==='operadores'&&typeof window.renderOperators==='function')return window.renderOperators();
-    return window.showView(target.view||'dashboard');
-  }finally{appNavRestoring=false;setTimeout(updateBackButton,0)}
+function moveMenuView(direction){
+  const ids=menuViewIds(),i=currentMenuIndex(ids),next=ids[i+direction];
+  if(!next)return;
+  const button=document.getElementById('nav-'+next);
+  if(button)button.click();
+  updateBackButton();
 }
-function goForwardView(){
- const target=appForwardHistory.pop();
- if(!target){updateBackButton();return}
- appViewHistory.push(navState());
- appNavRestoring=true;
- try{
-   if(target.view==='editar'&&target.editingId)return editOrder(target.editingId);
-   if(target.view==='demorados')return showLateOrders();
-   if(target.view==='nuevo')return newOrder();
-   if(target.view==='caja'&&typeof window.showCashSummary==='function')return window.showCashSummary();
-   if(target.view==='stock'&&typeof window.renderStock==='function')return window.renderStock();
-   if(target.view==='gastos'&&typeof window.renderExpenses==='function')return window.renderExpenses();
-   if(target.view==='operadores'&&typeof window.renderOperators==='function')return window.renderOperators();
-   return window.showView(target.view||'dashboard');
- }finally{appNavRestoring=false;setTimeout(updateBackButton,0)}
-}
+function goBackView(){moveMenuView(-1)}
+function goForwardView(){moveMenuView(1)}
 window.goBackView=goBackView;
 window.goForwardView=goForwardView;
 let editingId=null;
