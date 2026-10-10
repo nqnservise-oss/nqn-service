@@ -1118,7 +1118,7 @@ function showClientOrders(phone,clientNumber){let rows=load().filter(r=>(phone&&
 function renderKPIs(){
   title('KPIs del taller');setNav('kpis');
   const rows=load();
-  const META_DIARIA=500000, META_MENSUAL=10000000;
+  const META_DIARIA=350000, META_MENSUAL=7000000;
   window.__kpiMonthOffset=Number(window.__kpiMonthOffset||0);
   const base=new Date();
   const selected=new Date(base.getFullYear(),base.getMonth()+window.__kpiMonthOffset,1);
@@ -1166,7 +1166,10 @@ function renderKPIs(){
   const factVariation=prevFactSamePeriod>0?(facturacion/prevFactSamePeriod-1)*100:null;
   const elapsedBusinessDays=transcurridos.length;
   const totalBusinessDays=dias.length;
-  const expectedToDate=totalBusinessDays?META_MENSUAL*elapsedBusinessDays/totalBusinessDays:0;
+  const expectedToDate=META_DIARIA*elapsedBusinessDays;
+  const metaHabilesMes=META_DIARIA*totalBusinessDays;
+  const diferenciaMeta=facturacion-expectedToDate;
+  const porcentajeRitmo=expectedToDate>0?Math.round(100*facturacion/expectedToDate):0;
   const onPace=facturacion>=expectedToDate;
   const variationText=factVariation===null?'Sin base comparable':`${factVariation>=0?'+':''}${factVariation.toLocaleString('es-AR',{maximumFractionDigits:1})}% vs. mes anterior (mismo período)`;
   const paceText=`${onPace?'🟢 En ritmo':'🔴 Bajo el ritmo'} · esperado a la fecha: ${money(expectedToDate)}`;
@@ -1232,6 +1235,19 @@ function renderKPIs(){
         <button class="btn secondary" onclick="kpiResetMonth()" title="Volver al mes actual">↻</button>
       </div>
     </div>
+
+    <section class="kpi-box" aria-label="Seguimiento de metas" style="margin-bottom:18px">
+      <h3 class="kpi-boxtitle">Seguimiento de metas</h3>
+      <div class="kpi-boxsub">Objetivo diario de $350.000 por día hábil · objetivo del gráfico mensual: $7.000.000</div>
+      <div class="kpi-topcards" style="margin-top:16px">
+        <div class="kpi-card"><div class="kpi-cardhead">Meta diaria</div><div class="kpi-big">${fmtM(META_DIARIA)}</div><div class="kpi-note">Meta según los días hábiles del mes: ${fmtM(metaHabilesMes)}</div></div>
+        <div class="kpi-card"><div class="kpi-cardhead">Meta acumulada</div><div class="kpi-big">${fmtM(expectedToDate)}</div><div class="kpi-note">${elapsedBusinessDays} días hábiles transcurridos</div></div>
+        <div class="kpi-card"><div class="kpi-cardhead">Facturación acumulada</div><div class="kpi-big">${fmtM(facturacion)}</div><div class="kpi-note">Facturación del mes seleccionado</div></div>
+        <div class="kpi-card" style="background:${diferenciaMeta>=0?'#effaf4':'#fff4f4'}"><div class="kpi-cardhead">Diferencia con la meta</div><div class="kpi-big" style="color:${diferenciaMeta>=0?'#16875a':'#bd3434'}">${diferenciaMeta>=0?'+':'−'}${fmtM(Math.abs(diferenciaMeta))}</div><div class="kpi-note">${diferenciaMeta>=0?'Por encima de la meta':'Por debajo de la meta'}</div></div>
+      </div>
+      <div class="kpi-progress" style="margin-top:16px;height:19px"><span style="width:${Math.min(100,Math.max(0,porcentajeRitmo))}%;background:${diferenciaMeta>=0?'#16875a':'#c24d4d'}"></span></div>
+      <div class="kpi-progressrow"><strong>${porcentajeRitmo}% del objetivo acumulado</strong><span>${elapsedBusinessDays===totalBusinessDays?'Resultado final del mes':'Seguimiento hasta la fecha'}</span></div>
+    </section>
 
     <section class="kpi-topcards">
       <div class="kpi-card blue"><div class="kpi-cardhead"><span class="kpi-icon">▥</span><span>Facturación del mes</span></div><div class="kpi-big">${fmtM(facturacion)}</div><div class="kpi-note">Objetivo: ${fmtM(META_MENSUAL)}</div><div class="kpi-note">${variationText}</div><div class="kpi-note">${paceText}</div><div class="kpi-progress" style="position:relative"><span style="width:${pctMeta}%;background:${pctMeta<50?'#e00000':pctMeta<80?'#ffb900':'#00a83b'};transition:width .3s ease,background-color .3s ease"></span><span style="position:absolute;left:50%;top:50%;width:auto;height:auto;transform:translate(-50%,-50%);background:transparent;color:#10243e;font-size:11px;font-weight:900;line-height:1;text-shadow:0 0 3px #fff,0 0 3px #fff;pointer-events:none">50%</span><span style="position:absolute;right:4px;top:50%;width:auto;height:auto;transform:translateY(-50%);background:transparent;color:#10243e;font-size:11px;font-weight:900;line-height:1;text-shadow:0 0 3px #fff,0 0 3px #fff;pointer-events:none">100%</span></div><div class="kpi-progressrow"><span>Meta cumplida</span><strong>${pctMeta.toLocaleString('es-AR',{maximumFractionDigits:1})}%</strong></div></div>
