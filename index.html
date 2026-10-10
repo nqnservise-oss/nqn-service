@@ -1170,6 +1170,1156 @@ function renderKPIs(){
   const metaHabilesMes=META_DIARIA*totalBusinessDays;
   const diferenciaMeta=facturacion-expectedToDate;
   const porcentajeRitmo=expectedToDate>0?Math.round(100*facturacion/expectedToDate):0;
+  // Gráfico de seguimiento de metas: dos series acumuladas sobre los días hábiles transcurridos.
+  const metaChartDays=transcurridos;
+  const metaChartValues=metaChartDays.map((d,i)=>({
+    fecha:d.fecha,
+    meta:(i+1)*META_DIARIA,
+    real:Object.entries(factPorDia).reduce((sum,[fecha,monto])=>sum+(fecha<=d.fecha?Number(monto):0),0)
+  }));
+  const metaChartWidth=900,metaChartHeight=295,metaChartL=78,metaChartR=24,metaChartTop=25,metaChartBottom=45;
+  const metaChartMax=Math.max(1,expectedToDate,...metaChartValues.map(x=>x.real))*1.12;
+  const metaChartX=i=>metaChartL+(metaChartValues.length<2?0:i*(metaChartWidth-metaChartL-metaChartR)/(metaChartValues.length-1));
+  const metaChartY=n=>metaChartTop+(1-n/metaChartMax)*(metaChartHeight-metaChartTop-metaChartBottom);
+  const metaChartPath=kind=>metaChartValues.map((d,i)=>`${i===0?'M':'L'}${metaChartX(i).toFixed(1)} ${metaChartY(d[kind]).toFixed(1)}`).join(' ');
+  const metaChartAxis=n=>'
+  const onPace=facturacion>=expectedToDate;
+  const variationText=factVariation===null?'Sin base comparable':`${factVariation>=0?'+':''}${factVariation.toLocaleString('es-AR',{maximumFractionDigits:1})}% vs. mes anterior (mismo período)`;
+  const paceText=`${onPace?'🟢 En ritmo':'🔴 Bajo el ritmo'} · esperado a la fecha: ${money(expectedToDate)}`;
+
+  const shiftKey=(key,delta)=>{const [y,m]=key.split('-').map(Number),d=new Date(y,m-1+delta,1);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`};
+  const prevKey=shiftKey(mk,-1);
+  const prevDate=new Date(yy,mm-2,1);
+  const prevName=prevDate.toLocaleDateString('es-AR',{month:'long',year:'numeric'});
+  const prevTitle=prevName.charAt(0).toUpperCase()+prevName.slice(1);
+
+  const factByMonth=(key)=>rows.filter(r=>r.estado==='Entregado'&&monthKey(r.fechaEntrega)===key).reduce((a,r)=>a+Number(r.monto||0),0);
+
+  // Comparativo acumulado: para el mes actual, comparar solo hasta el día de hoy.
+  // Así no se extiende la línea hacia días futuros ni se compara un mes parcial contra el mes anterior completo.
+  const isCurrentMonth=mk===currentMonthKey();
+  const todayDate=new Date(hoy+'T12:00:00');
+  const compareDays=isCurrentMonth?Math.min(todayDate.getDate(),ultimo):ultimo;
+  let curCum=[],prevCum=[],c1=0,c2=0;
+  const prevY=prevDate.getFullYear(),prevM=prevDate.getMonth()+1;
+  const prevLastDay=new Date(prevY,prevM,0).getDate();
+  const daysToCompare=Math.min(compareDays,prevLastDay);
+  for(let d=1;d<=daysToCompare;d++){
+    const k=`${yy}-${String(mm).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    c1+=factPorDia[k]||0;curCum.push(c1);
+    const pk=`${prevY}-${String(prevM).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const pday=rows.filter(r=>r.estado==='Entregado'&&r.fechaEntrega===pk).reduce((a,r)=>a+Number(r.monto||0),0);
+    c2+=pday;prevCum.push(c2);
+  }
+  const curPeriodFact=curCum.length?curCum[curCum.length-1]:0;
+  const prevPeriodFact=prevCum.length?prevCum[prevCum.length-1]:0;
+  const variation=prevPeriodFact?((curPeriodFact-prevPeriodFact)/prevPeriodFact)*100:0;
+
+  const meses=Array.from({length:7},(_,i)=>shiftKey(mk,i-6));
+  const evolucion=meses.map(k=>({key:k,value:factByMonth(k)}));
+  const monthLabel=k=>{const [y,m]=k.split('-').map(Number);return new Date(y,m-1,1).toLocaleDateString('es-AR',{month:'short'}).replace('.','')};
+
+  const svgLine=(values,opt={})=>{
+    const W=760,H=230,L=58,R=20,T=25,B=36,max=Math.max(opt.max||0,...values,1);
+    const totalPoints=Math.max(1,Number(opt.totalPoints||values.length||1));
+    const x=i=>L+(totalPoints<=1?0:i*((W-L-R)/(totalPoints-1)));
+    const y=v=>T+(max-v)/max*(H-T-B);
+    return {W,H,L,R,T,B,max,x,y,points:values.map((v,i)=>`${x(i)},${y(v)}`).join(' ')};
+  };
+  const cmpMax=Math.max(...curCum,...prevCum,META_MENSUAL/2,1);
+  const cmp=svgLine(curCum,{max:cmpMax,totalPoints:ultimo+1});
+  const cmpXDay=d=>cmp.L+d*((cmp.W-cmp.L-cmp.R)/ultimo);
+  const curCmpPoints=[`${cmp.L},${cmp.y(0)}`,...curCum.map((v,i)=>`${cmpXDay(i+1)},${cmp.y(v)}`)].join(' ');
+  const prevCmpPoints=[`${cmp.L},${cmp.y(0)}`,...prevCum.map((v,i)=>`${cmpXDay(i+1)},${cmp.y(v)}`)].join(' ');
+  const evo=svgLine(evolucion.map(x=>x.value),{max:META_MENSUAL});
+  const metaY=evo.y(META_MENSUAL);
+
+  const fmtM=v=>money(v);
+  const fmtShort=v=>{const n=Number(v||0);if(Math.abs(n)>=1000000)return '$'+(n/1000000).toLocaleString('es-AR',{maximumFractionDigits:1})+' M';if(Math.abs(n)>=1000)return '$'+(n/1000).toLocaleString('es-AR',{maximumFractionDigits:0})+'k';return money(n)};
+  const lastSync=getSettings().lastCloudSync||nowISO();
+
+  document.getElementById('view').innerHTML=`
+  <div class="kpi-page">
+    <div class="kpi-toolbar">
+      <div><div class="kpi-subtitle">Resumen y evolución de la facturación</div></div>
+      <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;justify-content:flex-end">
+        <div class="kpi-monthnav"><button onclick="kpiShiftMonth(-1)" title="Mes anterior">‹</button><strong>${monthTitle}</strong><button onclick="kpiShiftMonth(1)" title="Mes siguiente">›</button></div>
+        <div class="kpi-refresh">Última actualización<br><strong>${prettyDateTime(lastSync)}</strong></div>
+        <button class="btn secondary" onclick="kpiResetMonth()" title="Volver al mes actual">↻</button>
+      </div>
+    </div>
+
+    <section class="kpi-box" aria-label="Seguimiento de metas" style="margin-bottom:18px">
+      <h3 class="kpi-boxtitle">Seguimiento de metas</h3>
+      <div class="kpi-boxsub">Objetivo diario de $350.000 por día hábil · objetivo del gráfico mensual: $7.000.000</div>
+      <div class="kpi-topcards" style="margin-top:16px">
+        <div class="kpi-card"><div class="kpi-cardhead">Meta diaria</div><div class="kpi-big">${fmtM(META_DIARIA)}</div><div class="kpi-note">Meta según los días hábiles del mes: ${fmtM(metaHabilesMes)}</div></div>
+        <div class="kpi-card"><div class="kpi-cardhead">Lo que deberías llevar facturado</div><div class="kpi-big">${fmtM(expectedToDate)}</div><div class="kpi-note">${elapsedBusinessDays} días hábiles transcurridos</div></div>
+        <div class="kpi-card"><div class="kpi-cardhead">Facturación acumulada</div><div class="kpi-big">${fmtM(facturacion)}</div><div class="kpi-note">Facturación del mes seleccionado</div></div>
+        <div class="kpi-card" style="background:${diferenciaMeta>=0?'#effaf4':'#fff4f4'}"><div class="kpi-cardhead">Diferencia con la meta</div><div class="kpi-big" style="color:${diferenciaMeta>=0?'#16875a':'#bd3434'}">${diferenciaMeta>=0?'+':'−'}${fmtM(Math.abs(diferenciaMeta))}</div><div class="kpi-note">${diferenciaMeta>=0?'Por encima de la meta':'Por debajo de la meta'}</div></div>
+      </div>
+      <div style="margin-top:24px">
+        <h4 style="font-size:17px;margin:0 0 5px">¿Cómo venimos respecto de la meta?</h4>
+        <div class="kpi-legend"><span><i class="kpi-dot light"></i>Lo que deberías llevar facturado</span><span><i class="kpi-dot"></i>Facturación real acumulada</span></div>
+        ${metaChartValues.length?`
+        <div class="kpi-svgwrap"><svg class="kpi-svg" style="min-width:650px;min-height:300px" viewBox="0 0 ${metaChartWidth} ${metaChartHeight}" role="img" aria-label="Gráfico comparativo entre facturación acumulada real y meta acumulada por día hábil">
+          ${[0,.25,.5,.75,1].map(p=>`<g><line x1="${metaChartL}" x2="${metaChartWidth-metaChartR}" y1="${metaChartY(metaChartMax*p)}" y2="${metaChartY(metaChartMax*p)}" stroke="#e7edf4"/><text x="${metaChartL-10}" y="${metaChartY(metaChartMax*p)+4}" text-anchor="end" font-size="12" fill="#56759b">${metaChartAxis(metaChartMax*p)}</text></g>`).join('')}
+          <path d="${metaChartPath('meta')}" fill="none" stroke="#e58a1f" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+          <path d="${metaChartPath('real')}" fill="none" stroke="#0d5bd8" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+          ${metaChartValues.map((v,i)=>i%Math.max(1,Math.ceil(metaChartValues.length/9))===0||i===metaChartValues.length-1?`<text x="${metaChartX(i)}" y="${metaChartHeight-15}" text-anchor="middle" font-size="12" fill="#56759b">${Number(v.fecha.slice(8,10))}</text>`:'').join('')}
+          ${metaChartValues.length?[`meta`,`real`].map(kind=>{const i=metaChartValues.length-1;return `<circle cx="${metaChartX(i)}" cy="${metaChartY(metaChartValues[i][kind])}" r="5" fill="${kind==='meta'?'#e58a1f':'#0d5bd8'}"/>`}).join(''):''}
+          <text x="${metaChartWidth/2}" y="${metaChartHeight-1}" text-anchor="middle" font-size="11" fill="#56759b">Día del mes (hábiles)</text>
+        </svg></div>`:'<div class="kpi-note" style="margin-top:14px">Todavía no transcurrieron días hábiles de este mes.</div>'}
+      </div>
+      <div class="kpi-progress" style="margin-top:16px;height:19px"><span style="width:${Math.min(100,Math.max(0,porcentajeRitmo))}%;background:${diferenciaMeta>=0?'#16875a':'#c24d4d'}"></span></div>
+      <div class="kpi-progressrow"><strong>${porcentajeRitmo}% del objetivo acumulado</strong><span>${elapsedBusinessDays===totalBusinessDays?'Resultado final del mes':'Seguimiento hasta la fecha'}</span></div>
+    </section>
+
+    <section class="kpi-topcards">
+      <div class="kpi-card blue"><div class="kpi-cardhead"><span class="kpi-icon">▥</span><span>Facturación del mes</span></div><div class="kpi-big">${fmtM(facturacion)}</div><div class="kpi-note">Objetivo: ${fmtM(META_MENSUAL)}</div><div class="kpi-note">${variationText}</div><div class="kpi-note">${paceText}</div><div class="kpi-progress" style="position:relative"><span style="width:${pctMeta}%;background:${pctMeta<50?'#e00000':pctMeta<80?'#ffb900':'#00a83b'};transition:width .3s ease,background-color .3s ease"></span><span style="position:absolute;left:50%;top:50%;width:auto;height:auto;transform:translate(-50%,-50%);background:transparent;color:#10243e;font-size:11px;font-weight:900;line-height:1;text-shadow:0 0 3px #fff,0 0 3px #fff;pointer-events:none">50%</span><span style="position:absolute;right:4px;top:50%;width:auto;height:auto;transform:translateY(-50%);background:transparent;color:#10243e;font-size:11px;font-weight:900;line-height:1;text-shadow:0 0 3px #fff,0 0 3px #fff;pointer-events:none">100%</span></div><div class="kpi-progressrow"><span>Meta cumplida</span><strong>${pctMeta.toLocaleString('es-AR',{maximumFractionDigits:1})}%</strong></div></div>
+      <div class="kpi-card green"><div class="kpi-cardhead"><span class="kpi-icon">▣</span><span>Gastos del mes</span></div><div class="kpi-big">${fmtM(gastosMes)}</div><div class="kpi-note">${facturacion?((gastosMes/facturacion)*100).toLocaleString('es-AR',{maximumFractionDigits:1}):'0'}% de la facturación</div></div>
+      <div class="kpi-card"><div class="kpi-cardhead"><span class="kpi-icon">▥</span><span>Resultado neto del mes</span></div><div class="kpi-big">${fmtM(resultadoNeto)}</div><div class="kpi-note">Facturación − costos − gastos</div></div>
+      <div class="kpi-card amber" role="button" tabindex="0" onclick="renderOrders(true)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();renderOrders(true)}" title="Ver órdenes por cobrar" style="cursor:pointer"><div class="kpi-cardhead"><span class="kpi-icon">◷</span><span>Por cobrar</span></div><div class="kpi-big">${fmtM(cobrar)}</div><div class="kpi-note">Tocá para ver saldos pendientes ↗</div></div>
+    </section>
+
+    <section class="kpi-smallcards">
+      <div class="kpi-small"><div class="kpi-cardhead"><span class="kpi-icon">◇</span><span>Ingresos</span></div><div class="kpi-big">${ingresos.length}</div><div class="kpi-note">Equipos ingresados este mes</div></div>
+      <div class="kpi-small"><div class="kpi-cardhead"><span class="kpi-icon">✓</span><span>Entregados</span></div><div class="kpi-big">${entregados.length}</div><div class="kpi-note">Equipos entregados este mes</div></div>
+      <div class="kpi-small"><div class="kpi-cardhead"><span class="kpi-icon">◇</span><span>Ticket promedio</span></div><div class="kpi-big">${fmtM(ticket)}</div><div class="kpi-note">Sobre órdenes entregadas</div></div>
+      <div class="kpi-small"><div class="kpi-cardhead"><span class="kpi-icon">▣</span><span>Días con facturación</span></div><div class="kpi-big">${conFact}</div><div class="kpi-note">de ${transcurridos.length} días hábiles</div></div>
+      <div class="kpi-small danger"><div class="kpi-cardhead"><span class="kpi-icon">▣</span><span>Días en cero</span></div><div class="kpi-big">${enCero}</div><div class="kpi-note">de ${transcurridos.length} días hábiles</div></div>
+      <div class="kpi-small"><div class="kpi-cardhead"><span class="kpi-icon">▥</span><span>Promedio por día hábil</span></div><div class="kpi-big">${fmtM(promedioHabiles)}</div><div class="kpi-note">Incluye días en cero</div></div>
+    </section>
+
+    <section class="kpi-charts">
+      <div class="kpi-box">
+        <h3 class="kpi-boxtitle">Comparativo del mes (acumulado por día)</h3><div class="kpi-boxsub">${monthTitle} vs ${prevTitle}</div>
+        <div class="kpi-legend"><span><i class="kpi-dot"></i>${monthTitle} (acumulado)</span><span><i class="kpi-dot light"></i>${prevTitle} (acumulado)</span></div>
+        <div class="kpi-svgwrap"><svg class="kpi-svg" viewBox="0 0 ${cmp.W} ${cmp.H}" role="img" aria-label="Comparativo acumulado del mes">
+          ${[0,.25,.5,.75,1].map(p=>`<g><line x1="${cmp.L}" x2="${cmp.W-cmp.R}" y1="${cmp.T+p*(cmp.H-cmp.T-cmp.B)}" y2="${cmp.T+p*(cmp.H-cmp.T-cmp.B)}" stroke="#e8eef5"/><text x="${cmp.L-8}" y="${cmp.T+p*(cmp.H-cmp.T-cmp.B)+4}" text-anchor="end" font-size="11" fill="#547395">${fmtShort(cmp.max*(1-p))}</text></g>`).join('')}
+          <polyline points="${prevCmpPoints}" fill="none" stroke="#e58a1f" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+          <polyline points="${curCmpPoints}" fill="none" stroke="#0d5bd8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+          ${curCum.map((v,i)=>i%3===0?`<circle cx="${cmpXDay(i+1)}" cy="${cmp.y(v)}" r="4" fill="#0d5bd8"/>`:'').join('')}
+          ${prevCum.map((v,i)=>i%3===0?`<circle cx="${cmpXDay(i+1)}" cy="${cmp.y(v)}" r="3.5" fill="#e58a1f"/>`:'').join('')}
+          ${Array.from(new Set([1,5,10,15,20,25,ultimo])).filter(d=>d>=1&&d<=ultimo).map(d=>`<text x="${cmpXDay(d)}" y="${cmp.H-12}" text-anchor="middle" font-size="10" fill="#547395">${d}</text>`).join('')}
+        </svg></div>
+        <div style="text-align:right;margin-top:-6px"><span class="badge ${prevPeriodFact===0?'amber':(variation<0?'red':'green')}" style="font-size:18px">${prevPeriodFact===0?'Sin base':((variation>=0?'+':'')+variation.toLocaleString('es-AR',{maximumFractionDigits:1})+'%')}</span><div class="kpi-note">${prevPeriodFact===0?'El período comparable anterior fue $0':'vs. mismo período de '+prevTitle+' · hasta el día '+daysToCompare}</div></div>
+      </div>
+
+      <div class="kpi-box">
+        <h3 class="kpi-boxtitle">Evolución mensual</h3><div class="kpi-boxsub">Total facturado por mes (últimos 7 meses)</div>
+        <div class="kpi-svgwrap"><svg class="kpi-svg" style="min-height:310px" viewBox="0 0 ${evo.W} ${evo.H}" role="img" aria-label="Evolución mensual">
+          ${[0,.25,.5,.75,1].map(p=>`<line x1="${evo.L}" x2="${evo.W-evo.R}" y1="${evo.T+p*(evo.H-evo.T-evo.B)}" y2="${evo.T+p*(evo.H-evo.T-evo.B)}" stroke="#e8eef5"/>`).join('')}
+          <line x1="${evo.L}" x2="${evo.W-evo.R}" y1="${metaY}" y2="${metaY}" stroke="#c78318" stroke-width="2" stroke-dasharray="7 6"/>
+          <text x="${evo.W-evo.R}" y="${Math.max(14,metaY-7)}" text-anchor="end" font-size="10" fill="#a86d13">Meta ${fmtShort(META_MENSUAL)}</text>
+          <polyline points="${evo.points}" fill="none" stroke="#0d5bd8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+          ${evolucion.map((x,i)=>`<g><circle cx="${evo.x(i)}" cy="${evo.y(x.value)}" r="5" fill="#0d5bd8"/><text x="${evo.x(i)}" y="${Math.max(14,evo.y(x.value)-10)}" text-anchor="middle" font-size="11" font-weight="700" fill="#17345a">${fmtShort(x.value)}</text><text x="${evo.x(i)}" y="${evo.H-12}" text-anchor="middle" font-size="11" fill="#547395">${monthLabel(x.key)}</text></g>`).join('')}
+        </svg></div>
+      </div>
+    </section>
+
+    <section class="kpi-box kpi-daily">
+      <div class="kpi-dailyhead"><div><h3 class="kpi-boxtitle">Detalle diario del mes</h3><div class="kpi-boxsub">Facturación, ingresos, entregas y resultado por día hábil</div></div><div class="kpi-note">Días hábiles del mes: <strong>${dias.length}</strong></div></div>
+      <div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Día</th><th>Facturación</th><th>Ingresos</th><th>Entregas</th><th>Gastos</th><th>Resultado</th></tr></thead><tbody>
+        ${dias.map(x=>{const res=x.fact-x.gasto;const cls=x.futuro?'':(x.fact>0?'kpi-day-green':'kpi-day-red');return `<tr class="${cls}"${x.futuro?' style="opacity:.55"':''}><td><strong>${prettyDate(x.fecha)}</strong></td><td>${x.dt.toLocaleDateString('es-AR',{weekday:'long'})}</td><td><strong>${fmtM(x.fact)}</strong></td><td>${x.ing||'-'}</td><td>${x.ent||'-'}</td><td>${fmtM(x.gasto)}</td><td class="${res>0?'kpi-result-pos':'kpi-result-zero'}">${fmtM(res)}</td></tr>`}).join('')}
+      </tbody></table></div>
+    </section>
+  </div>`;
+}
+
+function renderCleris(){
+  title('Cleris Eventos');setNav('cleris');let events=loadEvents(),mk=currentMonthKey(),monthEvents=events.filter(e=>monthKey(e.fecha)===mk),monthTotal=monthEvents.reduce((a,e)=>a+Number(e.monto||0),0),avg=monthEvents.length?monthTotal/monthEvents.length:0,year=localISODate().slice(0,4),yearTotal=events.filter(e=>String(e.fecha||'').startsWith(year)).reduce((a,e)=>a+Number(e.monto||0),0);
+  let sorted=[...events].sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha))||Number(b.id)-Number(a.id));
+  document.getElementById('view').innerHTML=`<section class="stats" style="margin-top:0"><div class="stat soft"><div class="statlabel">Ingresos del mes</div><div class="statvalue smallmoney">${money(monthTotal)}</div><div class="stathelp">Solo Cleris Eventos</div></div><div class="stat"><div class="statlabel">Eventos del mes</div><div class="statvalue">${monthEvents.length}</div><div class="stathelp">Cargados en ${mk}</div></div><div class="stat"><div class="statlabel">Promedio por evento</div><div class="statvalue smallmoney">${money(avg)}</div></div><div class="stat"><div class="statlabel">Total ${year}</div><div class="statvalue smallmoney">${money(yearTotal)}</div></div></section><section class="panel"><div class="panelhead"><div><div class="eyebrow">NUEVO INGRESO</div><h3>Registrar evento</h3></div></div><form class="eventgrid" onsubmit="submitEvent(event)"><div class="field short"><label>Fecha *</label><input id="eventFecha" type="date" value="${localISODate()}" required></div><div class="field"><label>Evento / cliente *</label><input id="eventDesc" required></div><div class="field"><label>Monto *</label><input id="eventMonto" type="text" inputmode="decimal" required></div><div class="field"><label>Medio de pago</label><select id="eventPago">${PAGOS.filter(x=>x!=='Pendiente').map(x=>`<option>${x}</option>`).join('')}</select></div><div class="field full"><label>Observaciones</label><input id="eventObs"></div><div class="actions full"><button class="btn primary" type="submit">Guardar evento</button></div></form><p class="sectionnote">Cleris queda separado de NQN Service: no modifica ticket promedio, marcas, equipos ni días del taller.</p></section><section class="panel"><div class="panelhead"><div><div class="eyebrow">HISTORIAL</div><h3>${events.length} eventos cargados</h3></div></div>${sorted.length?`<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Evento</th><th>Medio</th><th>Monto</th><th>Observaciones</th><th></th></tr></thead><tbody>${sorted.map(e=>`<tr><td>${prettyDate(e.fecha)}</td><td><strong>${esc(e.descripcion)}</strong></td><td>${esc(e.medioPago||'-')}</td><td><strong>${money(e.monto)}</strong></td><td>${esc(e.observaciones||'-')}</td><td class="right"><button class="btn danger small" onclick="deleteEvent('${esc(e.id)}')">Eliminar</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Todavía no cargaste eventos de Cleris.</div>'}</section>`;
+}
+function submitEvent(ev){ev.preventDefault();let rows=loadEvents(),now=nowISO(),obj={id:String(Date.now()),fecha:document.getElementById('eventFecha').value,descripcion:document.getElementById('eventDesc').value.trim(),monto:Math.max(0,parseMoneyAR(document.getElementById('eventMonto').value)||0),medioPago:document.getElementById('eventPago').value,observaciones:document.getElementById('eventObs').value.trim(),creado:now,actualizado:now};rows.push(obj);saveEvents(rows);queueCloudOp('upsertEvent',obj.id,obj,obj.actualizado);toast('Evento de Cleris guardado');renderCleris()}
+function deleteEvent(id){if(!confirm('¿Eliminar este evento de Cleris?'))return;saveEvents(loadEvents().filter(e=>String(e.id)!==String(id)));queueCloudOp('deleteEvent',id,null,nowISO());toast('Evento eliminado');renderCleris()}
+
+function externalBackupStatus(){
+  let s=getSettings(),last=s.lastExternalBackup;if(!last)return {className:'red',title:'Sin copia externa',text:'Descargá una copia desde “Copias”.'};
+  let days=Math.floor((Date.now()-new Date(last).getTime())/86400000);if(days>=7)return {className:'red',title:'Backup externo atrasado',text:'Última copia hace '+days+' días.'};if(days>=3)return {className:'amber',title:'Conviene hacer backup',text:'Última copia hace '+days+' días.'};return {className:'green',title:'Backup externo al día',text:'Última copia '+prettyDateTime(last)+'.'}
+}
+function runHealthCheck(){
+  let problems=[];
+  if(!storageSelfTest())problems.push('El navegador no permite almacenamiento local.');
+  let rows=load(),primary=readRowsKey(KEY),mirror=readRowsKey(KEY_MIRROR);
+  if(!validRows(primary))problems.push('La copia principal no es válida.');
+  if(!validRows(mirror))problems.push('La copia espejo no es válida.');
+  if(validRows(primary)&&validRows(mirror)&&primary.length!==mirror.length)problems.push('Principal y espejo tienen distinta cantidad de órdenes.');
+  let evA=loadEventsKey(KEY_EVENTS),evB=loadEventsKey(KEY_EVENTS_MIRROR);if(evA.length!==evB.length)problems.push('Principal y espejo de Cleris tienen distinta cantidad de eventos.');
+  if(problems.length){alert('Revisión del sistema\n\n'+problems.join('\n'));return false}
+  alert('Sistema OK.\n\nAlmacenamiento: OK\nCopia principal: OK\nCopia espejo: OK\nÓrdenes verificadas: '+rows.length+'\nEventos Cleris: '+loadEvents().length);
+  return true;
+}
+function renderBackup(){
+  title('Copias y seguridad');setNav('backup');
+  let rows=load(),events=loadEvents(),snaps=loadSnapshots(),st=externalBackupStatus(),cs=cloudStatus(),cfg=cloudConfig();
+  document.getElementById('view').innerHTML=`
+  <section class="panel" style="margin-top:0">
+    <div class="panelhead"><div><div class="eyebrow">NUBE</div><h3>Google Drive · Base central</h3></div><div class="cloudstatus"><span class="clouddot ${cs.cls}"></span><span>${esc(cs.label)}</span></div></div>
+    <div class="cloudgrid">
+      <div class="info">
+        <h4>Sincronización teléfono + computadora</h4>
+        <p>La app conserva una copia local y, cuando hay internet, sincroniza órdenes, Cleris y cierres de caja con una base central en Google Sheets. La hoja queda guardada en tu Google Drive y el sistema genera además un backup JSON automático por día.</p>
+        <label>URL del Web App de Google Apps Script</label>
+        <input id="cloudUrl" class="cloudurl" value="${esc(cfg.url)}">
+        <label style="margin-top:10px">Clave privada de sincronización</label>
+        <input id="cloudToken" class="cloudurl" type="password" value="${esc(cfg.token)}">
+        <div class="hint" style="margin-top:6px">La clave queda guardada solamente en este dispositivo; no forma parte de la app publicada.</div>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:10px"><input id="cloudEnabled" type="checkbox" style="width:auto" ${cfg.enabled?'checked':''}> Activar sincronización automática</label>
+        <div class="cloudactions">
+          <button class="btn primary" onclick="saveCloudConfig()">Guardar y sincronizar</button>
+          <button class="btn secondary" onclick="cloudSync(false)">Sincronizar ahora</button>
+          ${cfg.enabled?'<button class="btn secondary" onclick="disableCloud()">Desactivar nube</button>':''}
+        </div>
+      </div>
+      <div class="info">
+        <h4>Estado</h4>
+        <p><strong>${esc(cs.label)}</strong><br>${esc(cs.detail)}</p>
+        <div class="summaryrow" style="color:#58677b"><span>Cambios pendientes</span><strong style="color:#17263a">${cs.pending}</strong></div>
+        <div class="summaryrow" style="color:#58677b"><span>Última sincronización</span><strong style="color:#17263a">${cfg.lastSync?prettyDateTime(cfg.lastSync):'-'}</strong></div>
+        ${cfg.sheetUrl?`<div class="cloudactions"><a class="btn secondary" href="${esc(cfg.sheetUrl)}" target="_blank" rel="noopener">Abrir base en Drive</a>${cfg.backupFolderUrl?`<a class="btn secondary" href="${esc(cfg.backupFolderUrl)}" target="_blank" rel="noopener">Abrir backups</a>`:''}</div>`:''}
+        <p class="hint">La URL se configura una vez en cada dispositivo. Después, la sincronización es automática.</p>
+      </div>
+    </div>
+  </section>
+  <section class="panel">
+    <div class="panelhead"><div><div class="eyebrow">COPIA MANUAL</div><h3>Backup local</h3></div><span class="badge">${rows.length} órdenes · ${events.length} eventos</span></div>
+    <div class="backupstatus ${st.className}"><div><strong>${esc(st.title)}</strong></div><div>${esc(st.text)}</div></div>
+    <div class="backupbox">
+      <div class="info"><h4>Exportar copia externa</h4><p>Descarga órdenes del taller, eventos de Cleris y cierres de caja en un único archivo JSON. Es una segunda seguridad además de Drive.</p><button class="btn primary" onclick="exportData()">Descargar copia</button> <button class="btn secondary" onclick="runHealthCheck()">Revisar sistema</button></div>
+      <div class="info"><h4>Importar copia</h4><p>Restaura una copia exportada previamente. Si la nube está activa, después se vuelve a sincronizar.</p><input id="importFile" type="file" accept=".json" style="margin-bottom:10px"><button class="btn secondary" onclick="importData()">Importar copia</button></div>
+    </div>
+  </section>
+  <section class="panel">
+    <div class="panelhead"><div><div class="eyebrow">AUTOMÁTICO</div><h3>Instantáneas internas del taller</h3></div><span class="badge">Últimas ${snaps.length}/10</span></div>
+    <p class="hint">Las órdenes conservan versiones anteriores dentro del navegador. Esto ayuda ante errores de edición, pero <strong>no reemplaza la base central de Drive</strong>.</p>
+    ${snaps.length?`<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Motivo</th><th>Órdenes</th><th></th></tr></thead><tbody>${snaps.map(s=>`<tr><td>${prettyDateTime(s.fecha)}</td><td>${esc(s.reason||'Automática')}</td><td>${Array.isArray(s.ordenes)?s.ordenes.length:0}</td><td class="right"><button class="btn secondary small" onclick="restoreSnapshot(${Number(s.id)})">Restaurar</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Las instantáneas aparecerán después de los primeros cambios.</div>'}
+  </section>`;
+}
+function exportData(){
+  let payload={app:'NQN Service',version:5,edicion:'nube-drive-sync',exportado:nowISO(),ordenes:load(),cleriseventos:loadEvents(),cierrescaja:(typeof loadCashClosings==='function'?loadCashClosings():[]),settings:{lastSave:getSettings().lastSave||null}};
+  let blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='NQN_SERVICE_BACKUP_'+localISODate()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);let s=getSettings();s.lastExternalBackup=nowISO();setSettings(s);toast('Copia externa descargada');setTimeout(renderBackup,300)
+}
+function importData(){
+  let f=document.getElementById('importFile').files[0];if(!f){alert('Elegí un archivo de copia primero.');return}
+  let reader=new FileReader();
+  reader.onload=()=>{try{
+    let x=JSON.parse(reader.result),source=Array.isArray(x)?x:x.ordenes;
+    if(!Array.isArray(source))throw new Error();
+    if(!confirm('¿Reemplazar los datos actuales por esta copia?'))return;
+    let normalized=ensureClientNumbers(source.map(normalizeOrder));
+    save(normalized,'Antes de importar copia');
+    if(x&&Array.isArray(x.cleriseventos))saveEvents(x.cleriseventos);
+    if(x&&Array.isArray(x.cierrescaja)&&typeof saveCashClosings==='function')saveCashClosings(x.cierrescaja);
+    let s=getSettings();s.cloudEverSynced=false;setSettings(s);setCloudQueue([]);
+    toast('Copia restaurada');
+    renderBackup();
+    cloudAutoSyncSoon();
+  }catch(e){alert('El archivo no parece ser una copia válida de NQN Service.')}};
+  reader.readAsText(f)
+}
+function restoreSnapshot(id){let snap=loadSnapshots().find(x=>Number(x.id)===Number(id));if(!snap||!Array.isArray(snap.ordenes))return;if(!confirm('¿Restaurar esta instantánea? Los datos actuales se conservarán como otra instantánea.'))return;save(snap.ordenes,'Antes de restaurar instantánea');let s=getSettings();s.cloudEverSynced=false;setSettings(s);setCloudQueue([]);toast('Instantánea restaurada');renderBackup();cloudAutoSyncSoon()}
+
+function receiptTermsText(){
+  return 'Importante: una vez notificado que el equipo se encuentra listo para retirar, el cliente dispone de 48 horas para hacerlo. Vencido ese plazo, podrá aplicarse un cargo diario por estadía según la tarifa vigente.';
+}
+function receiptWrapLines(ctx,text,maxWidth){
+  const clean=String(text??'').trim()||'-',out=[];
+  clean.split(/\n+/).forEach(paragraph=>{
+    const words=paragraph.split(/\s+/).filter(Boolean);let line='';
+    words.forEach(word=>{
+      const test=line?line+' '+word:word;
+      if(line&&ctx.measureText(test).width>maxWidth){out.push(line);line=word}else line=test;
+    });
+    if(line)out.push(line);
+  });
+  return out.length?out:['-'];
+}
+function receiptCanvas(r){
+  const width=1080,pad=78,maxWidth=width-pad*2;
+  const fields=[
+    ['Cliente',r.cliente],['Teléfono',r.telefono],['Equipo',r.tipo],['Marca y modelo',r.marcaModelo],
+    ['Falla informada',r.falla||'-'],['Accesorios',r.accesorios||'-'],['Observaciones',r.observaciones||'-']
+  ];
+  const measure=document.createElement('canvas'),m=measure.getContext('2d');
+  m.font='36px Arial';
+  const blocks=fields.map(pair=>({label:pair[0],lines:receiptWrapLines(m,pair[1],maxWidth)}));
+  m.font='26px Arial';const termLines=receiptWrapLines(m,receiptTermsText(),maxWidth-36);
+  let height=250;
+  blocks.forEach(block=>{height+=42+block.lines.length*46+38});
+  height+=70+termLines.length*36+120;
+  const canvas=document.createElement('canvas');canvas.width=width;canvas.height=Math.max(1350,height);
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle='#ffffff';ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle='#0d5bd8';ctx.font='900 58px Arial';ctx.fillText('NQN Service',pad,90);
+  ctx.fillStyle='#6f7d90';ctx.font='28px Arial';ctx.fillText('Servicio técnico',pad,130);
+  ctx.textAlign='right';ctx.fillStyle='#14243a';ctx.font='700 46px Arial';ctx.fillText('Orden '+fmtOrder(r.numero),width-pad,82);
+  ctx.fillStyle='#6f7d90';ctx.font='27px Arial';ctx.fillText('Ingreso '+prettyDate(r.fechaIngreso),width-pad,122);ctx.fillText('Cliente C'+fmtClient(r.clienteNumero),width-pad,158);
+  ctx.textAlign='left';ctx.strokeStyle='#0d5bd8';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(pad,190);ctx.lineTo(width-pad,190);ctx.stroke();
+  let y=245;
+  blocks.forEach(block=>{
+    ctx.fillStyle='#788598';ctx.font='700 24px Arial';ctx.fillText(String(block.label).toUpperCase(),pad,y);y+=39;
+    ctx.fillStyle='#14243a';ctx.font='36px Arial';
+    block.lines.forEach(line=>{ctx.fillText(line,pad,y);y+=46});
+    y+=10;ctx.strokeStyle='#e4e9f0';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(width-pad,y);ctx.stroke();y+=28;
+  });
+  const boxY=y,boxH=58+termLines.length*36;
+  ctx.fillStyle='#f7f9fc';ctx.strokeStyle='#dde4ec';ctx.lineWidth=2;ctx.fillRect(pad,boxY,maxWidth,boxH);ctx.strokeRect(pad,boxY,maxWidth,boxH);
+  ctx.fillStyle='#596779';ctx.font='700 25px Arial';ctx.fillText('IMPORTANTE',pad+18,y+35);ctx.font='26px Arial';let ty=y+72;termLines.forEach(line=>{ctx.fillText(line,pad+18,ty);ty+=36});
+  y=boxY+boxH+42;ctx.fillStyle='#7c8998';ctx.font='24px Arial';ctx.fillText('Conserve el número de orden para futuras consultas.',pad,y);
+  return canvas;
+}
+function receiptCanvasBlob(canvas){
+  return new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('No se pudo crear la imagen')),'image/png',1));
+}
+function downloadReceiptImage(file){
+  const url=URL.createObjectURL(file),a=document.createElement('a');a.href=url;a.download=file.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
+}
+async function shareReceiptWhatsApp(id){
+  const r=load().find(x=>String(x.id)===String(id));if(!r)return;
+  const n=whatsappNumber(r.telefono);
+  if(!n||n.length<12){alert('Revisá el teléfono del cliente antes de compartir el comprobante.');return;}
+  try{
+    const blob=await receiptCanvasBlob(receiptCanvas(r));
+    const file=new File([blob],'NQN_Service_Orden_'+fmtOrder(r.numero)+'.png',{type:'image/png'});
+    const msg='Hola '+(r.cliente||'')+', te envío el comprobante de ingreso de NQN Service · Orden '+fmtOrder(r.numero)+'.';
+
+    // En Android / Chrome: compartir el archivo real mediante el panel nativo.
+    let canShareFile=!!navigator.share;
+    if(canShareFile&&navigator.canShare){
+      try{canShareFile=navigator.canShare({files:[file]})}catch(e){canShareFile=false}
+    }
+
+    if(canShareFile){
+      try{
+        await navigator.share({
+          files:[file],
+          title:'NQN Service · Orden '+fmtOrder(r.numero),
+          text:msg
+        });
+        return;
+      }catch(err){
+        // Si el usuario cancela, no hacemos nada más.
+        if(err&&err.name==='AbortError')return;
+        console.warn('Falló el compartido nativo; uso modo alternativo.',err);
+      }
+    }
+
+    // Respaldo para PC o navegadores que no permiten compartir archivos:
+    // guardar la imagen y abrir directamente el chat del cliente.
+    downloadReceiptImage(file);
+    const chatUrl='https://wa.me/'+n+'?text='+encodeURIComponent(msg);
+    const chat=window.open(chatUrl,'_blank');
+    if(chat)chat.opener=null;
+    if(!chat)window.location.href=chatUrl;
+  }catch(err){
+    console.error('Error al generar comprobante en imagen',err);
+    alert('No se pudo generar la imagen del comprobante. Podés seguir usando “Comprobante / PDF”.');
+  }
+}
+
+function printReceipt(id){
+  let r=load().find(x=>x.id===id);if(!r)return;let w=window.open('','_blank');if(!w){alert('El navegador bloqueó la ventana del comprobante. Permití ventanas emergentes para este archivo.');return}
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Comprobante ${fmtOrder(r.numero)}</title><style>body{font-family:Arial,sans-serif;color:#14243a;padding:32px}.sheet{max-width:760px;margin:auto}.top{display:flex;justify-content:space-between;border-bottom:3px solid #0d5bd8;padding-bottom:18px}.brand{font-size:28px;font-weight:900;color:#0d5bd8}.sub{color:#6f7d90}.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px}.item{padding:12px 0;border-bottom:1px solid #e4e9f0}.full{grid-column:1/-1}.lab{font-size:11px;color:#788598;font-weight:bold;text-transform:uppercase}.val{margin-top:5px}.foot{margin-top:28px;font-size:11px;color:#7c8998}.terms{margin-top:12px;padding:12px 14px;border:1px solid #dde4ec;background:#f7f9fc;border-radius:8px;font-size:11px;line-height:1.5;color:#596779}@media print{button{display:none}}</style></head><body><div class="sheet"><div class="top"><div><div class="brand">NQN Service</div><div class="sub">Servicio técnico</div></div><div style="text-align:right"><h2 style="margin:0">Orden ${fmtOrder(r.numero)}</h2><div class="sub">Ingreso ${prettyDate(r.fechaIngreso)}</div><div class="sub">Cliente C${fmtClient(r.clienteNumero)}</div></div></div><div class="grid"><div class="item"><div class="lab">Cliente</div><div class="val">${esc(r.cliente)}</div></div><div class="item"><div class="lab">Teléfono</div><div class="val">${esc(r.telefono)}</div></div><div class="item"><div class="lab">Equipo</div><div class="val">${esc(r.tipo)}</div></div><div class="item"><div class="lab">Marca y modelo</div><div class="val">${esc(r.marcaModelo)}</div></div><div class="item full"><div class="lab">Falla informada</div><div class="val">${esc(r.falla||'-')}</div></div><div class="item full"><div class="lab">Accesorios</div><div class="val">${esc(r.accesorios||'-')}</div></div><div class="item full"><div class="lab">Observaciones</div><div class="val">${esc(r.observaciones||'-')}</div></div></div><div class="foot">Conserve el número de orden para futuras consultas.</div><div class="terms">${esc(receiptTermsText())}</div><button onclick="window.print()" style="margin:22px auto;display:block;padding:11px 15px;background:#0d5bd8;color:white;border:0;border-radius:9px;font-weight:bold">Imprimir / Guardar PDF</button></div></body></html>`);w.document.close()
+}
+
+window.addEventListener('error',e=>{console.error(e.error||e.message)});
+window.addEventListener('unhandledrejection',e=>{console.error(e.reason)});
+function boot(){
+  if(!storageSelfTest()){
+    document.getElementById('view').innerHTML='<section class="panel"><h3>No se puede iniciar el almacenamiento local</h3><p>Esta versión necesita Microsoft Edge o Google Chrome. Abrila con <strong>ABRIR_NQN_SERVICE.bat</strong> desde una carpeta local.</p></section>';
+    return;
+  }
+  migrateIfNeeded();
+  let ev=loadEvents();try{saveEvents(ev)}catch(e){}
+  renderDashboard();
+  updateNetworkStatus();
+  if(cloudConfigured()&&navigator.onLine)setTimeout(()=>cloudSync(true),700);
+}
+window.addEventListener('offline',()=>{updateNetworkStatus();toast('Modo sin conexión · podés seguir cargando y buscando')});
+window.addEventListener('online',()=>{updateNetworkStatus();toast('Internet disponible · sincronizando');if(cloudConfigured())cloudSync(true)});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){updateNetworkStatus();if(cloudConfigured()&&navigator.onLine)cloudSync(true)}});
+setInterval(()=>{updateNetworkStatus();if(document.visibilityState==='visible'&&cloudConfigured()&&navigator.onLine)cloudSync(true)},30000);
+window.__nqnLegacyBoot=boot;
+</script>
+  <script src="turnos.js"></script>
+  <script src="cierre-z.js?v=942"></script>
+  <script>
+/* NQN Service V9.5 Completa
+   Caja diaria + operadores + PIN + roles + sincronización con Drive.
+   No guarda PIN en texto plano: almacena un hash.
+*/
+(() => {
+  const KEY_CASH = 'nqn_service_cash_closings_v2';
+  const KEY_CASH_MIRROR = 'nqn_service_cash_closings_v2_mirror';
+  const KEY_CASH_OLD = 'nqn_service_cash_closings_v1';
+  const KEY_CASH_OLD_MIRROR = 'nqn_service_cash_closings_v1_mirror';
+  const KEY_OPERATORS = 'nqn_service_operators_v1';
+  const KEY_OPERATORS_MIRROR = 'nqn_service_operators_v1_mirror';
+  const KEY_SESSION = 'nqn_service_operator_session_v1';
+  const KEY_EXPENSES = 'nqn_service_expenses_v1';
+  const KEY_EXPENSES_MIRROR = 'nqn_service_expenses_v1_mirror';
+  const KEY_STOCK = 'nqn_service_stock_v1';
+  const KEY_STOCK_MIRROR = 'nqn_service_stock_v1_mirror';
+  const KEY_TRANSFERS = 'nqn_service_cash_transfers_v1';
+  const EXPENSE_CATEGORIES = ['Combustible','Repuestos','Herramientas','Alquiler','Luz','Gas','Otro'];
+  const EXPENSE_CATEGORIES_VALID = [...EXPENSE_CATEGORIES,'Servicios']; // compatibilidad histórica
+  const EXPENSE_PAYMENTS = ['Efectivo','Mercado Pago'];
+  const ADMIN_VIEWS = new Set(['dashboard','kpis','cleris','backup','operadores']);
+
+  const coreShowView = window.showView;
+  const coreRenderDashboard = window.renderDashboard;
+  const coreRenderKPIs = window.renderKPIs;
+  const coreRenderCleris = window.renderCleris;
+  const coreRenderBackup = window.renderBackup;
+
+  function parseJSON(text, fallback){ try{return JSON.parse(text)}catch(e){return fallback} }
+  function readArray(key){ const x=parseJSON(localStorage.getItem(key)||'[]',[]); return Array.isArray(x)?x:[]; }
+  function localDay(){ return typeof localISODate==='function'?localISODate():new Date().toISOString().slice(0,10); }
+  function now(){ return typeof nowISO==='function'?nowISO():new Date().toISOString(); }
+  function e(v){ return typeof esc==='function'?esc(v):String(v??'').replace(/[&<>"']/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s])); }
+  function m(v){ return typeof money==='function'?money(v):'$'+Number(v||0).toLocaleString('es-AR',{maximumFractionDigits:0}); }
+  function dateLabel(v){ return typeof prettyDate==='function'?prettyDate(v):v||'-'; }
+  function dtLabel(v){ return typeof prettyDateTime==='function'?prettyDateTime(v):v||'-'; }
+  function uid(prefix){ return (crypto.randomUUID?crypto.randomUUID():prefix+'-'+Date.now()+'-'+Math.random().toString(36).slice(2)); }
+
+  function legacyPinHash(pin){
+    const raw='NQN_SERVICE_PIN|'+String(pin||'');
+    let h=2166136261;
+    for(let i=0;i<raw.length;i++){h^=raw.charCodeAt(i);h=Math.imul(h,16777619)}
+    return 'fnv1a-'+(h>>>0).toString(16);
+  }
+  async function hashPin(pin){
+    const raw='NQN_SERVICE_PIN|'+String(pin||'');
+    if(window.crypto&&crypto.subtle&&window.TextEncoder){
+      try{
+        const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(raw));
+        return Array.from(new Uint8Array(digest)).map(b=>b.toString(16).padStart(2,'0')).join('');
+      }catch(e){}
+    }
+    return legacyPinHash(pin);
+  }
+
+  function normalizeOperator(r,index=0){
+    return {
+      id:String(r?.id||('op-'+Date.now()+'-'+index)),
+      nombre:String(r?.nombre||r?.name||'').trim(),
+      rol:String(r?.rol||'operador').toLowerCase()==='admin'?'admin':'operador',
+      activo:r?.activo!==false,
+      pinHash:String(r?.pinHash||''),
+      creado:r?.creado||now(),
+      actualizado:r?.actualizado||r?.creado||now()
+    };
+  }
+  window.normalizeOperator=normalizeOperator;
+  window.loadOperators=function(){
+    let a=readArray(KEY_OPERATORS),b=readArray(KEY_OPERATORS_MIRROR);
+    const src=a.length?a:b;
+    if(!a.length&&b.length){try{localStorage.setItem(KEY_OPERATORS,JSON.stringify(b))}catch(e){}}
+    return src.map(normalizeOperator).filter(x=>x.nombre);
+  };
+  window.saveOperators=function(rows){
+    rows=(Array.isArray(rows)?rows:[]).map(normalizeOperator).filter(x=>x.nombre);
+    localStorage.setItem(KEY_OPERATORS_MIRROR,JSON.stringify(rows));
+    localStorage.setItem(KEY_OPERATORS,JSON.stringify(rows));
+    if(readArray(KEY_OPERATORS).length!==rows.length)throw new Error('No se pudo verificar el guardado de operadores');
+    return rows;
+  };
+
+  function migrateCashIfNeeded(){
+    if(readArray(KEY_CASH).length||readArray(KEY_CASH_MIRROR).length)return;
+    const old=readArray(KEY_CASH_OLD).length?readArray(KEY_CASH_OLD):readArray(KEY_CASH_OLD_MIRROR);
+    if(old.length)try{window.saveCashClosings(old)}catch(e){}
+  }
+  function normalizeCashClosing(r,index=0){
+    return {
+      id:String(r?.id||('caja-'+Date.now()+'-'+index)),fecha:String(r?.fecha||localDay()),
+      tipo:String(r?.tipo||'caja'),estado:String(r?.estado||''),periodo:String(r?.periodo||''),
+      operadorId:String(r?.operadorId||''),operador:String(r?.operador||'').trim(),
+      efectivo:Math.max(0,Number(r?.efectivo||0)),mercadoPago:Math.max(0,Number(r?.mercadoPago||0)),
+      tarjetas:Math.max(0,Number(r?.tarjetas||0)),notaCredito:Math.max(0,Number(r?.notaCredito||0)),
+      gastos:Math.max(0,Number(r?.gastos||0)),ajusteEfectivo:Number(r?.ajusteEfectivo||0),ajusteMP:Number(r?.ajusteMP||0),ajusteTotal:Number(r?.ajusteTotal||0),ajusteGastos:Number(r?.ajusteGastos||0),ajusteNotas:Number(r?.ajusteNotas||0),ajusteMotivo:String(r?.ajusteMotivo||'').trim(),saldoRealSnapshot:r?.saldoRealSnapshot&&typeof r.saldoRealSnapshot==='object'?r.saldoRealSnapshot:null,observaciones:String(r?.observaciones||'').trim(),
+      desde:String(r?.desde||''),hasta:String(r?.hasta||''),ejecutadoEn:String(r?.ejecutadoEn||''),
+      snapshot:(r?.snapshot&&typeof r.snapshot==='object')?r.snapshot:{},
+      creado:r?.creado||now(),actualizado:r?.actualizado||r?.creado||now()
+    };
+  }
+  window.normalizeCashClosing=normalizeCashClosing;
+  window.loadCashClosings=function(){
+    let a=readArray(KEY_CASH),b=readArray(KEY_CASH_MIRROR),src=a.length?a:b;
+    if(!a.length&&b.length){try{localStorage.setItem(KEY_CASH,JSON.stringify(b))}catch(e){}}
+    return src.map(normalizeCashClosing);
+  };
+  window.saveCashClosings=function(rows){
+    rows=(Array.isArray(rows)?rows:[]).map(normalizeCashClosing);
+    localStorage.setItem(KEY_CASH_MIRROR,JSON.stringify(rows));localStorage.setItem(KEY_CASH,JSON.stringify(rows));
+    if(readArray(KEY_CASH).length!==rows.length)throw new Error('No se pudo verificar el guardado de caja');
+    return rows;
+  };
+  function cashTotals(r){const ingresos=Number(r.efectivo||0)+Number(r.mercadoPago||0)+Number(r.tarjetas||0);return {ingresos,neto:ingresos-Number(r.notaCredito||0)-Number(r.gastos||0)}}
+  function cashFromOrders(fecha){
+    const out={efectivo:0,mercadoPago:0,tarjetas:0,mixto:0,cantidad:0};
+    const rows=(typeof load==='function'?load():[]);
+    rows.forEach(r=>{
+      if(!r)return;
+      const pagos=Array.isArray(r.pagos)?r.pagos:[];
+      if(pagos.length){
+        pagos.forEach(p=>{
+          if(String(p.fecha||'')!==String(fecha||''))return;
+          const monto=Number(p.monto||0);if(!monto)return;
+          const medio=String(p.medioPago||'').trim();
+          if(medio==='Efectivo')out.efectivo+=monto;
+          else if(medio==='Mercado Pago'||medio==='Transferencia')out.mercadoPago+=monto;
+          else if(medio==='Tarjeta'||medio==='Tarjeta crédito / débito'||medio==='Tarjeta crédito/débito')out.tarjetas+=monto;
+          else if(medio==='Mixto'){
+            const ef=Math.max(0,Number(p.efectivo||0)),ta=Math.max(0,Number(p.tarjeta||0));
+            if(ef>0||ta>0){out.efectivo+=ef;out.tarjetas+=ta}else out.mixto+=monto;
+          }
+          else return;
+          out.cantidad++;
+        });
+        return;
+      }
+      // Compatibilidad con órdenes anteriores a V9.11: conserva el criterio histórico.
+      if(r.estado!=='Entregado'||String(r.fechaEntrega||'')!==String(fecha||''))return;
+      const monto=Math.max(0,Number(r.pagado||0));if(!monto)return;
+      const medio=String(r.medioPago||'').trim();
+      if(medio==='Efectivo')out.efectivo+=monto;
+      else if(medio==='Mercado Pago'||medio==='Transferencia')out.mercadoPago+=monto;
+      else if(medio==='Tarjeta'||medio==='Tarjeta crédito / débito'||medio==='Tarjeta crédito/débito')out.tarjetas+=monto;
+      else if(medio==='Mixto')out.mixto+=monto;
+      else return;
+      out.cantidad++;
+    });
+    return out;
+  }
+
+  function cashFromTurnos(fecha){
+    const out={efectivo:0,mercadoPago:0,tarjetas:0,mixto:0,cantidad:0,total:0};
+    let all={};
+    try{all=JSON.parse(localStorage.getItem('nqn_turnos_v2')||'{}')||{}}catch(e){all={}}
+    const day=all[String(fecha||'')]||{};
+    Object.values(day).forEach(t=>{
+      if(!t||!t.visitaCobrada)return;
+      const monto=Math.max(0,Number(t.visitaMonto||30000));if(!monto)return;
+      const medio=String(t.visitaMedioPago||'').trim();
+      if(medio==='Efectivo')out.efectivo+=monto;
+      else if(medio==='Mercado Pago')out.mercadoPago+=monto;
+      else return;
+      out.total+=monto;out.cantidad++;
+    });
+    return out;
+  }
+
+  function cashFromCleris(fecha){
+    const out={efectivo:0,mercadoPago:0,tarjetas:0,mixto:0,cantidad:0,total:0};
+    const events=(typeof loadEvents==='function'?loadEvents():[]);
+    events.forEach(ev=>{
+      if(!ev||String(ev.fecha||'')!==String(fecha||''))return;
+      const monto=Math.max(0,Number(ev.monto||0));if(!monto)return;
+      const medio=String(ev.medioPago||'').trim();
+      if(medio==='Efectivo')out.efectivo+=monto;
+      else if(medio==='Mercado Pago'||medio==='Transferencia')out.mercadoPago+=monto;
+      else if(medio==='Tarjeta'||medio==='Tarjeta crédito / débito'||medio==='Tarjeta crédito/débito')out.tarjetas+=monto;
+      else if(medio==='Mixto')out.mixto+=monto;
+      else return;
+      out.total+=monto;
+      out.cantidad++;
+    });
+    return out;
+  }
+
+  function cashAutomatic(fecha){
+    const nqn=cashFromOrders(fecha),visitas=cashFromTurnos(fecha),cleris=cashFromCleris(fecha);
+    return {
+      efectivo:Number(nqn.efectivo||0)+Number(visitas.efectivo||0),
+      mercadoPago:Number(nqn.mercadoPago||0)+Number(visitas.mercadoPago||0),
+      tarjetas:Number(nqn.tarjetas||0),
+      mixto:Number(nqn.mixto||0),
+      cantidad:Number(nqn.cantidad||0)+Number(visitas.cantidad||0),
+      nqn,visitas,cleris
+    };
+  }
+
+  function normalizeExpense(r,index=0){
+    return {
+      id:String(r?.id||('gasto-'+Date.now()+'-'+index)),fecha:String(r?.fecha||localDay()),
+      operadorId:String(r?.operadorId||''),operador:String(r?.operador||'').trim(),
+      monto:Math.max(0,Number(r?.monto||0)),medioPago:EXPENSE_PAYMENTS.includes(String(r?.medioPago||''))?String(r.medioPago):'Efectivo',
+      categoria:EXPENSE_CATEGORIES_VALID.includes(String(r?.categoria||''))?String(r.categoria):'Otro',
+      observacion:String(r?.observacion||'').trim(),cajaId:String(r?.cajaId||''),
+      orderId:String(r?.orderId||''),orderNumero:Number(r?.orderNumero||0),orderCliente:String(r?.orderCliente||'').trim(),orderEquipo:String(r?.orderEquipo||'').trim(),
+      creado:r?.creado||now(),actualizado:r?.actualizado||r?.creado||now()
+    };
+  }
+  window.loadExpenses=function(){
+    let a=readArray(KEY_EXPENSES),b=readArray(KEY_EXPENSES_MIRROR),src=a.length?a:b;
+    if(!a.length&&b.length){try{localStorage.setItem(KEY_EXPENSES,JSON.stringify(b))}catch(e){}}
+    return src.map(normalizeExpense);
+  };
+  window.saveExpenses=function(rows){
+    rows=(Array.isArray(rows)?rows:[]).map(normalizeExpense);
+    localStorage.setItem(KEY_EXPENSES_MIRROR,JSON.stringify(rows));localStorage.setItem(KEY_EXPENSES,JSON.stringify(rows));
+    if(readArray(KEY_EXPENSES).length!==rows.length)throw new Error('No se pudo verificar el guardado de gastos');
+    return rows;
+  };
+  function operatorOwns(x,op){return String(x?.operadorId||'')===String(op?.id||'')||(!x?.operadorId&&String(x?.operador||'').toLowerCase()===String(op?.nombre||'').toLowerCase())}
+  function todaysCashForOperator(rows,op,fecha=localDay()){return rows.find(x=>x.fecha===fecha&&x.tipo!=='cierre_z'&&operatorOwns(x,op))||null}
+  function cierreZForDate(rows,fecha,op){
+    return (Array.isArray(rows)?rows:[]).filter(x=>x&&x.tipo==='cierre_z'&&x.estado==='cerrado'&&x.fecha===fecha&&(!op||x.periodo==='dia'||operatorOwns(x,op)))
+      .sort((a,b)=>String(b.ejecutadoEn||b.actualizado||'').localeCompare(String(a.ejecutadoEn||a.actualizado||'')))[0]||null;
+  }
+  window.cierreZForDate=cierreZForDate;
+  function expenseTotalFor(fecha,owner){
+    const rows=(window.loadExpenses?window.loadExpenses():[]).filter(x=>x.fecha===fecha&&operatorOwns(x,owner));
+    return rows.reduce((a,x)=>a+Number(x.monto||0),0);
+  }
+
+  function session(){
+    const s=parseJSON(sessionStorage.getItem(KEY_SESSION)||'null',null);if(!s||!s.id)return null;
+    const op=window.loadOperators().find(x=>String(x.id)===String(s.id)&&x.activo);return op||null;
+  }
+  window.currentOperator=session;
+  window.isAdmin=function(){const op=session();return !!op&&op.rol==='admin'};
+  function setSession(op){sessionStorage.setItem(KEY_SESSION,JSON.stringify({id:op.id,at:now()}));updateAuthBar();applyRoleNav()}
+  function clearSession(){sessionStorage.removeItem(KEY_SESSION);updateAuthBar();applyRoleNav()}
+
+  function ensureNavExtras(){
+    const nav=document.querySelector('.nav');if(!nav)return;
+    if(!document.getElementById('nav-stock')){
+      const b=document.createElement('button');b.id='nav-stock';b.innerHTML='▤ Stock';b.onclick=()=>window.showView('stock');
+      const k=document.getElementById('nav-kpis');k?nav.insertBefore(b,k):nav.appendChild(b);
+    }
+    if(!document.getElementById('nav-gastos')){
+      const b=document.createElement('button');b.id='nav-gastos';b.innerHTML='＋ Gasto';b.onclick=()=>window.showView('gastos');
+      const k=document.getElementById('nav-kpis');k?nav.insertBefore(b,k):nav.appendChild(b);
+    }
+    if(!document.getElementById('nav-caja')){
+      const b=document.createElement('button');b.id='nav-caja';b.innerHTML='▣ Resumen caja';b.onclick=()=>window.showView('caja');
+      const k=document.getElementById('nav-kpis');k?nav.insertBefore(b,k):nav.appendChild(b);
+    }
+    if(!document.getElementById('nav-operadores')){
+      const b=document.createElement('button');b.id='nav-operadores';b.innerHTML='♙ Operadores';b.onclick=()=>window.showView('operadores');
+      const backup=document.getElementById('nav-backup');backup?nav.insertBefore(b,backup):nav.appendChild(b);
+    }
+    const top=document.querySelector('.top > div:last-child');
+    if(top&&!document.getElementById('authStatus')){
+      const d=document.createElement('div');d.id='authStatus';top.insertBefore(d,top.firstChild);
+    }
+    updateAuthBar();applyRoleNav();
+  }
+  function updateAuthBar(){
+    const el=document.getElementById('authStatus');if(!el)return;const op=session();
+    if(!op){el.innerHTML='<span class="badge">V9.36 transferencias sincronizadas</span>';return}
+    el.innerHTML=`<button class="btn secondary small" type="button" onclick="logoutOperator()">👤 ${e(op.nombre)} · Salir</button>`;
+  }
+  function applyRoleNav(){
+    const op=session(),admin=!!op&&op.rol==='admin';
+    ['nav-dashboard','nav-kpis','nav-cleris','nav-backup','nav-operadores'].forEach(id=>{const x=document.getElementById(id);if(x)x.style.display=admin?'':'none'});
+    ['nav-nuevo','nav-ordenes','nav-clientes','nav-stock','nav-gastos','nav-caja'].forEach(id=>{const x=document.getElementById(id);if(x)x.style.display=op?'':'none'});
+    const t=document.getElementById('nav-turnos');if(t)t.style.display=op?'':'none';
+  }
+  window.logoutOperator=function(){clearSession();renderLoginOrSetup()};
+
+  function renderLoginOrSetup(){
+    ensureNavExtras();document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));
+    const ops=window.loadOperators();
+    if(!ops.length)return renderFirstAdmin();
+    const active=ops.filter(x=>x.activo);
+    title('Ingreso de operador');
+    document.getElementById('view').innerHTML=`<section class="panel" style="max-width:560px;margin:40px auto 0"><div class="panelhead"><div><div class="eyebrow">ACCESO</div><h3>Ingresar a NQN Service</h3></div><span class="badge">V9.31 RESUMEN Y COMPARTIR</span></div>${active.length?`<form class="grid" style="grid-template-columns:1fr" onsubmit="window.loginOperator(event)"><div class="field"><label>Operador</label><select id="loginOperatorId" required>${active.map(o=>`<option value="${e(o.id)}">${e(o.nombre)}</option>`).join('')}</select></div><div class="field"><label>PIN</label><input id="loginPin" type="password" inputmode="numeric" autocomplete="current-password" required autofocus><div class="hint">Si tu PIN anterior tenía guion, también podés ingresar solo los números.</div></div><div class="actions"><button class="btn primary" type="submit">Ingresar</button></div></form>`:'<div class="alert red"><strong>No hay operadores activos</strong><span>Se necesita un administrador activo para continuar.</span></div>'}</section>`;
+    applyRoleNav();
+  }
+  function renderFirstAdmin(){
+    title('Configuración inicial');
+    document.getElementById('view').innerHTML=`<section class="panel" style="max-width:620px;margin:40px auto 0"><div class="panelhead"><div><div class="eyebrow">PRIMER INGRESO</div><h3>Crear administrador</h3></div><span class="badge">Se hace una sola vez</span></div><p class="sectionnote">Creá el primer usuario administrador. Después vas a poder agregar, editar, desactivar o eliminar operadores desde la aplicación.</p><form class="grid" style="grid-template-columns:1fr" onsubmit="createFirstAdmin(event)"><div class="field"><label>Nombre *</label><input id="firstAdminName" required autofocus></div><div class="field"><label>PIN *</label><input id="firstAdminPin" type="password" inputmode="numeric" minlength="4" required></div><div class="field"><label>Repetir PIN *</label><input id="firstAdminPin2" type="password" inputmode="numeric" minlength="4" required></div><div class="actions"><button class="btn primary" type="submit">Crear administrador</button></div></form></section>`;
+    applyRoleNav();
+  }
+  window.createFirstAdmin=async function(ev){
+    ev.preventDefault();const nombre=document.getElementById('firstAdminName').value.trim(),p1=document.getElementById('firstAdminPin').value,p2=document.getElementById('firstAdminPin2').value;
+    if(p1!==p2){alert('Los PIN no coinciden.');return}if(p1.length<4){alert('El PIN debe tener al menos 4 caracteres.');return}
+    const ts=now(),op=normalizeOperator({id:uid('op'),nombre,rol:'admin',activo:true,pinHash:await hashPin(p1),creado:ts,actualizado:ts});
+    window.saveOperators([op]);if(typeof queueCloudOp==='function')queueCloudOp('upsertOperator',op.id,op,op.actualizado);setSession(op);toast('Administrador creado');afterLogin();
+  };
+  window.loginOperator=async function(ev){
+    ev.preventDefault();
+    try{
+      const id=document.getElementById('loginOperatorId').value;
+      const input=document.getElementById('loginPin');
+      const pin=String(input.value||'').trim();
+      const op=window.loadOperators().find(x=>String(x.id)===String(id)&&x.activo);
+      if(!op){alert('Operador no disponible.');return}
+      const digits=pin.replace(/\D/g,'');
+      const candidates=[pin,digits];
+      if(digits.length===4)candidates.push(digits.slice(0,2)+'-'+digits.slice(2));
+      const unique=[...new Set(candidates.filter(Boolean))];
+      let matched=false;
+      for(const candidate of unique){
+        const currentHash=await hashPin(candidate);
+        if(currentHash===op.pinHash||legacyPinHash(candidate)===op.pinHash){matched=true;break}
+      }
+      if(!matched){alert('PIN incorrecto.');input.select();return}
+      if(digits.length>=4){
+        const freshHash=await hashPin(digits);
+        if(freshHash!==op.pinHash){
+          const rows=window.loadOperators();
+          const i=rows.findIndex(x=>String(x.id)===String(op.id));
+          if(i>=0){rows[i]={...rows[i],pinHash:freshHash,actualizado:now()};window.saveOperators(rows);op.pinHash=freshHash;op.actualizado=rows[i].actualizado;if(typeof queueCloudOp==='function')queueCloudOp('upsertOperator',op.id,op,op.actualizado)}
+        }
+      }
+      setSession(op);afterLogin();
+    }catch(err){
+      console.error('Error al validar PIN',err);
+      alert('No se pudo validar el PIN. Recargá la aplicación e intentá nuevamente.');
+    }
+  };
+  function afterLogin(){
+    ensureNavExtras();applyRoleNav();updateAuthBar();const op=session();
+    if(!op)return renderLoginOrSetup();
+    if(op.rol==='admin')window.renderDashboard();else window.newOrder();
+  }
+
+  window.queueCloudOp=function(type,id,data=null,at=(typeof nowISO==='function'?nowISO():now())){
+    let low=String(type||'').toLowerCase(),entity=low.includes('expense')?'expense':(low.includes('operator')?'operator':(low.includes('cash')?'cash':(low.includes('event')?'event':'order')));
+    let q=cloudQueue().filter(op=>!(op.entity===entity&&String(op.id)===String(id)));
+    q.push({opId:uid('q'),type,entity,id:String(id),at,data});setCloudQueue(q);updateNetworkStatus();cloudAutoSyncSoon();
+  };
+  window.bootstrapCloudQueue=function(){
+    let s=getSettings();let q=cloudQueue(),seen=new Set(q.map(x=>x.entity+':'+x.id));
+    const seedCore=!s.cloudEverSynced;
+    if(!seedCore&&s.expensesCloudSeeded)return;
+    if(seedCore){
+      load().forEach(r=>{let k='order:'+r.id;if(!seen.has(k)){q.push({opId:'boot-o-'+r.id,type:'upsertOrder',entity:'order',id:String(r.id),at:r.actualizado||r.creado||now(),data:r});seen.add(k)}});
+      loadEvents().forEach(r=>{let k='event:'+r.id;if(!seen.has(k)){q.push({opId:'boot-e-'+r.id,type:'upsertEvent',entity:'event',id:String(r.id),at:r.actualizado||r.creado||now(),data:r});seen.add(k)}});
+      window.loadCashClosings().forEach(r=>{let k='cash:'+r.id;if(!seen.has(k)){q.push({opId:'boot-c-'+r.id,type:'upsertCash',entity:'cash',id:String(r.id),at:r.actualizado||r.creado||now(),data:r});seen.add(k)}});
+      window.loadOperators().forEach(r=>{let k='operator:'+r.id;if(!seen.has(k)){q.push({opId:'boot-p-'+r.id,type:'upsertOperator',entity:'operator',id:String(r.id),at:r.actualizado||r.creado||now(),data:r});seen.add(k)}});
+    }
+    window.loadExpenses().forEach(r=>{let k='expense:'+r.id;if(!seen.has(k)){q.push({opId:'boot-x-'+r.id,type:'upsertExpense',entity:'expense',id:String(r.id),at:r.actualizado||r.creado||now(),data:r});seen.add(k)}});
+    s.expensesCloudSeeded=true;setSettings(s);setCloudQueue(q);
+  };
+  window.opReflected=function(op,state){
+    let rows=null;
+    if(op.entity==='order')rows=Array.isArray(state?.ordenes)?state.ordenes:null;
+    else if(op.entity==='cash')rows=Array.isArray(state?.cierrescaja)?state.cierrescaja:null;
+    else if(op.entity==='operator')rows=Array.isArray(state?.operadores)?state.operadores:null;
+    else if(op.entity==='expense')rows=Array.isArray(state?.gastos)?state.gastos:null;
+    else if(op.entity==='event')rows=Array.isArray(state?.cleriseventos)?state.cleriseventos:null;
+    if(!rows)return false;
+    const hit=rows.find(x=>String(x.id)===String(op.id));
+    if(String(op.type||'').startsWith('delete'))return !hit;
+    if(!hit)return false;
+    const remoteAt=new Date(hit.actualizado||hit.creado||0).getTime(),localAt=new Date(op.at||op.data?.actualizado||op.data?.creado||0).getTime();
+    return !localAt||remoteAt>=localAt;
+  };
+  window.applyCloudState=function(state,pending=[]){
+    const pOrders=new Set(pending.filter(x=>x.entity==='order').map(x=>String(x.id)));
+    const pEvents=new Set(pending.filter(x=>x.entity==='event').map(x=>String(x.id)));
+    const pCash=new Set(pending.filter(x=>x.entity==='cash').map(x=>String(x.id)));
+    const pOps=new Set(pending.filter(x=>x.entity==='operator').map(x=>String(x.id)));
+    const pExpenses=new Set(pending.filter(x=>x.entity==='expense').map(x=>String(x.id)));
+    const dExpenses=new Set(pending.filter(x=>x.entity==='expense'&&x.type==='deleteExpense').map(x=>String(x.id)));
+    const dOrders=new Set(pending.filter(x=>x.entity==='order'&&x.type==='deleteOrder').map(x=>String(x.id)));
+    const dEvents=new Set(pending.filter(x=>x.entity==='event'&&x.type==='deleteEvent').map(x=>String(x.id)));
+    const dCash=new Set(pending.filter(x=>x.entity==='cash'&&x.type==='deleteCash').map(x=>String(x.id)));
+    const dOps=new Set(pending.filter(x=>x.entity==='operator'&&x.type==='deleteOperator').map(x=>String(x.id)));
+
+    if(Array.isArray(state?.ordenes)){
+      let ro=ensureClientNumbers(state.ordenes.map(normalizeOrder));
+      if(dOrders.size)ro=ro.filter(x=>!dOrders.has(String(x.id)));
+      if(pOrders.size){let map=new Map(ro.map(x=>[String(x.id),x]));load().forEach(x=>{if(pOrders.has(String(x.id))&&!dOrders.has(String(x.id)))map.set(String(x.id),x)});ro=ensureClientNumbers([...map.values()].map(normalizeOrder))}
+      writeRowsKey(KEY_MIRROR,ro);writeRowsKey(KEY,ro);
+    }
+    if(Array.isArray(state?.cleriseventos)){
+      let re=state.cleriseventos;
+      if(dEvents.size)re=re.filter(x=>!dEvents.has(String(x.id)));
+      if(pEvents.size){let map=new Map(re.map(x=>[String(x.id),x]));loadEvents().forEach(x=>{if(pEvents.has(String(x.id))&&!dEvents.has(String(x.id)))map.set(String(x.id),x)});re=[...map.values()]}
+      saveEvents(re);
+    }
+    if(Array.isArray(state?.cierrescaja)){
+      let rc=state.cierrescaja.map(normalizeCashClosing);
+      if(dCash.size)rc=rc.filter(x=>!dCash.has(String(x.id)));
+      if(pCash.size){let map=new Map(rc.map(x=>[String(x.id),x]));window.loadCashClosings().forEach(x=>{if(pCash.has(String(x.id))&&!dCash.has(String(x.id)))map.set(String(x.id),x)});rc=[...map.values()]}
+      window.saveCashClosings(rc);
+    }
+    if(Array.isArray(state?.gastos)){
+      let rx=state.gastos.map(normalizeExpense);
+      if(dExpenses.size)rx=rx.filter(x=>!dExpenses.has(String(x.id)));
+      if(pExpenses.size){let map=new Map(rx.map(x=>[String(x.id),x]));window.loadExpenses().forEach(x=>{if(pExpenses.has(String(x.id))&&!dExpenses.has(String(x.id)))map.set(String(x.id),x)});rx=[...map.values()]}
+      window.saveExpenses(rx);
+    }
+    if(Array.isArray(state?.operadores)){
+      let rp=state.operadores.map(normalizeOperator);
+      if(dOps.size)rp=rp.filter(x=>!dOps.has(String(x.id)));
+      if(pOps.size){let map=new Map(rp.map(x=>[String(x.id),x]));window.loadOperators().forEach(x=>{if(pOps.has(String(x.id))&&!dOps.has(String(x.id)))map.set(String(x.id),x)});rp=[...map.values()]}
+      const localOps=window.loadOperators();
+      const remoteHasAdmin=rp.some(x=>x.activo&&x.rol==='admin');
+      const localHasAdmin=localOps.some(x=>x.activo&&x.rol==='admin');
+      if(remoteHasAdmin||!localHasAdmin)window.saveOperators(rp);
+    }
+  };
+  window.refreshViewAfterCloudSync=function(){
+    // Sincronizar datos sin tocar la vista actual ni reconstruir formularios.
+    updateNetworkStatus();
+  };
+
+  window.showView=function(v){
+    if(!session()){renderLoginOrSetup();return}
+    if(ADMIN_VIEWS.has(v)&&!window.isAdmin()){toast('Esta sección es solo para administrador');window.newOrder();return}
+    if(v==='stock')return window.renderStock();if(v==='gastos')return window.renderExpenses();if(v==='caja')return window.showCashSummary();if(v==='operadores')return window.renderOperators();return coreShowView(v);
+  };
+  window.renderDashboard=function(){if(!window.isAdmin())return window.newOrder();return coreRenderDashboard()};
+  window.renderKPIs=function(){if(!window.isAdmin())return window.newOrder();return coreRenderKPIs()};
+  window.renderCleris=function(){if(!window.isAdmin())return window.newOrder();return coreRenderCleris()};
+  window.renderBackup=function(){if(!window.isAdmin())return window.newOrder();return coreRenderBackup()};
+
+  function cashValue(id){return document.getElementById(id)?.value??''}function cashNum(id){const n=parseMoneyAR(cashValue(id));return Number.isFinite(n)?Math.max(0,n):0}
+
+  function monthBalance(fecha,owner){
+    const mk=String(fecha||localDay()).slice(0,7);
+    const isAdmin=window.isAdmin();
+    const orders=(typeof load==='function'?load():[]);
+    const ingresos=orders.reduce((a,r)=>{
+      const pagos=Array.isArray(r?.pagos)?r.pagos:[];
+      if(pagos.length)return a+pagos.filter(p=>String(p.fecha||'').slice(0,7)===mk).reduce((s,p)=>s+Number(p.monto||0),0);
+      if(r?.estado==='Entregado'&&String(r.fechaEntrega||'').slice(0,7)===mk)return a+Math.max(0,Number(r.pagado||0));
+      return a;
+    },0);
+    let turnosAll={};try{turnosAll=JSON.parse(localStorage.getItem('nqn_turnos_v2')||'{}')||{}}catch(e){turnosAll={}}
+    const visitasIngresos=Object.entries(turnosAll).filter(([d])=>String(d).slice(0,7)===mk).reduce((sum,[,day])=>sum+Object.values(day||{}).filter(t=>t&&t.visitaCobrada).reduce((s,t)=>s+Math.max(0,Number(t.visitaMonto||30000)),0),0);
+    const clerisIngresos=(typeof loadEvents==='function'?loadEvents():[]).filter(x=>String(x.fecha||'').slice(0,7)===mk).reduce((a,x)=>a+Math.max(0,Number(x.monto||0)),0);
+    const ingresosCaja=ingresos+visitasIngresos;
+    const expenses=(window.loadExpenses?window.loadExpenses():[]).filter(x=>String(x.fecha||'').slice(0,7)===mk&&(isAdmin||operatorOwns(x,owner)));
+    const gastos=expenses.reduce((a,x)=>a+Math.max(0,Number(x.monto||0)),0);
+    const closings=(window.loadCashClosings?window.loadCashClosings():[]).filter(x=>String(x.fecha||'').slice(0,7)===mk&&(isAdmin||operatorOwns(x,owner)));
+    const notas=closings.reduce((a,x)=>a+Math.max(0,Number(x.notaCredito||0)),0);
+    const ajusteGastos=closings.reduce((a,x)=>a+Number(x.ajusteGastos||0),0);
+    const ajusteNotas=closings.reduce((a,x)=>a+Number(x.ajusteNotas||0),0);
+    const ajustesEfectivo=closings.reduce((a,x)=>a+Number(x.ajusteEfectivo||0),0);
+    const ajustesMP=closings.reduce((a,x)=>a+Number(x.ajusteMP||0),0);
+    const ajustesTotal=closings.reduce((a,x)=>a+Number(x.ajusteTotal||0),0);
+    const transfers=readArray(KEY_TRANSFERS).filter(x=>String(x.fecha||'').slice(0,7)===mk);
+    const transferEf=transfers.reduce((a,x)=>a+(x.origen==='Efectivo'?-Number(x.monto||0):x.destino==='Efectivo'?Number(x.monto||0):0),0);
+    const transferMP=transfers.reduce((a,x)=>a+(x.origen==='Mercado Pago'?-Number(x.monto||0):x.destino==='Mercado Pago'?Number(x.monto||0):0),0);
+    const gastosEfectivo=expenses.filter(x=>x.medioPago==='Efectivo').reduce((a,x)=>a+Number(x.monto||0),0);
+    const gastosMP=expenses.filter(x=>x.medioPago==='Mercado Pago').reduce((a,x)=>a+Number(x.monto||0),0);
+    const cobros={efectivo:0,mercadoPago:0,tarjetas:0};
+    const days=new Set([...orders.flatMap(r=>Array.isArray(r?.pagos)&&r.pagos.length?r.pagos.map(p=>p.fecha):[r.fechaEntrega]),...Object.keys(turnosAll)].filter(x=>String(x||'').slice(0,7)===mk));
+    days.forEach(day=>{const x=cashAutomatic(day);cobros.efectivo+=x.efectivo;cobros.mercadoPago+=x.mercadoPago;cobros.tarjetas+=x.tarjetas});
+    const rawEf=cobros.efectivo-gastosEfectivo+ajustesEfectivo+transferEf;
+    const rawMP=cobros.mercadoPago-gastosMP+ajustesMP+transferMP;
+    // La última conciliación absoluta es un punto de partida; los movimientos posteriores
+    // se agregan una sola vez. Nunca modifica ingresos, gastos ni resultado mensual.
+    const latest=closings.filter(x=>x.saldoRealSnapshot&&x.tipo!=='cierre_z')
+      .sort((a,b)=>String(b.saldoRealSnapshot?.at||'').localeCompare(String(a.saldoRealSnapshot?.at||'')))[0]?.saldoRealSnapshot;
+    const cajaReal=latest?Number(latest.ef)+rawEf-Number(latest.rawEf):rawEf;
+    const mpReal=latest?Number(latest.mp)+rawMP-Number(latest.rawMP):rawMP;
+    return {ingresos:ingresosCaja,ingresosNQN:ingresos+visitasIngresos,ingresosVisitas:visitasIngresos,ingresosCleris:clerisIngresos,gastos:gastos+ajusteGastos,notas:notas+ajusteNotas,ajustesEfectivo,ajustesMP,ajustesTotal,efectivo:cobros.efectivo,gastosEfectivo,cajaFisica:cajaReal,mercadoPago:mpReal,neto:ingresosCaja-notas-gastos+ajustesEfectivo+ajustesMP+ajustesTotal};
+  }
+
+  function paintMonthBalance(value){
+    const box=document.getElementById('cashMonthBox'),el=document.getElementById('cashMonthNet');
+    if(!box||!el)return;
+    el.textContent=m(value);
+    box.classList.toggle('bad',value<0);
+    box.classList.toggle('soft',value>=0);
+    el.style.color=value<0?'var(--red)':'';
+  }
+
+  function cashPreview(){
+    const t=cashTotals({efectivo:cashNum('cashEfectivo'),mercadoPago:cashNum('cashMP'),tarjetas:cashNum('cashTarjetas'),notaCredito:cashNum('cashNC'),gastos:cashNum('cashGastos')});
+    const a=document.getElementById('cashTotal'),b=document.getElementById('cashNeto');
+    if(a)a.textContent=m(t.ingresos);
+    if(b){b.textContent=m(t.neto);b.style.color=t.neto<0?'var(--red)':''}
+    const op=session(),fecha=cashValue('cashFecha')||localDay();
+    if(op&&window.isAdmin()){
+      const owner={id:op.id,nombre:op.nombre};
+      const mb=monthBalance(fecha,owner);
+      const saved=(window.loadCashClosings?window.loadCashClosings():[]).filter(x=>x.fecha===fecha&&(window.isAdmin()||operatorOwns(x,owner))).reduce((s,x)=>s+Number(x.notaCredito||0),0);
+      paintMonthBalance(mb.neto+saved-cashNum('cashNC'));
+    }
+  }
+  window.showCashSummary=function(editId=''){
+    rememberCurrentView('caja');
+    const op=session();if(!op)return renderLoginOrSetup();currentView='caja';editingId=null;setNav('caja');title('Resumen de caja diario');
+    const allCash=window.loadCashClosings();
+    const all=allCash.filter(x=>x?.tipo!=='cierre_z');
+    let hit=editId?all.find(x=>String(x.id)===String(editId)):todaysCashForOperator(all,op);
+    if(hit&&!window.isAdmin()&&!operatorOwns(hit,op)){toast('No podés editar el cierre de otro operador');return window.showCashSummary()}
+    const todayHit=!hit?all.find(x=>x.fecha===localDay()&&operatorOwns(x,op)):null;
+    if(!hit&&todayHit)hit=todayHit;
+    const r=hit||{fecha:localDay(),operadorId:op.id,operador:op.nombre,efectivo:0,mercadoPago:0,tarjetas:0,notaCredito:0,gastos:0,observaciones:''};
+    const owner={id:r.operadorId||op.id,nombre:r.operador||op.nombre};
+    const gastosDia=(window.loadExpenses?window.loadExpenses():[]).filter(x=>x.fecha===r.fecha&&operatorOwns(x,owner));
+    const gastosTotal=gastosDia.reduce((a,x)=>a+Number(x.monto||0),0);
+    const ge=gastosDia.filter(x=>x.medioPago==='Efectivo').reduce((a,x)=>a+Number(x.monto||0),0),gm=gastosDia.filter(x=>x.medioPago==='Mercado Pago').reduce((a,x)=>a+Number(x.monto||0),0);
+    const autoCash=cashAutomatic(r.fecha);
+    const cajaVista=editId?r:{...r,efectivo:autoCash.efectivo,mercadoPago:autoCash.mercadoPago,tarjetas:autoCash.tarjetas};
+    const resumen={...cajaVista,gastos:gastosTotal};
+    const tt=cashTotals(resumen);
+    const month=window.isAdmin()?monthBalance(r.fecha,owner):null,monthNet=month?.neto||0;
+    const visible=window.isAdmin()?all:all.filter(x=>operatorOwns(x,op));
+    const sorted=[...visible].sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha))||String(b.actualizado).localeCompare(String(a.actualizado)));
+    const zAll=allCash.filter(x=>x?.tipo==='cierre_z'&&x?.estado==='cerrado');
+    const zVisible=window.isAdmin()?zAll:zAll.filter(x=>operatorOwns(x,op));
+    const zSorted=[...zVisible].sort((a,b)=>String(b.ejecutadoEn||b.actualizado||'').localeCompare(String(a.ejecutadoEn||a.actualizado||'')));
+    document.getElementById('view').innerHTML=`<section class="panel" style="margin-top:0"><div class="panelhead"><div><div class="eyebrow">CIERRE DIARIO</div><h3>${hit?'Cierre del día':'Cargar cierre del día'}</h3></div><span class="badge">Operador: ${e(r.operador)}</span></div><form class="grid" onsubmit="submitCashSummary(event,'${e(hit?.id||'')}')"><div class="field short"><label>Fecha *</label><input id="cashFecha" type="date" value="${e(r.fecha)}" required></div><div class="field"><label>Operador</label><input value="${e(r.operador)}" readonly></div><div class="field"><label>Efectivo</label><input id="cashEfectivo" class="cashNumber" type="text" inputmode="decimal" value="${moneyInput(cajaVista.efectivo)}"></div><div class="field"><label>Mercado Pago / transferencias</label><input id="cashMP" class="cashNumber" type="text" inputmode="decimal" value="${moneyInput(cajaVista.mercadoPago)}"></div><div class="field"><label>Tarjeta crédito / débito</label><input id="cashTarjetas" class="cashNumber" type="text" inputmode="decimal" value="${moneyInput(cajaVista.tarjetas)}"></div><div class="field full"><div id="cashAutoHint" class="hint"><strong>Automático:</strong> suma únicamente los cobros de NQN Service y las visitas cobradas desde Turnos. Los ingresos de Cleris Eventos se consultan por separado y no afectan esta caja.${autoCash.mixto>0?` <strong>Atención:</strong> hay ${m(autoCash.mixto)} con medio "Mixto"; revisá manualmente cómo repartirlo.`:''}</div></div><div class="field"><label>Nota de crédito</label><input id="cashNC" class="cashNumber" type="text" inputmode="decimal" value="${moneyInput(r.notaCredito)}"></div><div class="field"><label>Gastos del día</label><input id="cashGastos" type="text" value="${moneyInput(gastosTotal)}" readonly><div class="hint">Se carga desde el botón <strong>＋ Gasto</strong>. Efectivo: ${m(ge)} · Mercado Pago: ${m(gm)}</div></div><div class="field full"><label>Observaciones</label><input id="cashObs" value="${e(r.observaciones)}"></div><div class="field full">${window.isAdmin()?`<h3 style="margin:12px 0 8px">Resumen del mes</h3><div class="stats" style="grid-template-columns:repeat(2,1fr);margin:5px 0"><div class="stat soft"><div class="statlabel">Efectivo cobrado del mes</div><div class="statvalue smallmoney">${m(month.efectivo)}</div><div class="stathelp">Suma de los Z · sin restar gastos</div></div><div class="stat soft"><div class="statlabel">Total mes Mercado Pago</div><div class="statvalue smallmoney">${m(month.mercadoPago)}</div></div><div class="stat soft"><div class="statlabel">Gastos pagados en efectivo</div><div class="statvalue smallmoney">${m(month.gastosEfectivo)}</div></div><div class="stat soft"><div class="statlabel">Caja física</div><div class="statvalue smallmoney">${m(month.cajaFisica)}</div><div class="stathelp">Cobrado en efectivo − gastos en efectivo + ajustes y transferencias</div></div><div class="stat soft"><div class="statlabel">Total mes gastos</div><div class="statvalue smallmoney">${m(month.gastos)}</div></div><div class="stat soft"><div class="statlabel">Total mes notas de crédito</div><div class="statvalue smallmoney">${m(month.notas)}</div></div><div id="cashMonthBox" class="stat ${monthNet<0?'bad':'soft'}" style="grid-column:1/-1"><div class="statlabel">Saldo total del mes</div><div id="cashMonthNet" class="statvalue smallmoney" style="${monthNet<0?'color:var(--red)':''}">${m(monthNet)}</div><div class="stathelp">Cobros − gastos − notas de crédito + ajustes registrados</div></div></div>`:''}<h3 style="margin:18px 0 8px">Cierre del día</h3><div class="stats" style="grid-template-columns:repeat(2,1fr);margin:5px 0"><div class="stat soft"><div class="statlabel">Total cobrado hoy</div><div id="cashTotal" class="statvalue smallmoney">${m(tt.ingresos)}</div></div><div class="stat ${tt.neto<0?'bad':''}"><div class="statlabel">Neto del día</div><div id="cashNeto" class="statvalue smallmoney" style="${tt.neto<0?'color:var(--red)':''}">${m(tt.neto)}</div><div class="stathelp">Cobrado − notas de crédito − gastos</div></div></div></div><div class="actions full">${window.isAdmin()?'<button type="button" class="btn secondary" onclick="ajustarSaldosCaja()">Reiniciar resumen del mes / ajustar saldos</button>':''}<button type="button" class="btn secondary" onclick="mostrarTransferenciaCaja()">⇄ Transferencia entre cajas</button><button type="button" class="btn secondary" onclick="renderExpenses()">＋ Cargar gasto</button><button class="btn primary" type="submit">${hit?'Guardar cambios':'Guardar cierre'}</button></div></form></section><section class="panel"><div class="panelhead"><div><div class="eyebrow">HISTORIAL</div><h3>${window.isAdmin()?'Todos los cierres':'Mis cierres'}</h3></div><span class="badge">${visible.length}</span></div>${sorted.length?`<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Operador</th><th>Total</th><th>Nota crédito</th><th>Gastos</th><th>Neto</th><th></th></tr></thead><tbody>${sorted.slice(0,100).map(x=>{const t=cashTotals(x);return `<tr><td><strong>${dateLabel(x.fecha)}</strong></td><td>${e(x.operador)}</td><td><strong>${m(t.ingresos)}</strong></td><td>${m(x.notaCredito)}</td><td>${m(x.gastos)}</td><td><strong>${m(t.neto)}</strong></td><td class="right nowrap"><button class="btn secondary small" onclick="showCashSummary('${e(x.id)}')">Editar</button>${window.isAdmin()?` <button class="btn danger small" onclick="deleteCashSummary('${e(x.id)}')">Eliminar</button>`:''}</td></tr>`}).join('')}</tbody></table></div>`:'<div class="empty">Todavía no hay cierres de caja.</div>'}</section><section class="panel"><div class="panelhead"><div><div class="eyebrow">HISTORIAL Z</div><h3>Cierres Z realizados</h3></div><span class="badge">${zVisible.length}</span></div>${zSorted.length?`<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Operador</th><th>Tipo</th><th>Efectivo contado</th><th>Diferencia</th></tr></thead><tbody>${zSorted.slice(0,100).map(x=>{const d=new Date(x.ejecutadoEn||x.actualizado||x.creado||'');const hora=Number.isNaN(d.getTime())?'—':d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});const tipo=String(x.periodo||'turno')==='dia'?'Cierre de día':'Cierre de turno';return `<tr><td><strong>${dateLabel(x.fecha)}</strong></td><td>${e(hora)}</td><td>${e(x.operador||'Sin registrar')}</td><td><span class="badge">${e(tipo)}</span></td><td>${m(Number(x.snapshot?.efectivoContado||0))}</td><td><strong>${m(Number(x.snapshot?.diferencia||0))}</strong></td></tr>`}).join('')}</tbody></table></div>`:'<div class="empty">Todavía no hay cierres Z realizados.</div>'}</section>`;
+    document.querySelectorAll('.cashNumber').forEach(x=>x.addEventListener('input',cashPreview));
+    const fechaEl=document.getElementById('cashFecha');if(fechaEl)fechaEl.addEventListener('change',()=>{
+      const fecha=fechaEl.value,auto=cashAutomatic(fecha),total=expenseTotalFor(fecha,owner);
+      const ef=document.getElementById('cashEfectivo'),mp=document.getElementById('cashMP'),ta=document.getElementById('cashTarjetas'),g=document.getElementById('cashGastos'),h=document.getElementById('cashAutoHint');
+      if(ef)ef.value=moneyInput(auto.efectivo);if(mp)mp.value=moneyInput(auto.mercadoPago);if(ta)ta.value=moneyInput(auto.tarjetas);if(g)g.value=moneyInput(total);
+      if(h)h.innerHTML=`<strong>Automático:</strong> suma únicamente los cobros de NQN Service y las visitas cobradas desde Turnos. Los ingresos de Cleris Eventos se consultan por separado y no afectan esta caja.${auto.mixto>0?` <strong>Atención:</strong> hay ${m(auto.mixto)} con medio "Mixto"; revisá manualmente cómo repartirlo.`:''}`;
+      cashPreview();
+    });
+  };
+  window.mostrarTransferenciaCaja=function(){
+    let panel=document.getElementById('cashTransferPanel');if(panel){panel.remove();return}
+    panel=document.createElement('div');panel.id='cashTransferPanel';panel.className='panel';panel.style.margin='12px 0';
+    panel.innerHTML='<h3>Transferencia entre cajas</h3><div class="grid"><div class="field"><label>Origen</label><select id="transferOrigen"><option>Efectivo</option><option>Mercado Pago</option></select></div><div class="field"><label>Destino</label><select id="transferDestino"><option>Mercado Pago</option><option>Efectivo</option></select></div><div class="field"><label>Monto</label><input id="transferMonto" type="text" inputmode="decimal"></div><div class="field"><label>Observación</label><input id="transferObs" placeholder="Ej.: Devolución de dinero adelantado"></div></div><div class="actions"><button type="button" class="btn primary" onclick="guardarTransferenciaCaja()">Guardar transferencia</button><button type="button" class="btn secondary" onclick="document.getElementById(\'cashTransferPanel\').remove()">Cancelar</button></div>';
+    document.querySelector('#view .panel')?.appendChild(panel);document.getElementById('transferMonto')?.focus();
+  };
+  window.guardarTransferenciaCaja=function(){
+    const op=session();if(!op)return;const origen=cashValue('transferOrigen'),destino=cashValue('transferDestino'),monto=parseMoneyAR(cashValue('transferMonto')),observacion=String(cashValue('transferObs')||'').trim(),fecha=cashValue('cashFecha')||localDay();
+    if(origen===destino){alert('Origen y destino deben ser distintos.');return}if(!Number.isFinite(monto)||monto<=0){alert('Ingresá un monto válido.');return}
+    const rows=readArray(KEY_TRANSFERS),ts=now(),obj={id:uid('transferencia'),tipo:'transferencia',fecha,origen,destino,monto,observacion,operadorId:op.id,operador:op.nombre,creado:ts,actualizado:ts};rows.push(obj);localStorage.setItem(KEY_TRANSFERS,JSON.stringify(rows));
+    if(typeof queueCloudOp==='function')queueCloudOp('upsertCash',obj.id,obj,ts);
+    toast('Transferencia registrada · '+m(monto));window.showCashSummary();
+  };
+  window.ajustarSaldosCaja=function(){
+    if(!window.isAdmin()){alert('Solo el administrador puede ajustar saldos.');return}
+    const op=session(),fecha=cashValue('cashFecha')||localDay();
+    if(fecha!==localDay()){alert('El ajuste de saldos se registra con la fecha de hoy. Volvé al cierre de hoy.');return}
+    const owner={id:op.id,nombre:op.nombre},actual=monthBalance(fecha,owner);
+    let panel=document.getElementById('cashAdjustPanel');
+    if(panel){panel.remove();return}
+    panel=document.createElement('div');panel.id='cashAdjustPanel';panel.className='panel';panel.style.margin='12px 0';
+    panel.innerHTML='<h3>Ajustar saldos reales</h3><p>Escribí los saldos reales o tocá «Poner todos en cero». Ese botón también reinicia los acumulados visibles de gastos y notas de crédito; el historial queda registrado.</p><div class="grid"><div class="field"><label>Efectivo real</label><input id="adjustEf" type="text" inputmode="decimal"></div><div class="field"><label>Mercado Pago real</label><input id="adjustMP" type="text" inputmode="decimal"></div><div class="field"><label>Total disponible real (efectivo + Mercado Pago)</label><input id="adjustTotal" type="text" readonly aria-readonly="true"></div><div class="field"><label>Motivo del ajuste *</label><input id="adjustMotivo" value="Conciliación de caja"></div></div><div class="actions"><button type="button" class="btn secondary" onclick="ponerSaldosCajaEnCero()">Poner todos en cero</button><button type="button" class="btn primary" onclick="guardarAjusteSaldosCaja()">Guardar ajuste</button><button type="button" class="btn secondary" onclick="document.getElementById(\'cashAdjustPanel\').remove()">Cancelar</button></div>';
+    const target=document.querySelector('#view .panel');target?.appendChild(panel);
+    document.getElementById('adjustEf').value='';
+    document.getElementById('adjustMP').value='';
+    document.getElementById('adjustTotal').value='';
+    for(const id of ['adjustEf','adjustMP'])document.getElementById(id).addEventListener('input',()=>{const ef=parseMoneyAR(cashValue('adjustEf')),mp=parseMoneyAR(cashValue('adjustMP'));document.getElementById('adjustTotal').value=Number.isFinite(ef)&&Number.isFinite(mp)?String(Math.round((ef+mp)*100)/100):''});
+    panel.scrollIntoView({behavior:'smooth',block:'nearest'});
+  };
+  window.ponerSaldosCajaEnCero=function(){['adjustEf','adjustMP','adjustTotal'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='0'});document.getElementById('cashAdjustPanel').dataset.resetAll='1'};
+  window.guardarAjusteSaldosCaja=function(){
+    if(!window.isAdmin())return;
+    const op=session(),fecha=cashValue('cashFecha')||localDay();
+    if(fecha!==localDay()){alert('Volvé al cierre de hoy para registrar el ajuste.');return}
+    const owner={id:op.id,nombre:op.nombre},actual=monthBalance(fecha,owner);
+    const fields=['adjustEf','adjustMP'];
+    for(const id of fields){if(!cashValue(id).trim()){alert('Completá los tres saldos; escribí 0 si corresponde.');document.getElementById(id)?.focus();return}}
+    const [ef,mp]=fields.map(id=>parseMoneyAR(cashValue(id)));const total=ef+mp;
+    if(!Number.isFinite(ef)||!Number.isFinite(mp)||!Number.isFinite(total)||ef<0||mp<0||total<0){alert('Ingresá importes válidos mayores o iguales a cero.');return}
+    const motivo=cashValue('adjustMotivo').trim();
+    if(!motivo){alert('Indicá un motivo para conservar el registro.');return}
+    const deltaEf=ef-actual.cajaFisica,deltaMP=mp-actual.mercadoPago,deltaTotal=-deltaEf-deltaMP;
+    const resetAll=document.getElementById('cashAdjustPanel')?.dataset.resetAll==='1';
+    const deltaGastos=resetAll?-actual.gastos:0,deltaNotas=resetAll?-actual.notas:0;
+    if(!deltaEf&&!deltaMP&&!deltaTotal&&!deltaGastos&&!deltaNotas){alert('Los totales ya están en cero.');return}
+    if(!confirm('Se registrará un ajuste de efectivo de '+m(deltaEf)+' y de Mercado Pago de '+m(deltaMP)+'. El total disponible quedará en '+m(total)+'. El resultado mensual se conserva en '+m(actual.neto)+'. Los cobros y gastos originales se conservan.'+(resetAll?' También se reinician los acumulados visibles de gastos y notas de crédito.':'')+' ¿Guardar ajuste?'))return;
+    const rows=window.loadCashClosings(),ts=now();
+    let c=todaysCashForOperator(rows,op,fecha);
+    if(!c){c=normalizeCashClosing({id:uid('caja'),fecha,operadorId:op.id,operador:op.nombre,creado:ts});rows.push(c)}
+    c.ajusteEfectivo=Number(c.ajusteEfectivo||0)+deltaEf;
+    c.ajusteMP=Number(c.ajusteMP||0)+deltaMP;
+    c.ajusteTotal=Number(c.ajusteTotal||0)+deltaTotal;
+    c.ajusteGastos=Number(c.ajusteGastos||0)+deltaGastos;
+    c.ajusteNotas=Number(c.ajusteNotas||0)+deltaNotas;
+    c.ajusteMotivo=[c.ajusteMotivo,fecha+': '+motivo.trim()+' (efectivo '+m(deltaEf)+', MP '+m(deltaMP)+', total adicional '+m(deltaTotal)+(resetAll?', gastos y notas reiniciados':'')+')'].filter(Boolean).join(' | ');
+    c.actualizado=ts;
+    // Guardar el saldo físico confirmado como referencia absoluta, sin sumar dos veces
+    // conciliaciones previas. Capturar el cálculo bruto después del ajuste.
+    const afterRawEf=actual.cajaFisica+deltaEf;
+    const afterRawMP=actual.mercadoPago+deltaMP;
+    const prevSnapshot=rows.filter(x=>x.saldoRealSnapshot&&x.tipo!=='cierre_z')
+      .sort((a,b)=>String(b.saldoRealSnapshot?.at||'').localeCompare(String(a.saldoRealSnapshot?.at||'')))[0]?.saldoRealSnapshot;
+    const rawEf=prevSnapshot?Number(prevSnapshot.rawEf)+(afterRawEf-Number(prevSnapshot.ef)):afterRawEf;
+    const rawMP=prevSnapshot?Number(prevSnapshot.rawMP)+(afterRawMP-Number(prevSnapshot.mp)):afterRawMP;
+    c.saldoRealSnapshot={at:ts,ef,mp,rawEf,rawMP};
+    window.saveCashClosings(rows);
+    queueCloudOp('upsertCash',c.id,c,c.actualizado);
+    toast('Ajuste de caja registrado');
+    window.showCashSummary();
+  };
+  window.submitCashSummary=function(ev,editId=''){
+    ev.preventDefault();const op=session();if(!op)return renderLoginOrSetup();let rows=window.loadCashClosings(),old=editId?rows.find(x=>String(x.id)===String(editId)):null;
+    const fechaObjetivo=old?.fecha||cashValue('cashFecha')||localDay();
+    const zLock=cierreZForDate(rows,fechaObjetivo,old||op);
+    if(zLock){alert('Este período ya tiene un Cierre Z ejecutado y quedó bloqueado. Los movimientos nuevos deben registrarse en un cierre posterior.');return}
+    if(old&&!window.isAdmin()&&!operatorOwns(old,op)){alert('No podés modificar el cierre de otro operador.');return}
+    const owner=old||{operadorId:op.id,operador:op.nombre},ts=now(),fecha=cashValue('cashFecha'),ownerRef={id:owner.operadorId||op.id,nombre:owner.operador||op.nombre},gastosDetalle=expenseTotalFor(fecha,ownerRef),obj=normalizeCashClosing({id:editId||uid('caja'),fecha,operadorId:ownerRef.id,operador:ownerRef.nombre,efectivo:cashNum('cashEfectivo'),mercadoPago:cashNum('cashMP'),tarjetas:cashNum('cashTarjetas'),notaCredito:cashNum('cashNC'),gastos:gastosDetalle,observaciones:String(cashValue('cashObs')||'').trim(),ajusteEfectivo:old?.ajusteEfectivo||0,ajusteMP:old?.ajusteMP||0,ajusteTotal:old?.ajusteTotal||0,ajusteGastos:old?.ajusteGastos||0,ajusteNotas:old?.ajusteNotas||0,ajusteMotivo:old?.ajusteMotivo||'',creado:old?.creado||ts,actualizado:ts});
+    const dup=rows.find(x=>String(x.id)!==String(editId)&&x.fecha===obj.fecha&&operatorOwns(x,{id:obj.operadorId,nombre:obj.operador}));if(dup&&!confirm('Ya existe un cierre para esta fecha y operador. ¿Guardar otro igualmente?'))return;
+    if(editId){const i=rows.findIndex(x=>String(x.id)===String(editId));i>=0?rows[i]=obj:rows.push(obj)}else rows.push(obj);window.saveCashClosings(rows);queueCloudOp('upsertCash',obj.id,obj,obj.actualizado);toast(editId?'Cierre actualizado':'Cierre guardado');window.showCashSummary();
+  };
+
+  function normalizeStockItem(r,index=0){
+    return {id:String(r?.id||('stock-'+Date.now()+'-'+index)),nombre:String(r?.nombre||'').trim(),cantidad:Math.max(0,Number(r?.cantidad||0)),minimo:Math.max(0,Number(r?.minimo??2)),costo:Math.max(0,Number(r?.costo||0)),creado:r?.creado||now(),actualizado:r?.actualizado||r?.creado||now()};
+  }
+  window.loadStock=function(){
+    let a=readArray(KEY_STOCK),b=readArray(KEY_STOCK_MIRROR),src=a.length?a:b;
+    if(!a.length&&b.length){try{localStorage.setItem(KEY_STOCK,JSON.stringify(b))}catch(e){}}
+    return src.map(normalizeStockItem).filter(x=>x.nombre);
+  };
+  window.saveStock=function(rows){
+    rows=(Array.isArray(rows)?rows:[]).map(normalizeStockItem).filter(x=>x.nombre);
+    localStorage.setItem(KEY_STOCK_MIRROR,JSON.stringify(rows));localStorage.setItem(KEY_STOCK,JSON.stringify(rows));
+    if(readArray(KEY_STOCK).length!==rows.length)throw new Error('No se pudo verificar el guardado de stock');
+    return rows;
+  };
+  function stockValue(rows){return rows.reduce((a,x)=>a+Number(x.cantidad||0)*Number(x.costo||0),0)}
+  window.renderStock=function(editId=''){
+    const op=session();if(!op)return renderLoginOrSetup();currentView='stock';editingId=null;setNav('stock');title('Stock');
+    const rows=window.loadStock().sort((a,b)=>a.nombre.localeCompare(b.nombre,'es'));
+    const item=editId?rows.find(x=>String(x.id)===String(editId)):null;
+    const units=rows.reduce((a,x)=>a+Number(x.cantidad||0),0),low=rows.filter(x=>Number(x.cantidad||0)<=Number(x.minimo||0)).length;
+    document.getElementById('view').innerHTML=`<section class="stats" style="margin-top:0"><div class="stat"><div class="statlabel">Repuestos cargados</div><div class="statvalue">${rows.length}</div></div><div class="stat"><div class="statlabel">Unidades</div><div class="statvalue">${units}</div></div><div class="stat ${low?'bad':''}"><div class="statlabel">Stock bajo</div><div class="statvalue">${low}</div><div class="stathelp">Cantidad ≤ mínimo</div></div><div class="stat soft"><div class="statlabel">Valor del stock</div><div class="statvalue smallmoney">${m(stockValue(rows))}</div></div></section><section class="panel"><div class="panelhead"><div><div class="eyebrow">${item?'EDITAR':'NUEVO REPUESTO'}</div><h3>${item?'Editar stock':'Agregar al stock'}</h3></div></div><form class="grid" onsubmit="saveStockForm(event,'${e(item?.id||'')}')"><div class="field full"><label>Repuesto *</label><input id="stockName" value="${e(item?.nombre||'')}" required autofocus></div><div class="field"><label>Cantidad</label><input id="stockQty" type="number" min="0" step="1" value="${Number(item?.cantidad||0)}"></div><div class="field"><label>Stock mínimo</label><input id="stockMin" type="number" min="0" step="1" value="${Number(item?.minimo??2)}"></div><div class="field"><label>Costo unitario</label><input id="stockCost" type="text" inputmode="decimal" value="${item?moneyInput(item.costo):''}"></div><div class="actions full">${item?'<button type="button" class="btn secondary" onclick="renderStock()">Cancelar</button>':''}<button class="btn primary" type="submit">${item?'Guardar cambios':'Agregar repuesto'}</button></div></form><p class="sectionnote">El stock inicial que ya tenías comprado no se carga como gasto nuevo. El costo queda guardado para saber cuánto consumió cada OT.</p></section><section class="panel"><div class="panelhead"><div><div class="eyebrow">INVENTARIO</div><h3>Repuestos disponibles</h3></div><span class="badge">${rows.length}</span></div><div class="searchbar"><input id="stockSearch" oninput="filterStockTable()"><select id="stockFilter" onchange="filterStockTable()"><option value="">Todo el stock</option><option value="bajo">Solo stock bajo</option></select></div><div id="stockTableBox"></div></section>`;
+    filterStockTable();
+  };
+  window.filterStockTable=function(){
+    const q=String(document.getElementById('stockSearch')?.value||'').toLowerCase().trim(),f=document.getElementById('stockFilter')?.value||'';
+    let rows=window.loadStock().filter(x=>(!q||String(x.nombre).toLowerCase().includes(q))&&(!f||(f==='bajo'&&Number(x.cantidad||0)<=Number(x.minimo||0)))).sort((a,b)=>a.nombre.localeCompare(b.nombre,'es'));
+    const box=document.getElementById('stockTableBox');if(!box)return;
+    box.innerHTML=rows.length?`<div class="tablewrap"><table><thead><tr><th>Repuesto</th><th>Cantidad</th><th>Mínimo</th><th>Costo unit.</th><th>Valor</th><th></th></tr></thead><tbody>${rows.map(x=>{const low=Number(x.cantidad||0)<=Number(x.minimo||0);return `<tr><td><strong>${e(x.nombre)}</strong>${low?'<div class="muted" style="color:var(--red)">Stock bajo</div>':''}</td><td><strong>${Number(x.cantidad||0)}</strong></td><td>${Number(x.minimo||0)}</td><td>${m(x.costo)}</td><td>${m(Number(x.cantidad||0)*Number(x.costo||0))}</td><td class="right nowrap"><button class="btn secondary small" onclick="adjustStock('${e(x.id)}',1)">+1</button> <button class="btn secondary small" onclick="adjustStock('${e(x.id)}',-1)">−1</button> <button class="btn primary small" onclick="useStockInOrder('${e(x.id)}')">Usar en OT</button> <button class="btn secondary small" onclick="renderStock('${e(x.id)}')">Editar</button> <button class="btn danger small" onclick="deleteStockItem('${e(x.id)}')">Eliminar</button></td></tr>`}).join('')}</tbody></table></div>`:'<div class="empty">No hay repuestos con ese filtro.</div>';
+  };
+  window.saveStockForm=function(ev,id=''){
+    ev.preventDefault();const nombre=String(document.getElementById('stockName')?.value||'').trim();if(!nombre)return;
+    const cantidad=Math.max(0,Number(document.getElementById('stockQty')?.value||0)),minimo=Math.max(0,Number(document.getElementById('stockMin')?.value||0)),costo=Math.max(0,parseMoneyAR(document.getElementById('stockCost')?.value)||0),ts=now();
+    let rows=window.loadStock();if(id){const i=rows.findIndex(x=>String(x.id)===String(id));if(i<0)return;rows[i]={...rows[i],nombre,cantidad,minimo,costo,actualizado:ts}}else{rows.push(normalizeStockItem({id:uid('stock'),nombre,cantidad,minimo,costo,creado:ts,actualizado:ts}))}
+    window.saveStock(rows);toast(id?'Stock actualizado':'Repuesto agregado');window.renderStock();
+  };
+  window.adjustStock=function(id,delta){
+    let rows=window.loadStock(),i=rows.findIndex(x=>String(x.id)===String(id));if(i<0)return;const next=Number(rows[i].cantidad||0)+Number(delta||0);if(next<0){toast('No hay unidades para descontar');return}rows[i]={...rows[i],cantidad:next,actualizado:now()};window.saveStock(rows);filterStockTable();
+  };
+  window.deleteStockItem=function(id){
+    let rows=window.loadStock(),x=rows.find(r=>String(r.id)===String(id));if(!x)return;if(!confirm('¿Eliminar "'+x.nombre+'" del stock?'))return;window.saveStock(rows.filter(r=>String(r.id)!==String(id)));window.renderStock();
+  };
+  window.useStockInOrder=function(id){
+    let stock=window.loadStock(),i=stock.findIndex(x=>String(x.id)===String(id));if(i<0)return;const item=stock[i];if(Number(item.cantidad||0)<=0){toast('No hay stock disponible');return}
+    const raw=prompt('Número de OT donde usaste 1 unidad de '+item.nombre+':');if(raw===null)return;const num=Number(String(raw).replace(/\D/g,''));if(!num){alert('Ingresá un número de OT válido.');return}
+    let orders=load(),oi=orders.findIndex(r=>Number(r.numero)===num);if(oi<0){alert('No encontré la OT '+num+'.');return}const order=orders[oi];if(order.estado==='Entregado'&&!confirm('La OT '+fmtOrder(order.numero)+' ya figura entregada. ¿Asignar el repuesto igual?'))return;
+    const ts=now(),usage={id:uid('repuso'),stockId:item.id,nombre:item.nombre,cantidad:1,costoUnitario:Number(item.costo||0),fecha:localDay(),creado:ts};order.repuestosUsados=[...(Array.isArray(order.repuestosUsados)?order.repuestosUsados:[]),usage];order.actualizado=ts;orders[oi]=order;
+    stock[i]={...item,cantidad:Number(item.cantidad||0)-1,actualizado:ts};window.saveStock(stock);save(orders,'Asignación de repuesto a OT '+fmtOrder(order.numero));queueCloudOp('upsertOrder',order.id,order,order.actualizado);toast(item.nombre+' asignado a OT '+fmtOrder(order.numero));window.renderStock();
+  };
+  window.renderExpenses=function(){
+    const op=session();if(!op)return renderLoginOrSetup();currentView='gastos';editingId=null;setNav('gastos');title('Gastos');
+    const all=window.loadExpenses(),visible=window.isAdmin()?all:all.filter(x=>operatorOwns(x,op));
+    const sorted=[...visible].sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha))||String(b.creado).localeCompare(String(a.creado)));
+    const today=localDay(),todayRows=visible.filter(x=>x.fecha===today),todayTotal=todayRows.reduce((a,x)=>a+Number(x.monto||0),0);
+    document.getElementById('view').innerHTML=`<section class="panel" style="margin-top:0"><div class="panelhead"><div><div class="eyebrow">NUEVO GASTO</div><h3>Cargar gasto</h3></div><span class="badge">Hoy: ${m(todayTotal)}</span></div><form class="grid" onsubmit="saveExpenseForm(event)"><div class="field short"><label>Fecha</label><input id="expenseDate" type="date" value="${today}" readonly></div><div class="field"><label>Monto *</label><input id="expenseAmount" type="text" inputmode="decimal" required autofocus></div><div class="field"><label>Medio de pago *</label><select id="expensePayment" onchange="expensePaymentChanged(true)">${EXPENSE_PAYMENTS.map(x=>`<option>${e(x)}</option>`).join('')}</select><button id="openMercadoPagoBtn" type="button" class="btn secondary small" style="display:none;margin-top:8px" onclick="openMercadoPago()">Abrir Mercado Pago</button></div><div class="field"><label>Tipo de gasto *</label><select id="expenseCategory" onchange="expenseCategoryChanged()">${EXPENSE_CATEGORIES.map(x=>`<option>${e(x)}</option>`).join('')}</select></div><div class="field full" id="expenseOrderField" style="display:none"><label>Orden de trabajo *</label><input id="expenseOrderSearch" list="expenseOrderOptions"><datalist id="expenseOrderOptions"></datalist><div id="expenseOrderConfirm" class="muted" style="margin-top:6px">Buscá por OT o cliente.</div></div><div class="field full"><label>Observación <span id="expenseObsRequired" class="muted">(opcional)</span></label><input id="expenseObs"></div><div class="actions full"><button class="btn primary" type="submit">Guardar gasto</button></div></form></section><section class="panel"><div class="panelhead"><div><div class="eyebrow">HISTORIAL</div><h3>${window.isAdmin()?'Gastos registrados':'Mis gastos'}</h3></div><span class="badge">${visible.length}</span></div>${sorted.length?`<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>OT</th><th>Medio</th><th>Observación</th><th>Monto</th><th></th></tr></thead><tbody>${sorted.slice(0,150).map(x=>`<tr><td>${dateLabel(x.fecha)}</td><td><strong>${e(x.categoria)}</strong></td><td>${x.orderNumero?'<strong>OT '+fmtOrder(x.orderNumero)+'</strong><div class="muted">'+e(x.orderCliente||'')+'</div>':'-'}</td><td>${e(x.medioPago)}</td><td>${e(x.observacion||'-')}</td><td><strong>${m(x.monto)}</strong></td><td class="right"><button class="btn secondary small" onclick="editExpense('${e(x.id)}')">Editar</button> <button class="btn danger small" onclick="deleteExpense('${e(x.id)}')">Eliminar</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Todavía no cargaste gastos.</div>'}</section>`;
+    window.expenseCategoryChanged();
+    window.expensePaymentChanged();
+  };
+  window.expensePaymentChanged=function(openNow=false){
+    const pay=document.getElementById('expensePayment')?.value||'',btn=document.getElementById('openMercadoPagoBtn');
+    if(btn)btn.style.display=pay==='Mercado Pago'?'inline-flex':'none';
+    if(openNow&&pay==='Mercado Pago')window.openMercadoPago();
+  };
+  window.openMercadoPago=function(){
+    let left=false;
+    const onHide=()=>{if(document.hidden)left=true};
+    document.addEventListener('visibilitychange',onHide,{once:true});
+    try{window.location.href='mercadopago://';}catch(e){}
+    setTimeout(()=>{if(!left&&!document.hidden)window.open('https://www.mercadopago.com.ar/','_blank','noopener')},900);
+  };
+  window.expenseCategoryChanged=function(){
+    const cat=document.getElementById('expenseCategory')?.value||'',tag=document.getElementById('expenseObsRequired'),obs=document.getElementById('expenseObs'),field=document.getElementById('expenseOrderField');
+    if(tag)tag.textContent=cat==='Otro'?'(obligatoria para Otro)':'(opcional)';
+    if(obs)obs.required=cat==='Otro';
+    if(field)field.style.display=cat==='Repuestos'?'block':'none';
+    if(cat==='Repuestos')window.prepareExpenseOrders();
+  };
+  window.prepareExpenseOrders=function(){
+    const input=document.getElementById('expenseOrderSearch'),list=document.getElementById('expenseOrderOptions'),confirmBox=document.getElementById('expenseOrderConfirm');if(!input||!list)return;
+    const rows=load().filter(r=>r.estado!=='Entregado').sort((a,b)=>(Number(b.numero)||0)-(Number(a.numero)||0));
+    list.innerHTML=rows.map(r=>`<option value="${fmtOrder(r.numero)}">${e(r.cliente||'')} · ${e(r.tipo||'')} ${e(r.marcaModelo||'')}</option>`).join('');
+    const update=()=>{
+      const q=String(input.value||'').trim().toLowerCase().replace(/^ot\s*/,'').replace(/^0+/,'');
+      const found=rows.find(r=>String(Number(r.numero)||0)===q)||rows.find(r=>String(r.cliente||'').toLowerCase()===String(input.value||'').trim().toLowerCase());
+      input.dataset.orderId=found?.id||'';
+      if(confirmBox)confirmBox.innerHTML=found?`<strong>OT ${fmtOrder(found.numero)}</strong> · ${e(found.cliente||'')} · ${e(found.tipo||'')} ${e(found.marcaModelo||'')}`:'Buscá por OT o cliente.';
+    };
+    input.oninput=update;input.onchange=update;update();
+  };
+  window.saveExpenseForm=function(ev){
+    ev.preventDefault();const op=session();if(!op)return renderLoginOrSetup();const parsedMonto=parseMoneyAR(document.getElementById('expenseAmount')?.value||'');const monto=Number.isFinite(parsedMonto)?Math.max(0,parsedMonto):0,categoria=document.getElementById('expenseCategory')?.value||'',medioPago=document.getElementById('expensePayment')?.value||'',observacion=String(document.getElementById('expenseObs')?.value||'').trim(),fecha=document.getElementById('expenseDate')?.value||localDay();
+    if(!monto){alert('Ingresá el monto del gasto.');return}if(categoria==='Otro'&&!observacion){alert('En “Otro” escribí una observación para saber qué gasto fue.');return}
+    let linkedOrder=null;
+    if(categoria==='Repuestos'){
+      const oid=document.getElementById('expenseOrderSearch')?.dataset?.orderId||'';
+      linkedOrder=load().find(r=>String(r.id)===String(oid));
+      if(!linkedOrder){alert('Seleccioná una OT válida para este repuesto.');return}
+    }
+    const ts=now();let cash=window.loadCashClosings(),c=todaysCashForOperator(cash,op,fecha);if(!c){c=normalizeCashClosing({id:uid('caja'),fecha,operadorId:op.id,operador:op.nombre,efectivo:0,mercadoPago:0,tarjetas:0,notaCredito:0,gastos:0,observaciones:'',creado:ts,actualizado:ts});cash.push(c)}
+    const obj=normalizeExpense({id:uid('gasto'),fecha,operadorId:op.id,operador:op.nombre,monto,medioPago,categoria,observacion,cajaId:c.id,orderId:linkedOrder?.id||'',orderNumero:linkedOrder?.numero||0,orderCliente:linkedOrder?.cliente||'',orderEquipo:linkedOrder?((linkedOrder.tipo||'')+' '+(linkedOrder.marcaModelo||'')).trim():'',creado:ts,actualizado:ts});let expenses=window.loadExpenses();expenses.push(obj);window.saveExpenses(expenses);queueCloudOp('upsertExpense',obj.id,obj,obj.actualizado);
+    c.gastos=Math.max(0,Number(c.gastos||0)+monto);c.actualizado=ts;const ci=cash.findIndex(x=>String(x.id)===String(c.id));if(ci>=0)cash[ci]=c;window.saveCashClosings(cash);queueCloudOp('upsertCash',c.id,c,c.actualizado);toast('Gasto guardado · '+m(monto));window.renderExpenses();
+  };
+  window.editExpense=function(id){
+    const op=session();if(!op)return renderLoginOrSetup();let expenses=window.loadExpenses(),x=expenses.find(r=>String(r.id)===String(id));if(!x)return;
+    if(!window.isAdmin()&&!operatorOwns(x,op)){toast('No podés editar un gasto de otro operador');return}
+    const amountRaw=prompt('Monto del gasto:',moneyInput(x.monto));if(amountRaw===null)return;const monto=parseMoneyAR(amountRaw);if(!Number.isFinite(monto)||monto<=0){alert('Ingresá un monto válido.');return}
+    const catRaw=prompt('Tipo de gasto: Combustible, Repuestos, Herramientas, Alquiler, Luz, Gas u Otro',x.categoria||'Otro');if(catRaw===null)return;
+    const categoria=EXPENSE_CATEGORIES_VALID.find(c=>c.toLowerCase()===String(catRaw).trim().toLowerCase());if(!categoria){alert('Elegí una categoría válida.');return}
+    const payRaw=prompt('Medio de pago: Efectivo o Mercado Pago',x.medioPago||'Efectivo');if(payRaw===null)return;
+    const medioPago=EXPENSE_PAYMENTS.find(c=>c.toLowerCase()===String(payRaw).trim().toLowerCase());if(!medioPago){alert('Elegí Efectivo o Mercado Pago.');return}
+    const obsRaw=prompt('Observación:',x.observacion||'');if(obsRaw===null)return;const observacion=String(obsRaw).trim();if(categoria==='Otro'&&!observacion){alert('En “Otro” la observación es obligatoria.');return}
+    const oldMonto=Number(x.monto||0),ts=now();x.monto=monto;x.categoria=categoria;x.medioPago=medioPago;x.observacion=observacion;x.actualizado=ts;window.saveExpenses(expenses);queueCloudOp('upsertExpense',x.id,x,x.actualizado);
+    let cash=window.loadCashClosings(),c=cash.find(r=>String(r.id)===String(x.cajaId));if(!c)c=cash.find(r=>r.fecha===x.fecha&&operatorOwns(r,{id:x.operadorId,nombre:x.operador}));if(c){c.gastos=Math.max(0,Number(c.gastos||0)-oldMonto+monto);c.actualizado=ts;window.saveCashClosings(cash);queueCloudOp('upsertCash',c.id,c,c.actualizado)}
+    toast('Gasto actualizado');window.renderExpenses();
+  };
+  window.deleteExpense=function(id){
+    const op=session();if(!op)return renderLoginOrSetup();let expenses=window.loadExpenses(),x=expenses.find(r=>String(r.id)===String(id));if(!x)return;if(!window.isAdmin()&&!operatorOwns(x,op)){toast('No podés eliminar un gasto de otro operador');return}if(!confirm('¿Eliminar este gasto de '+m(x.monto)+'?'))return;window.saveExpenses(expenses.filter(r=>String(r.id)!==String(id)));queueCloudOp('deleteExpense',x.id,null,now());
+    let cash=window.loadCashClosings(),c=cash.find(r=>String(r.id)===String(x.cajaId));if(!c)c=cash.find(r=>r.fecha===x.fecha&&operatorOwns(r,{id:x.operadorId,nombre:x.operador}));if(c){c.gastos=Math.max(0,Number(c.gastos||0)-Number(x.monto||0));c.actualizado=now();window.saveCashClosings(cash);queueCloudOp('upsertCash',c.id,c,c.actualizado)}toast('Gasto eliminado');window.renderExpenses();
+  };
+  window.deleteCashSummary=function(id){if(!window.isAdmin()){toast('Solo el administrador puede eliminar cierres');return}const rows=window.loadCashClosings(),x=rows.find(r=>String(r.id)===String(id));if(!x)return;const zLock=cierreZForDate(rows,x.fecha,x);if(zLock){alert('No se puede eliminar: ese período ya tiene un Cierre Z ejecutado y quedó bloqueado.');return}if(!confirm('¿Eliminar el cierre de '+dateLabel(x.fecha)+' de '+x.operador+'?'+((x.ajusteEfectivo||x.ajusteMP||x.ajusteTotal||x.ajusteGastos||x.ajusteNotas)?' También se eliminará el ajuste de saldos asociado a este cierre.':'') ))return;window.saveCashClosings(rows.filter(r=>String(r.id)!==String(id)));queueCloudOp('deleteCash',id,null,now());toast('Cierre eliminado');window.showCashSummary()};
+
+  window.renderOperators=function(editId=''){
+    rememberCurrentView('operadores');
+    if(!window.isAdmin())return window.newOrder();currentView='operadores';editingId=null;setNav('operadores');title('Operadores');
+    const rows=window.loadOperators(),r=editId?rows.find(x=>String(x.id)===String(editId)):null;
+    document.getElementById('view').innerHTML=`<section class="panel" style="margin-top:0"><div class="panelhead"><div><div class="eyebrow">ACCESOS</div><h3>${r?'Editar operador':'Nuevo operador'}</h3></div><span class="badge">${rows.filter(x=>x.activo).length} activos</span></div><form class="grid" onsubmit="saveOperatorForm(event,'${e(r?.id||'')}')"><div class="field"><label>Nombre *</label><input id="opName" value="${e(r?.nombre||'')}" required></div><div class="field"><label>Rol</label><select id="opRole"><option value="operador" ${r?.rol!=='admin'?'selected':''}>Operador</option><option value="admin" ${r?.rol==='admin'?'selected':''}>Administrador</option></select></div><div class="field"><label>${r?'Nuevo PIN (dejar vacío para conservar)':'PIN *'}</label><input id="opPin" type="password" inputmode="numeric" ${r?'':'required'} minlength="4"></div><div class="field"><label>Estado</label><select id="opActive"><option value="1" ${r?.activo!==false?'selected':''}>Activo</option><option value="0" ${r?.activo===false?'selected':''}>Inactivo</option></select></div><div class="actions full">${r?'<button type="button" class="btn secondary" onclick="renderOperators()">Cancelar</button>':''}<button class="btn primary" type="submit">${r?'Guardar cambios':'Agregar operador'}</button></div></form><p class="sectionnote">Si un operador ya tiene cierres de caja, conviene desactivarlo en lugar de eliminarlo para conservar el historial.</p></section><section class="panel"><div class="panelhead"><div><div class="eyebrow">LISTADO</div><h3>Operadores configurados</h3></div></div>${rows.length?`<div class="tablewrap"><table><thead><tr><th>Nombre</th><th>Rol</th><th>Estado</th><th>Última actualización</th><th></th></tr></thead><tbody>${rows.sort((a,b)=>a.nombre.localeCompare(b.nombre,'es')).map(x=>`<tr><td><strong>${e(x.nombre)}</strong></td><td>${x.rol==='admin'?'Administrador':'Operador'}</td><td><span class="badge ${x.activo?'green':'red'}">${x.activo?'Activo':'Inactivo'}</span></td><td>${dtLabel(x.actualizado)}</td><td class="right nowrap"><button class="btn secondary small" onclick="renderOperators('${e(x.id)}')">Editar</button> <button class="btn ${x.activo?'danger':'success'} small" onclick="toggleOperator('${e(x.id)}')">${x.activo?'Desactivar':'Activar'}</button> <button class="btn danger small" onclick="deleteOperator('${e(x.id)}')">Eliminar</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No hay operadores.</div>'}</section>`;
+  };
+  function activeAdmins(rows){return rows.filter(x=>x.activo&&x.rol==='admin')}
+  window.saveOperatorForm=async function(ev,id=''){
+    ev.preventDefault();let rows=window.loadOperators(),old=id?rows.find(x=>String(x.id)===String(id)):null,name=document.getElementById('opName').value.trim(),role=document.getElementById('opRole').value==='admin'?'admin':'operador',active=document.getElementById('opActive').value==='1',pin=document.getElementById('opPin').value;
+    if(!name)return;if(!old&&!pin){alert('Ingresá un PIN.');return}if(pin&&pin.length<4){alert('El PIN debe tener al menos 4 caracteres.');return}
+    const current=session();if(old&&current&&String(old.id)===String(current.id)&&!active){alert('No podés desactivar el usuario con el que estás trabajando.');return}
+    if(old&&old.rol==='admin'&&(role!=='admin'||!active)&&activeAdmins(rows).length<=1){alert('Tiene que quedar al menos un administrador activo.');return}
+    const ts=now(),obj=normalizeOperator({id:id||uid('op'),nombre:name,rol:role,activo:active,pinHash:pin?await hashPin(pin):(old?.pinHash||''),creado:old?.creado||ts,actualizado:ts});
+    const dup=rows.find(x=>String(x.id)!==String(obj.id)&&x.nombre.toLowerCase()===name.toLowerCase());if(dup){alert('Ya existe un operador con ese nombre.');return}
+    if(old){const i=rows.findIndex(x=>String(x.id)===String(id));rows[i]=obj}else rows.push(obj);window.saveOperators(rows);queueCloudOp('upsertOperator',obj.id,obj,obj.actualizado);if(current&&String(current.id)===String(obj.id))setSession(obj);toast(old?'Operador actualizado':'Operador agregado');window.renderOperators();
+  };
+  window.toggleOperator=function(id){let rows=window.loadOperators(),x=rows.find(r=>String(r.id)===String(id));if(!x)return;const current=session();if(current&&String(current.id)===String(id)&&x.activo){alert('No podés desactivar el usuario con el que estás trabajando.');return}if(x.rol==='admin'&&x.activo&&activeAdmins(rows).length<=1){alert('Tiene que quedar al menos un administrador activo.');return}x.activo=!x.activo;x.actualizado=now();window.saveOperators(rows);queueCloudOp('upsertOperator',x.id,x,x.actualizado);toast(x.activo?'Operador activado':'Operador desactivado');window.renderOperators()};
+  window.deleteOperator=function(id){let rows=window.loadOperators(),x=rows.find(r=>String(r.id)===String(id));if(!x)return;const current=session();if(current&&String(current.id)===String(id)){alert('No podés eliminar el usuario con el que estás trabajando.');return}if(x.rol==='admin'&&x.activo&&activeAdmins(rows).length<=1){alert('Tiene que quedar al menos un administrador activo.');return}const used=window.loadCashClosings().some(c=>String(c.operadorId||'')===String(x.id)||(!c.operadorId&&String(c.operador||'').toLowerCase()===x.nombre.toLowerCase()));if(used){alert('Este operador tiene historial de caja. No se elimina: desactivalo para conservar el registro.');return}if(!confirm('¿Eliminar definitivamente a '+x.nombre+'?'))return;window.saveOperators(rows.filter(r=>String(r.id)!==String(id)));queueCloudOp('deleteOperator',id,null,now());toast('Operador eliminado');window.renderOperators()};
+
+  window.exportData=function(){
+    const payload={app:'NQN Service',version:9,edicion:'completa-caja-operadores',exportado:now(),ordenes:load(),cleriseventos:loadEvents(),cierrescaja:window.loadCashClosings(),gastos:window.loadExpenses(),stock:window.loadStock(),operadores:window.loadOperators(),settings:{lastSave:getSettings().lastSave||null}};
+    const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='NQN_SERVICE_BACKUP_'+localDay()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);let s=getSettings();s.lastExternalBackup=now();setSettings(s);toast('Copia externa descargada');setTimeout(()=>window.renderBackup(),300)
+  };
+  window.importData=function(){
+    const f=document.getElementById('importFile')?.files?.[0];if(!f){alert('Elegí un archivo de copia primero.');return}const reader=new FileReader();reader.onload=()=>{try{const x=JSON.parse(reader.result),source=Array.isArray(x)?x:x.ordenes;if(!Array.isArray(source))throw new Error();if(!confirm('¿Reemplazar los datos actuales por esta copia?'))return;save(ensureClientNumbers(source.map(normalizeOrder)),'Antes de importar copia');if(Array.isArray(x.cleriseventos))saveEvents(x.cleriseventos);if(Array.isArray(x.cierrescaja))window.saveCashClosings(x.cierrescaja);if(Array.isArray(x.gastos))window.saveExpenses(x.gastos);if(Array.isArray(x.operadores))window.saveOperators(x.operadores);let s=getSettings();s.cloudEverSynced=false;setSettings(s);setCloudQueue([]);clearSession();toast('Copia restaurada');cloudAutoSyncSoon();renderLoginOrSetup()}catch(err){alert('El archivo no parece ser una copia válida de NQN Service.')}};reader.readAsText(f)
+  };
+  window.runHealthCheck=function(){
+    const problems=[];if(!storageSelfTest())problems.push('El navegador no permite almacenamiento local.');const primary=readRowsKey(KEY),mirror=readRowsKey(KEY_MIRROR);if(!validRows(primary))problems.push('La copia principal de órdenes no es válida.');if(!validRows(mirror))problems.push('La copia espejo de órdenes no es válida.');if(validRows(primary)&&validRows(mirror)&&primary.length!==mirror.length)problems.push('Principal y espejo de órdenes tienen distinta cantidad.');if(loadEventsKey(KEY_EVENTS).length!==loadEventsKey(KEY_EVENTS_MIRROR).length)problems.push('Las copias de Cleris no coinciden.');if(readArray(KEY_CASH).length!==readArray(KEY_CASH_MIRROR).length)problems.push('Las copias de caja no coinciden.');if(readArray(KEY_EXPENSES).length!==readArray(KEY_EXPENSES_MIRROR).length)problems.push('Las copias de gastos no coinciden.');if(readArray(KEY_STOCK).length!==readArray(KEY_STOCK_MIRROR).length)problems.push('Las copias de stock no coinciden.');if(readArray(KEY_OPERATORS).length!==readArray(KEY_OPERATORS_MIRROR).length)problems.push('Las copias de operadores no coinciden.');if(!activeAdmins(window.loadOperators()).length)problems.push('No hay administrador activo.');if(problems.length){alert('Revisión del sistema\n\n'+problems.join('\n'));return false}alert('Sistema OK.\n\nÓrdenes: '+load().length+'\nCleris: '+loadEvents().length+'\nCierres de caja: '+window.loadCashClosings().length+'\nGastos locales: '+window.loadExpenses().length+'\nStock local: '+window.loadStock().length+'\nOperadores: '+window.loadOperators().length+'\nAdministrador activo: OK\n\nGastos: sincronización entre dispositivos habilitada mediante Google Drive. Stock continúa local en esta versión.');return true
+  };
+
+  window.secureBoot=async function(){
+    ensureNavExtras();if(!storageSelfTest()){document.getElementById('view').innerHTML='<section class="panel"><h3>No se puede iniciar el almacenamiento local</h3><p>Esta versión necesita Microsoft Edge o Google Chrome.</p></section>';return}
+    migrateIfNeeded();try{saveEvents(loadEvents())}catch(e){}migrateCashIfNeeded();try{window.saveCashClosings(window.loadCashClosings())}catch(e){}try{window.saveOperators(window.loadOperators())}catch(e){}updateNetworkStatus();
+    if(cloudConfigured()&&navigator.onLine){try{await cloudSync(true)}catch(e){}}
+    if(session())afterLogin();else renderLoginOrSetup();
+  };
+
+  ensureNavExtras();
+  window.secureBoot();
+})();
+
+  </script>
+</body>
+</html>
++Math.round(n/1000).toLocaleString('es-AR')+' mil';
+
   const onPace=facturacion>=expectedToDate;
   const variationText=factVariation===null?'Sin base comparable':`${factVariation>=0?'+':''}${factVariation.toLocaleString('es-AR',{maximumFractionDigits:1})}% vs. mes anterior (mismo período)`;
   const paceText=`${onPace?'🟢 En ritmo':'🔴 Bajo el ritmo'} · esperado a la fecha: ${money(expectedToDate)}`;
