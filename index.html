@@ -171,6 +171,9 @@ input,select,textarea{font-size:16px;line-height:1.4}
 .appback:hover:not(:disabled){background:var(--soft);border-color:#cbd9ea}.appback:disabled{opacity:.38;cursor:default}
 .topleft{display:flex;align-items:center;gap:12px;min-width:0}.topleft>div{min-width:0}
 @media(max-width:620px){.top{align-items:flex-start;gap:10px;flex-wrap:wrap}.topleft{width:100%}.appback{padding:9px 11px}.top>div:last-child{margin-left:auto}}
+.navarrows{display:flex;align-items:center;gap:12px;margin-left:28px;flex-wrap:wrap}
+.navarrows .appback{padding:13px 19px;font-size:15px;min-height:46px}
+@media(max-width:620px){.navarrows{margin-left:0;gap:9px}.navarrows .appback{padding:11px 13px;font-size:14px}}
 /* ===== FIN BOTÓN VOLVER PERSISTENTE ===== */
 /* ===== FIN AJUSTE VISUAL 17-09-2026 ===== */
 </style>
@@ -194,7 +197,7 @@ input,select,textarea{font-size:16px;line-height:1.4}
   </aside>
 
   <main class="main">
-    <div class="top"><div class="topleft"><button id="appBackBtn" class="appback" type="button" onclick="goBackView()" title="Volver a la pantalla anterior">← Volver</button><div><div class="eyebrow">SERVICIO TÉCNICO</div><h1 id="pageTitle">Panel principal</h1></div></div><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end"><div id="netStatus" class="netstatus"><span class="netdot"></span><span>Iniciando</span></div><div class="muted" id="today"></div></div></div>
+    <div class="top"><div class="topleft"><div><div class="eyebrow">SERVICIO TÉCNICO</div><h1 id="pageTitle">Panel principal</h1></div><div class="navarrows"><button id="appBackBtn" class="appback" type="button" onclick="goBackView()" title="Volver a la pantalla anterior">← Volver</button><button id="appForwardBtn" class="appback" type="button" onclick="goForwardView()" title="Avanzar a la siguiente pantalla">Avanzar →</button></div></div><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end"><div id="netStatus" class="netstatus"><span class="netdot"></span><span>Iniciando</span></div><div class="muted" id="today"></div></div></div>
     <div id="view"></div>
   </main>
 </div>
@@ -478,12 +481,19 @@ const WASHER_CATALOG={
 };
 let currentView='dashboard';
 let appViewHistory=[];
+let appForwardHistory=[];
 let appNavRestoring=false;
-function updateBackButton(){const b=document.getElementById('appBackBtn');if(b)b.disabled=appViewHistory.length===0}
+function navState(){return {view:currentView||'dashboard',editingId:editingId||''}}
+function updateBackButton(){
+ const b=document.getElementById('appBackBtn'),f=document.getElementById('appForwardBtn');
+ if(b)b.disabled=appViewHistory.length===0;
+ if(f)f.disabled=appForwardHistory.length===0;
+}
 function rememberCurrentView(nextView,nextId=''){
   if(appNavRestoring)return;
-  const state={view:currentView||'dashboard',editingId:editingId||''};
+  const state=navState();
   if(state.view===nextView&&(!nextId||String(state.editingId)===String(nextId)))return;
+  appForwardHistory=[];
   const last=appViewHistory[appViewHistory.length-1];
   if(!last||last.view!==state.view||String(last.editingId||'')!==String(state.editingId||''))appViewHistory.push(state);
   if(appViewHistory.length>30)appViewHistory.shift();
@@ -492,6 +502,7 @@ function rememberCurrentView(nextView,nextId=''){
 function goBackView(){
   const target=appViewHistory.pop();
   if(!target){updateBackButton();return}
+  appForwardHistory.push(navState());
   appNavRestoring=true;
   try{
     if(target.view==='editar'&&target.editingId)return editOrder(target.editingId);
@@ -504,7 +515,24 @@ function goBackView(){
     return window.showView(target.view||'dashboard');
   }finally{appNavRestoring=false;setTimeout(updateBackButton,0)}
 }
+function goForwardView(){
+ const target=appForwardHistory.pop();
+ if(!target){updateBackButton();return}
+ appViewHistory.push(navState());
+ appNavRestoring=true;
+ try{
+   if(target.view==='editar'&&target.editingId)return editOrder(target.editingId);
+   if(target.view==='demorados')return showLateOrders();
+   if(target.view==='nuevo')return newOrder();
+   if(target.view==='caja'&&typeof window.showCashSummary==='function')return window.showCashSummary();
+   if(target.view==='stock'&&typeof window.renderStock==='function')return window.renderStock();
+   if(target.view==='gastos'&&typeof window.renderExpenses==='function')return window.renderExpenses();
+   if(target.view==='operadores'&&typeof window.renderOperators==='function')return window.renderOperators();
+   return window.showView(target.view||'dashboard');
+ }finally{appNavRestoring=false;setTimeout(updateBackButton,0)}
+}
 window.goBackView=goBackView;
+window.goForwardView=goForwardView;
 let editingId=null;
 
 function safeJSON(text,fallback){try{return JSON.parse(text)}catch(e){return fallback}}
