@@ -1241,7 +1241,7 @@ function renderKPIs(){
       <div class="kpi-boxsub">Objetivo diario de $350.000 por día hábil · objetivo del gráfico mensual: $7.000.000</div>
       <div class="kpi-topcards" style="margin-top:16px">
         <div class="kpi-card"><div class="kpi-cardhead">Meta diaria</div><div class="kpi-big">${fmtM(META_DIARIA)}</div><div class="kpi-note">Meta según los días hábiles del mes: ${fmtM(metaHabilesMes)}</div></div>
-        <div class="kpi-card"><div class="kpi-cardhead">Meta acumulada</div><div class="kpi-big">${fmtM(expectedToDate)}</div><div class="kpi-note">${elapsedBusinessDays} días hábiles transcurridos</div></div>
+        <div class="kpi-card"><div class="kpi-cardhead">Lo que deberías llevar facturado</div><div class="kpi-big">${fmtM(expectedToDate)}</div><div class="kpi-note">${elapsedBusinessDays} días hábiles transcurridos</div></div>
         <div class="kpi-card"><div class="kpi-cardhead">Facturación acumulada</div><div class="kpi-big">${fmtM(facturacion)}</div><div class="kpi-note">Facturación del mes seleccionado</div></div>
         <div class="kpi-card" style="background:${diferenciaMeta>=0?'#effaf4':'#fff4f4'}"><div class="kpi-cardhead">Diferencia con la meta</div><div class="kpi-big" style="color:${diferenciaMeta>=0?'#16875a':'#bd3434'}">${diferenciaMeta>=0?'+':'−'}${fmtM(Math.abs(diferenciaMeta))}</div><div class="kpi-note">${diferenciaMeta>=0?'Por encima de la meta':'Por debajo de la meta'}</div></div>
       </div>
