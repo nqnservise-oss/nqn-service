@@ -934,6 +934,20 @@ function submitOrder(ev,isNew){
       medioCorregido=true;
     }
     obj.pagado=legacyPagado+obj.pagos.reduce((a,p)=>a+Number(p.monto||0),0);
+    // Solo al pasar de En taller a Entregado: impedir saldos sin autorización.
+    // Incluye cualquier pago registrado en este mismo guardado.
+    if(obj.estado==='Entregado'&&old.estado!=='Entregado'&&balance(obj)>0.009){
+      const deuda=balance(obj);
+      if(!(typeof window.isAdmin==='function'&&window.isAdmin())){
+        alert('No se puede entregar: queda un saldo pendiente de '+money(deuda)+'. Registrá el cobro antes de entregar.');
+        return;
+      }
+      if(!confirm('Queda un saldo pendiente de '+money(deuda)+'. ¿Autorizar excepcionalmente la entrega con deuda como administrador?'))return;
+      const motivo=prompt('Motivo obligatorio de la entrega con saldo pendiente:');
+      if(!motivo||!motivo.trim()){alert('La entrega no se autorizó: falta el motivo.');return}
+      obj.autorizacionEntregaDeuda={monto:deuda,motivo:motivo.trim(),fecha:now,operador:(typeof window.currentOperator==='function'&&window.currentOperator()?.nombre)||'Administrador'};
+      obj.historial.push({fecha:now,estado:'Entrega con deuda autorizada',saldo:deuda,motivo:motivo.trim(),operador:obj.autorizacionEntregaDeuda.operador});
+    }else if(old.autorizacionEntregaDeuda){obj.autorizacionEntregaDeuda=old.autorizacionEntregaDeuda}
     if(obj.pagado>obj.monto&&obj.monto>0&&!confirm('El total recibido supera el monto total. ¿Guardar igual?'))return;
     const stockChange=prepareStockUsageFromForm(now);if(!stockChange.ok)return;
     if(stockChange.usage)obj.repuestosUsados.push(stockChange.usage);
