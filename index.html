@@ -60,7 +60,13 @@ button,input,select,textarea{font:inherit}.shell{min-height:100vh;display:grid;g
 .kpi-small .kpi-cardhead{font-size:13px}.kpi-small .kpi-icon{width:32px;height:32px;font-size:17px;border-radius:9px;background:#f7faff;box-shadow:none}
 .kpi-small.danger .kpi-icon{color:#d33}
 .kpi-small .kpi-big{font-size:29px;margin:8px 0 5px}
-.kpi-charts{display:grid;grid-template-columns:1.45fr 1fr;gap:16px;margin-top:16px}
+.kpi-charts{display:grid;grid-template-columns:minmax(0,1fr);gap:22px;margin-top:20px}
+.kpi-charts .kpi-box{min-width:0;padding:22px 24px}
+.kpi-charts .kpi-boxtitle{font-size:21px}
+.kpi-charts .kpi-boxsub{font-size:15px}
+.kpi-charts .kpi-svgwrap{width:100%;overflow-x:auto}
+.kpi-charts .kpi-svg{width:100%;min-width:620px;max-width:none}
+@media(max-width:700px){.kpi-charts .kpi-box{padding:16px 12px}.kpi-charts .kpi-svg{min-width:540px}}
 .kpi-box{background:#fff;border:1px solid #e4eaf2;border-radius:15px;padding:16px 18px}
 .kpi-boxtitle{font-size:18px;font-weight:900;margin:0}.kpi-boxsub{font-size:13px;color:#4f6f99;margin-top:3px}
 .kpi-legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:#56759b;margin:8px 0 2px}
@@ -1260,7 +1266,7 @@ function renderKPIs(){
 
       <div class="kpi-box">
         <h3 class="kpi-boxtitle">Evolución mensual</h3><div class="kpi-boxsub">Total facturado por mes (últimos 7 meses)</div>
-        <div class="kpi-svgwrap"><svg class="kpi-svg" viewBox="0 0 ${evo.W} ${evo.H}" role="img" aria-label="Evolución mensual">
+        <div class="kpi-svgwrap"><svg class="kpi-svg" style="min-height:310px" viewBox="0 0 ${evo.W} ${evo.H}" role="img" aria-label="Evolución mensual">
           ${[0,.25,.5,.75,1].map(p=>`<line x1="${evo.L}" x2="${evo.W-evo.R}" y1="${evo.T+p*(evo.H-evo.T-evo.B)}" y2="${evo.T+p*(evo.H-evo.T-evo.B)}" stroke="#e8eef5"/>`).join('')}
           <line x1="${evo.L}" x2="${evo.W-evo.R}" y1="${metaY}" y2="${metaY}" stroke="#c78318" stroke-width="2" stroke-dasharray="7 6"/>
           <text x="${evo.W-evo.R}" y="${Math.max(14,metaY-7)}" text-anchor="end" font-size="10" fill="#a86d13">Meta ${fmtShort(META_MENSUAL)}</text>
