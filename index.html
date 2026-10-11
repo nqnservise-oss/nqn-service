@@ -1174,14 +1174,23 @@ function renderKPIs(){
   const prevY=prevDate.getFullYear(),prevM=prevDate.getMonth()+1;
   const prevLastDay=new Date(prevY,prevM,0).getDate();
   const daysToCompare=Math.min(compareDays,prevLastDay);
-  for(let d=1;d<=daysToCompare;d++){
+  // Mostrar el día 31 aunque el mes previo tenga solo 30 días.
+  let curDaily=[],prevDaily=[];
+  for(let d=1;d<=compareDays;d++){
     const k=`${yy}-${String(mm).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    c1+=factPorDia[k]||0;curCum.push(c1);
-    const pk=`${prevY}-${String(prevM).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const pday=rows.filter(r=>r.estado==='Entregado'&&r.fechaEntrega===pk).reduce((a,r)=>a+Number(r.monto||0),0);
-    c2+=pday;prevCum.push(c2);
+    const currentDay=factPorDia[k]||0;
+    curDaily.push(currentDay);
+    c1+=currentDay;
+    curCum.push(c1);
+    if(d<=prevLastDay){
+      const pk=`${prevY}-${String(prevM).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const previousDay=rows.filter(r=>r.estado==='Entregado'&&r.fechaEntrega===pk).reduce((a,r)=>a+Number(r.monto||0),0);
+      prevDaily.push(previousDay);
+      c2+=previousDay;
+      prevCum.push(c2);
+    }
   }
-  const curPeriodFact=curCum.length?curCum[curCum.length-1]:0;
+  const curPeriodFact=daysToCompare>0?curCum[daysToCompare-1]:0;
   const prevPeriodFact=prevCum.length?prevCum[prevCum.length-1]:0;
   const variation=prevPeriodFact?((curPeriodFact-prevPeriodFact)/prevPeriodFact)*100:0;
 
@@ -1196,7 +1205,12 @@ function renderKPIs(){
     const y=v=>T+(max-v)/max*(H-T-B);
     return {W,H,L,R,T,B,max,x,y,points:values.map((v,i)=>`${x(i)},${y(v)}`).join(' ')};
   };
-  const cmpMax=Math.max(...curCum,...prevCum,META_MENSUAL/2,1);
+  const cmpObservedMax=Math.max(...curCum,...prevCum,1);
+  // Marcas redondas: 0, 1 M, 2 M, etc.
+  const cmpRawStep=cmpObservedMax/4;
+  const cmpMagnitude=Math.pow(10,Math.floor(Math.log10(cmpRawStep)));
+  const cmpNiceFactor=[1,2,2.5,5,10].find(f=>f*cmpMagnitude>=cmpRawStep)||10;
+  const cmpMax=4*cmpNiceFactor*cmpMagnitude;
   const cmp=svgLine(curCum,{max:cmpMax,totalPoints:ultimo+1});
   const cmpXDay=d=>cmp.L+d*((cmp.W-cmp.L-cmp.R)/ultimo);
   const curCmpPoints=[`${cmp.L},${cmp.y(0)}`,...curCum.map((v,i)=>`${cmpXDay(i+1)},${cmp.y(v)}`)].join(' ');
@@ -1206,6 +1220,29 @@ function renderKPIs(){
 
   const fmtM=v=>money(v);
   const fmtShort=v=>{const n=Number(v||0);if(Math.abs(n)>=1000000)return '$'+(n/1000000).toLocaleString('es-AR',{maximumFractionDigits:1})+' M';if(Math.abs(n)>=1000)return '$'+(n/1000).toLocaleString('es-AR',{maximumFractionDigits:0})+'k';return money(n)};
+  // Detalle del gráfico comparativo, sin modificar los datos.
+  window.kpiCompareShow=function(day,event){
+    const tooltip=document.getElementById('kpiCompareTooltip');
+    if(!tooltip)return;
+    const index=day-1, current=curCum[index], previous=prevCum[index];
+    if(!Number.isFinite(current)){tooltip.style.display='none';return}
+    const currentHtml=`<div style="margin-top:7px;color:#0d5bd8"><strong>${monthTitle}</strong></div><div>Facturado el día: <strong>${money(curDaily[index]||0)}</strong></div><div>Acumulado: <strong>${money(current)}</strong></div>`;
+    const previousHtml=Number.isFinite(previous)
+      ?`<div style="margin-top:9px;color:#bc7213"><strong>${prevTitle}</strong></div><div>Facturado el día: <strong>${money(prevDaily[index]||0)}</strong></div><div>Acumulado: <strong>${money(previous)}</strong></div><div style="border-top:1px solid #dbe5f0;margin-top:9px;padding-top:7px"><strong>Diferencia acumulada: ${current-previous>=0?'+':'−'}${money(Math.abs(current-previous))}</strong></div>`
+      :`<div style="margin-top:9px;color:#73869b">${prevTitle}: sin día equivalente</div>`;
+    tooltip.innerHTML=`<div style="font-weight:800;font-size:14px">Día ${day}</div>${currentHtml}${previousHtml}`;
+    tooltip.style.display='block';
+    const width=tooltip.offsetWidth, height=tooltip.offsetHeight;
+    const left=Math.max(8,Math.min(window.innerWidth-width-8,event.clientX+16));
+    let top=event.clientY-height-12;
+    if(top<8)top=event.clientY+16;
+    top=Math.max(8,Math.min(window.innerHeight-height-8,top));
+    tooltip.style.left=left+'px';tooltip.style.top=top+'px';
+  };
+  window.kpiCompareHide=function(){
+    const tooltip=document.getElementById('kpiCompareTooltip');
+    if(tooltip)tooltip.style.display='none';
+  };
   const lastSync=getSettings().lastCloudSync||nowISO();
 
   document.getElementById('view').innerHTML=`
@@ -1252,14 +1289,17 @@ function renderKPIs(){
       <div class="kpi-box">
         <h3 class="kpi-boxtitle">Comparativo del mes (acumulado por día)</h3><div class="kpi-boxsub">${monthTitle} vs ${prevTitle}</div>
         <div class="kpi-legend"><span><i class="kpi-dot"></i>${monthTitle} (acumulado)</span><span><i class="kpi-dot light"></i>${prevTitle} (acumulado)</span></div>
-        <div class="kpi-svgwrap"><svg class="kpi-svg" viewBox="0 0 ${cmp.W} ${cmp.H}" role="img" aria-label="Comparativo acumulado del mes">
+        <div class="kpi-svgwrap"><svg class="kpi-svg" viewBox="0 0 ${cmp.W} ${cmp.H}" role="img" aria-label="Comparativo acumulado del mes; pasá el mouse por los días para ver el detalle">
           ${[0,.25,.5,.75,1].map(p=>`<g><line x1="${cmp.L}" x2="${cmp.W-cmp.R}" y1="${cmp.T+p*(cmp.H-cmp.T-cmp.B)}" y2="${cmp.T+p*(cmp.H-cmp.T-cmp.B)}" stroke="#e8eef5"/><text x="${cmp.L-8}" y="${cmp.T+p*(cmp.H-cmp.T-cmp.B)+4}" text-anchor="end" font-size="11" fill="#547395">${fmtShort(cmp.max*(1-p))}</text></g>`).join('')}
           <polyline points="${prevCmpPoints}" fill="none" stroke="#e58a1f" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
           <polyline points="${curCmpPoints}" fill="none" stroke="#0d5bd8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-          ${curCum.map((v,i)=>i%3===0?`<circle cx="${cmpXDay(i+1)}" cy="${cmp.y(v)}" r="4" fill="#0d5bd8"/>`:'').join('')}
-          ${prevCum.map((v,i)=>i%3===0?`<circle cx="${cmpXDay(i+1)}" cy="${cmp.y(v)}" r="3.5" fill="#e58a1f"/>`:'').join('')}
-          ${Array.from(new Set([1,5,10,15,20,25,ultimo])).filter(d=>d>=1&&d<=ultimo).map(d=>`<text x="${cmpXDay(d)}" y="${cmp.H-12}" text-anchor="middle" font-size="10" fill="#547395">${d}</text>`).join('')}
+          ${curCum.map((v,i)=>`<circle cx="${cmpXDay(i+1)}" cy="${cmp.y(v)}" r="2.6" fill="#0d5bd8"/>`).join('')}
+          ${prevCum.map((v,i)=>`<circle cx="${cmpXDay(i+1)}" cy="${cmp.y(v)}" r="2.6" fill="#e58a1f"/>`).join('')}
+          ${Array.from({length:ultimo},(_,i)=>i+1).map(d=>`<text x="${cmpXDay(d)}" y="${cmp.H-12}" text-anchor="middle" font-size="10" fill="#547395">${d}</text>`).join('')}
+          ${Array.from({length:compareDays},(_,i)=>i+1).map(d=>`<rect x="${cmpXDay(d)-(cmp.W-cmp.L-cmp.R)/ultimo/2}" y="${cmp.T}" width="${(cmp.W-cmp.L-cmp.R)/ultimo}" height="${cmp.H-cmp.T-cmp.B}" fill="transparent" style="cursor:crosshair" onmousemove="kpiCompareShow(${d},event)" onmouseleave="kpiCompareHide()"/>`).join('')}
         </svg></div>
+        <div id="kpiCompareTooltip" style="display:none;position:fixed;left:0;top:0;z-index:10000;pointer-events:none;max-width:300px;min-width:235px;padding:11px 13px;background:#fff;border:1px solid #cddcec;border-radius:10px;box-shadow:0 8px 25px #123b5c33;color:#17345a;font-size:12px;line-height:1.6"></div>
+        <div class="kpi-note" style="margin-top:3px">Pasá el mouse por un día para ver la facturación del día, el acumulado y la diferencia entre meses.</div>
         <div style="text-align:right;margin-top:-6px"><span class="badge ${prevPeriodFact===0?'amber':(variation<0?'red':'green')}" style="font-size:18px">${prevPeriodFact===0?'Sin base':((variation>=0?'+':'')+variation.toLocaleString('es-AR',{maximumFractionDigits:1})+'%')}</span><div class="kpi-note">${prevPeriodFact===0?'El período comparable anterior fue $0':'vs. mismo período de '+prevTitle+' · hasta el día '+daysToCompare}</div></div>
       </div>
 
