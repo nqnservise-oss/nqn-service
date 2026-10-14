@@ -135,6 +135,7 @@
     const a=new Date(from+'T12:00:00'),b=new Date(to+'T12:00:00');
     const days=Math.round((b-a)/86400000);
     if(!Number.isFinite(days)||days>366){box.innerHTML='<div class="empty">Consultá períodos de hasta 367 días. Podés consultar otro rango después.</div>';return}
+    if(typeof window.nqnMovimientosDia!=='function'){box.innerHTML='<div class="empty">El detalle todavía no se cargó. Actualizá la app y volvé a entrar.</div>';return}
     const all=allMovements(from,to);
     const shown=all.filter(x=>filterByMedia(x,media));
     const accounting={ef:{cobros:0,gastos:0,transfers:0,ajustes:0},mp:{cobros:0,gastos:0,transfers:0,ajustes:0}};
@@ -194,7 +195,7 @@
       '<div class="field"><label>Hasta</label><input id="libroHasta" type="date" value="'+esc(d)+'"></div>'+
       '<div class="field"><label>Medio de pago</label><select id="libroMedio"><option value="todos">Todos</option><option value="mp">Mercado Pago / transferencias</option><option value="efectivo">Efectivo</option><option value="tarjeta">Tarjetas</option><option value="otros">No especificado</option></select></div>'+
       '<div class="field" style="justify-content:end"><button id="libroBuscar" class="btn primary" type="button">Consultar movimientos</button></div></div>'+
-      '<div id="libroResultado"></div>';
+      '<p class="hint">Incluye la caja de NQN Service; Cleris Eventos se controla por separado.</p><div id="libroResultado"></div>';
     cashForm.after(panel);
     $('libroCerrar').addEventListener('click',()=>panel.remove());
     $('libroBuscar').addEventListener('click',run);
