@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nqn-service-v943-historial-cierres-z';
+const CACHE_NAME = 'nqn-service-v944-libro-movimientos';
 const APP_SHELL = [
   './',
   './index.html',
@@ -6,6 +6,7 @@ const APP_SHELL = [
   './manifest.webmanifest',
   './turnos.js',
   './cierre-z.js?v=942',
+  './libro-movimientos.js?v=1',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-maskable-512.png'
