@@ -546,5 +546,7 @@
     window.renderCierreZ=render;
   }
 
+  // Exponer el detalle diario para auditorías de solo lectura.
+  window.nqnMovimientosDia=movements;
   ready(()=>setTimeout(boot,0));
 })();
