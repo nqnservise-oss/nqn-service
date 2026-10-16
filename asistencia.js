@@ -10,7 +10,7 @@
   function esc(x){return String(x==null?'':x).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c];});}
   function op(){return typeof window.currentOperator==='function'?window.currentOperator():null;}
   function admin(){return typeof window.isAdmin==='function'&&window.isAdmin();}
-  function today(){return new Intl.DateTimeFormat('en-CA',{timeZone:TZ,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());}
+  function today(){var p=new Intl.DateTimeFormat('es-AR',{timeZone:TZ,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()),get=function(k){return p.find(function(x){return x.type===k;}).value;};return get('year')+'-'+get('month')+'-'+get('day');}
   function minute(h){var a=String(h||'').split(':');return Number(a[0])*60+Number(a[1]);}
   function hhmm(x){return /^\d{2}:\d{2}$/.test(String(x||''))?x:'--:--';}
   function getKey(){try{return localStorage.getItem(KEY)||'';}catch(_){return '';}}
@@ -100,7 +100,7 @@
     addMenu();var user=op();
     if(!user)return;
     if(typeof window.rememberCurrentView==='function')window.rememberCurrentView('asistencia');
-    window.currentView='asistencia';
+    currentView='asistencia';
     if(typeof window.setNav==='function')window.setNav('asistencia');
     if(typeof window.title==='function')window.title('Control de asistencia');
     var host=document.getElementById('view');if(!host)return;
@@ -200,5 +200,12 @@
   }
   var previous=window.showView;
   window.showView=function(v){if(v==='asistencia')return show();return previous.apply(this,arguments);};
+  var baseLogout=window.logoutOperator;
+  if(typeof baseLogout==='function')window.logoutOperator=function(){baseLogout.apply(this,arguments);var b=document.getElementById('nav-asistencia');if(b)b.style.display='none';};
+  var baseLogin=window.loginOperator;
+  if(typeof baseLogin==='function')window.loginOperator=async function(){var v=await baseLogin.apply(this,arguments);var b=document.getElementById('nav-asistencia');if(b)b.style.display=op()?'':'none';return v;};
+  var baseCreateAdmin=window.createFirstAdmin;
+  if(typeof baseCreateAdmin==='function')window.createFirstAdmin=async function(){var v=await baseCreateAdmin.apply(this,arguments);var b=document.getElementById('nav-asistencia');if(b)b.style.display=op()?'':'none';return v;};
   addMenu();
+  var menu=document.getElementById('nav-asistencia');if(menu)menu.style.display=op()?'':'none';
 })();
