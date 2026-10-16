@@ -56,6 +56,14 @@
     await fetch(c.url,{method:'POST',mode:'no-cors',redirect:'follow',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(Object.assign({action:'attendanceEvent',token:c.token,deviceKey:getKey()},body))});
     // En Apps Script el POST no-cors no da respuesta legible. Sólo se confirma al releer la nube.
   }
+  async function confirmed(requestId){
+    for(var attempt=0;attempt<4;attempt++){
+      if(attempt)await new Promise(function(resolve){setTimeout(resolve,attempt*500);});
+      await pull();
+      if(events.some(function(r){return r.solicitud===requestId;}))return true;
+    }
+    return false;
+  }
   function effective(dayId,date){
     var chosen={entrada:null,salida:null};
     events.filter(function(r){return String(r.operadorId)===String(dayId)&&r.fecha===date;}).forEach(function(r){
@@ -160,8 +168,7 @@
     var id=crypto.randomUUID?crypto.randomUUID():String(Date.now())+'-'+Math.random();
     loading=true;notify('Registrando en el servidor...');try{
       await post({kind:'punch',tipo:kind,operadorId:user.id,pin:pin,solicitud:id});
-      await pull();
-      if(!events.some(function(r){return r.solicitud===id;}))throw new Error('No se pudo confirmar el fichaje. No lo des por registrado.');
+      if(!await confirmed(id))throw new Error('No se pudo confirmar el fichaje. No lo des por registrado.');
       errorText=(kind==='entrada'?'Ingreso':'Salida')+' confirmado por el servidor.';
     }catch(e){updateError(e);}finally{loading=false;render();}
   };
@@ -178,7 +185,7 @@
     var rid=crypto.randomUUID?crypto.randomUUID():String(Date.now())+'-'+Math.random();
     loading=true;notify('Guardando ajuste...');try{
       await post({kind:'adjust',operadorId:id,fecha:date,objetivo:kind,hora:time,motivo:reason,adminId:op().id,pin:pin,solicitud:rid});
-      await pull();if(!events.some(function(r){return r.solicitud===rid;}))throw new Error('El ajuste no fue confirmado por el servidor.');
+      if(!await confirmed(rid))throw new Error('El ajuste no fue confirmado por el servidor.');
       errorText='Ajuste guardado con auditoría.';
     }catch(e){updateError(e);}finally{loading=false;render();}
   };
