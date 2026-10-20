@@ -736,7 +736,7 @@ function renderDashboard(){
   document.getElementById('view').innerHTML=`
     <section class="hero"><div><div class="eyebrow" style="color:#8fb9ff">CONTROL DEL TALLER</div><h2>Gestión de órdenes de servicio</h2><p>Los equipos quedan en taller al ingresar y se cierran automáticamente cuando cargás la fecha de entrega.</p></div><button class="btn primary" onclick="newOrder()">＋ Nuevo ingreso</button></section>
     <section class="stats">
-      <div class="stat"><div class="statlabel">En taller</div><div class="statvalue">${active}</div><div class="stathelp">Órdenes abiertas</div></div>
+      <div class="stat" role="button" tabindex="0" onclick="showView('taller')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showView('taller')}" style="cursor:pointer" title="Ver órdenes en taller" aria-label="Ver las ${active} órdenes en taller"><div class="statlabel">En taller</div><div class="statvalue">${active}</div><div class="stathelp">Tocá para ver las órdenes</div></div>
       <div class="stat ${late?'bad':''}" ${late?'onclick="showLateOrders()" style="cursor:pointer" title="Ver equipos demorados"':''}><div class="statlabel">4+ días</div><div class="statvalue">${late}</div><div class="stathelp">${late?'⚠️ Tocá para verlos':'Equipos demorados'}</div></div>
       <div class="stat"><div class="statlabel">Entregados hoy</div><div class="statvalue">${entregadosHoy}</div><div class="stathelp">Cierre por fecha de entrega</div></div>
       <div class="stat soft"><div class="statlabel">Facturación del mes</div><div class="statvalue smallmoney">${money(facturacion)}</div><div class="stathelp">Órdenes entregadas</div></div>
