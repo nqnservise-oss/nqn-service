@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nqn-service-v947-cierre-entrega';
+const CACHE_NAME = 'nqn-service-v948-entrega-un-paso';
 const APP_SHELL = [
   './',
   './index.html',
