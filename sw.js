@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nqn-service-v945-asistencia';
+const CACHE_NAME = 'nqn-service-v946-menu-simplificado';
 const APP_SHELL = [
   './',
   './index.html',
