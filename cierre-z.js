@@ -292,6 +292,8 @@
     const neto=ingresos-egresos;
     const gastosEfectivo=rows.filter(x=>x.tipo==='gasto' && String(x.medio||'').toLowerCase()==='efectivo').reduce((a,x)=>a+Number(x.monto||0),0);
     const efectivoEsperado=Number(tot.efectivo||0)-gastosEfectivo;
+    const gastosMP=rows.filter(x=>x.tipo==='gasto' && ['mercado pago','transferencia'].includes(String(x.medio||'').toLowerCase())).reduce((a,x)=>a+Number(x.monto||0),0);
+    const mpNeto=Number(tot.mp||0)-gastosMP;
 
     const cierres=safeArray(()=>typeof window.loadCashClosings==='function'?window.loadCashClosings():[])
       .filter(x=>String(x.fecha||'')===fecha && x?.tipo!=='cierre_z');
@@ -381,8 +383,9 @@
           <div class="eyebrow">TOTALES DEL PERÍODO ABIERTO</div>
           <div class="nqn-z-stats">
             <div class="stat"><div class="statlabel">Efectivo cobrado</div><div class="statvalue smallmoney">${m(tot.efectivo)}</div></div>
-            <div class="stat"><div class="statlabel">Efectivo real en caja</div><div class="statvalue smallmoney">${m(Number(tot.efectivo||0)-Number(tot.gastos||0))}</div></div>
+            <div class="stat"><div class="statlabel">Efectivo real en caja</div><div class="statvalue smallmoney">${m(efectivoEsperado)}</div></div>
             <div class="stat"><div class="statlabel">Mercado Pago</div><div class="statvalue smallmoney">${m(tot.mp)}</div></div>
+            <div class="stat"><div class="statlabel">Movimiento neto Mercado Pago</div><div class="statvalue smallmoney">${m(mpNeto)}</div></div>
             <div class="stat"><div class="statlabel">Débito</div><div class="statvalue smallmoney">${m(tot.debito)}</div></div>
             <div class="stat"><div class="statlabel">Crédito</div><div class="statvalue smallmoney">${m(tot.credito)}</div></div>
             <div class="stat"><div class="statlabel">Gastos</div><div class="statvalue smallmoney">${m(tot.gastos)}</div></div>
