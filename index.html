@@ -189,7 +189,7 @@ input,select,textarea{font-size:16px;line-height:1.4}
 <body>
 <div class="shell">
   <aside class="sidebar">
-    <div class="brand"><div class="brandmark">NQN</div><div><div class="brandname">NQN Service</div><div class="brandsub">Gestión técnica · V9.48 entrega en un paso</div></div></div>
+    <div class="brand"><div class="brandmark">NQN</div><div><div class="brandname">NQN Service</div><div class="brandsub">Gestión técnica · V9.49 gastos y caja</div></div></div>
     <div class="nav">
       <button id="nav-dashboard" class="active" onclick="showView('dashboard')">⌂ Dashboard</button>
       <button id="nav-nuevo" onclick="newOrder()">＋ Nuevo ingreso</button>
@@ -231,8 +231,8 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredIns
 window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;updateInstallButton();toast('NQN Service instalada')});
 function updateInstallButton(){let b=document.getElementById('installPwaBtn');if(b)b.classList.toggle('show',!!deferredInstallPrompt)}
 async function installPwa(){if(!deferredInstallPrompt){alert('Si Chrome no muestra la instalación todavía, recargá la página una vez y volvé a intentar.');return}deferredInstallPrompt.prompt();try{await deferredInstallPrompt.userChoice}catch(e){}deferredInstallPrompt=null;updateInstallButton()}
-const OFFLINE_CACHE='nqn-service-v948-entrega';
-const OFFLINE_ASSETS=['./','./index.html','./NQN_SERVICE_ESTABLE.html','./manifest.webmanifest','./turnos.js','./asistencia.js?v=1','./icons/icon-192.png','./icons/icon-512.png'];
+const OFFLINE_CACHE='nqn-service-v949-gastos-caja';
+const OFFLINE_ASSETS=['./','./index.html','./NQN_SERVICE_ESTABLE.html','./manifest.webmanifest','./turnos.js','./cierre-z.js?v=949','./libro-movimientos.js?v=1','./asistencia.js?v=1','./icons/icon-192.png','./icons/icon-512.png'];
 let swReloading=false;
 async function ensureOfflineReady(){
   if(!('serviceWorker' in navigator)||!location.protocol.startsWith('http'))return false;
@@ -646,7 +646,7 @@ function normalizeOrder(r,index=0){
     falla:r.falla||'',accesorios:r.accesorios||'',observaciones:r.observaciones||'',estado,
     situacionTaller:r.situacionTaller||'En reparación',
     monto:Number(r.monto||0),pagado:Number(r.pagado||0),medioPago:r.medioPago||'Pendiente',
-    pagos:Array.isArray(r.pagos)?r.pagos.map(p=>({id:String(p?.id||('pago-'+Date.now()+'-'+Math.random().toString(36).slice(2))),fecha:String(p?.fecha||localISODate()),monto:Number(p?.monto||0),medioPago:String(p?.medioPago||r.medioPago||'Pendiente'),creado:p?.creado||creado})):[],
+    pagos:Array.isArray(r.pagos)?r.pagos.map(p=>({...(p||{}),id:String(p?.id||('pago-'+Date.now()+'-'+Math.random().toString(36).slice(2))),fecha:String(p?.fecha||localISODate()),monto:Number(p?.monto||0),medioPago:String(p?.medioPago||r.medioPago||'Pendiente'),creado:p?.creado||creado})):[],
     repuestosUsados:Array.isArray(r.repuestosUsados)?r.repuestosUsados.map(x=>({id:String(x?.id||('rep-'+Date.now()+'-'+Math.random().toString(36).slice(2))),stockId:String(x?.stockId||''),nombre:String(x?.nombre||''),cantidad:Math.max(1,Number(x?.cantidad||1)),costoUnitario:Math.max(0,Number(x?.costoUnitario||x?.costo||0)),fecha:String(x?.fecha||localISODate()),creado:x?.creado||creado})):[],
     creado,actualizado:r.actualizado||creado,fechasEstado:{'En taller':creado,...(fechaEntrega?{'Entregado':r.actualizado||creado}:{})},historial
   };
