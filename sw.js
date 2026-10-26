@@ -1,11 +1,11 @@
-const CACHE_NAME = 'nqn-service-v948-entrega-un-paso';
+const CACHE_NAME = 'nqn-service-v949-gastos-caja';
 const APP_SHELL = [
   './',
   './index.html',
   './NQN_SERVICE_ESTABLE.html',
   './manifest.webmanifest',
   './turnos.js',
-  './cierre-z.js?v=942',
+  './cierre-z.js?v=949',
   './libro-movimientos.js?v=1',
   './asistencia.js?v=1',
   './icons/icon-192.png',
