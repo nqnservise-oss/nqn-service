@@ -189,7 +189,7 @@ input,select,textarea{font-size:16px;line-height:1.4}
 <body>
 <div class="shell">
   <aside class="sidebar">
-    <div class="brand"><div class="brandmark">NQN</div><div><div class="brandname">NQN Service</div><div class="brandsub">Gestión técnica · V9.48 entrega en un paso</div></div></div>
+    <div class="brand"><div class="brandmark">NQN</div><div><div class="brandname">NQN Service</div><div class="brandsub">Gestión técnica · V9.49 gastos y caja</div></div></div>
     <div class="nav">
       <button id="nav-dashboard" class="active" onclick="showView('dashboard')">⌂ Dashboard</button>
       <button id="nav-nuevo" onclick="newOrder()">＋ Nuevo ingreso</button>
@@ -231,8 +231,8 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredIns
 window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;updateInstallButton();toast('NQN Service instalada')});
 function updateInstallButton(){let b=document.getElementById('installPwaBtn');if(b)b.classList.toggle('show',!!deferredInstallPrompt)}
 async function installPwa(){if(!deferredInstallPrompt){alert('Si Chrome no muestra la instalación todavía, recargá la página una vez y volvé a intentar.');return}deferredInstallPrompt.prompt();try{await deferredInstallPrompt.userChoice}catch(e){}deferredInstallPrompt=null;updateInstallButton()}
-const OFFLINE_CACHE='nqn-service-v948-entrega';
-const OFFLINE_ASSETS=['./','./index.html','./NQN_SERVICE_ESTABLE.html','./manifest.webmanifest','./turnos.js','./asistencia.js?v=1','./icons/icon-192.png','./icons/icon-512.png'];
+const OFFLINE_CACHE='nqn-service-v949-gastos-caja';
+const OFFLINE_ASSETS=['./','./index.html','./NQN_SERVICE_ESTABLE.html','./manifest.webmanifest','./turnos.js','./cierre-z.js?v=949','./libro-movimientos.js?v=1','./asistencia.js?v=1','./icons/icon-192.png','./icons/icon-512.png'];
 let swReloading=false;
 async function ensureOfflineReady(){
   if(!('serviceWorker' in navigator)||!location.protocol.startsWith('http'))return false;
@@ -646,7 +646,7 @@ function normalizeOrder(r,index=0){
     falla:r.falla||'',accesorios:r.accesorios||'',observaciones:r.observaciones||'',estado,
     situacionTaller:r.situacionTaller||'En reparación',
     monto:Number(r.monto||0),pagado:Number(r.pagado||0),medioPago:r.medioPago||'Pendiente',
-    pagos:Array.isArray(r.pagos)?r.pagos.map(p=>({id:String(p?.id||('pago-'+Date.now()+'-'+Math.random().toString(36).slice(2))),fecha:String(p?.fecha||localISODate()),monto:Number(p?.monto||0),medioPago:String(p?.medioPago||r.medioPago||'Pendiente'),creado:p?.creado||creado})):[],
+    pagos:Array.isArray(r.pagos)?r.pagos.map(p=>({...(p||{}),id:String(p?.id||('pago-'+Date.now()+'-'+Math.random().toString(36).slice(2))),fecha:String(p?.fecha||localISODate()),monto:Number(p?.monto||0),medioPago:String(p?.medioPago||r.medioPago||'Pendiente'),creado:p?.creado||creado})):[],
     repuestosUsados:Array.isArray(r.repuestosUsados)?r.repuestosUsados.map(x=>({id:String(x?.id||('rep-'+Date.now()+'-'+Math.random().toString(36).slice(2))),stockId:String(x?.stockId||''),nombre:String(x?.nombre||''),cantidad:Math.max(1,Number(x?.cantidad||1)),costoUnitario:Math.max(0,Number(x?.costoUnitario||x?.costo||0)),fecha:String(x?.fecha||localISODate()),creado:x?.creado||creado})):[],
     creado,actualizado:r.actualizado||creado,fechasEstado:{'En taller':creado,...(fechaEntrega?{'Entregado':r.actualizado||creado}:{})},historial
   };
@@ -1068,7 +1068,7 @@ function orderExpensePanel(r){
         <input type="hidden" id="expenseCategory" value="Repuestos">
         <div class="field short"><label>Fecha</label><input id="expenseDate" type="date" value="${localISODate()}" readonly></div>
         <div class="field"><label>Monto del repuesto *</label><input id="expenseAmount" type="text" inputmode="decimal" required></div>
-        <div class="field"><label>Medio de pago *</label><select id="expensePayment" onchange="expensePaymentChanged(true)"><option>Efectivo</option><option>Mercado Pago</option></select><button id="openMercadoPagoBtn" type="button" class="btn secondary small" style="display:none;margin-top:8px" onclick="openMercadoPago()">Abrir Mercado Pago</button></div>
+        <div class="field"><label>Medio de pago *</label><select id="expensePayment" onchange="expensePaymentChanged()"><option>Efectivo</option><option>Mercado Pago</option></select><button id="openMercadoPagoBtn" type="button" class="btn secondary small" style="display:none;margin-top:8px" onclick="openMercadoPago()">Abrir Mercado Pago</button></div>
         <div class="field full"><label>Detalle del repuesto / proveedor</label><input id="expenseObs" placeholder="Ej.: Bomba Drean · proveedor"></div>
         <div class="actions full"><button type="submit" class="btn primary">Guardar gasto</button><button type="button" class="btn secondary" onclick="toggleOrderExpenseForm()">Cancelar</button></div>
       </form>
@@ -1605,7 +1605,7 @@ setInterval(()=>{updateNetworkStatus();if(document.visibilityState==='visible'&&
 window.__nqnLegacyBoot=boot;
 </script>
   <script src="turnos.js"></script>
-  <script src="cierre-z.js?v=942"></script>
+  <script src="cierre-z.js?v=949"></script>
   <script>
 /* NQN Service V9.5 Completa
    Caja diaria + operadores + PIN + roles + sincronización con Drive.
@@ -2268,14 +2268,15 @@ window.__nqnLegacyBoot=boot;
     const all=window.loadExpenses(),visible=window.isAdmin()?all:all.filter(x=>operatorOwns(x,op));
     const sorted=[...visible].sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha))||String(b.creado).localeCompare(String(a.creado)));
     const today=localDay(),todayRows=visible.filter(x=>x.fecha===today),todayTotal=todayRows.reduce((a,x)=>a+Number(x.monto||0),0);
-    document.getElementById('view').innerHTML=`<section class="panel" style="margin-top:0"><div class="panelhead"><div><div class="eyebrow">NUEVO GASTO</div><h3>Cargar gasto</h3></div><span class="badge">Hoy: ${m(todayTotal)}</span></div><form class="grid" onsubmit="saveExpenseForm(event)"><div class="field short"><label>Fecha</label><input id="expenseDate" type="date" value="${today}" readonly></div><div class="field"><label>Monto *</label><input id="expenseAmount" type="text" inputmode="decimal" required autofocus></div><div class="field"><label>Medio de pago *</label><select id="expensePayment" onchange="expensePaymentChanged(true)">${EXPENSE_PAYMENTS.map(x=>`<option>${e(x)}</option>`).join('')}</select><button id="openMercadoPagoBtn" type="button" class="btn secondary small" style="display:none;margin-top:8px" onclick="openMercadoPago()">Abrir Mercado Pago</button></div><div class="field"><label>Tipo de gasto *</label><select id="expenseCategory" onchange="expenseCategoryChanged()">${EXPENSE_CATEGORIES.map(x=>`<option>${e(x)}</option>`).join('')}</select></div><div class="field full" id="expenseOrderField" style="display:none"><label>Orden de trabajo *</label><input id="expenseOrderSearch" list="expenseOrderOptions"><datalist id="expenseOrderOptions"></datalist><div id="expenseOrderConfirm" class="muted" style="margin-top:6px">Buscá por OT o cliente.</div></div><div class="field full"><label>Observación <span id="expenseObsRequired" class="muted">(opcional)</span></label><input id="expenseObs"></div><div class="actions full"><button class="btn primary" type="submit">Guardar gasto</button></div></form></section><section class="panel"><div class="panelhead"><div><div class="eyebrow">HISTORIAL</div><h3>${window.isAdmin()?'Gastos registrados':'Mis gastos'}</h3></div><span class="badge">${visible.length}</span></div>${sorted.length?`<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>OT</th><th>Medio</th><th>Observación</th><th>Monto</th><th></th></tr></thead><tbody>${sorted.slice(0,150).map(x=>`<tr><td>${dateLabel(x.fecha)}</td><td><strong>${e(x.categoria)}</strong></td><td>${x.orderNumero?'<strong>OT '+fmtOrder(x.orderNumero)+'</strong><div class="muted">'+e(x.orderCliente||'')+'</div>':'-'}</td><td>${e(x.medioPago)}</td><td>${e(x.observacion||'-')}</td><td><strong>${m(x.monto)}</strong></td><td class="right"><button class="btn secondary small" onclick="editExpense('${e(x.id)}')">Editar</button> <button class="btn danger small" onclick="deleteExpense('${e(x.id)}')">Eliminar</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Todavía no cargaste gastos.</div>'}</section>`;
+    document.getElementById('view').innerHTML=`<section class="panel" style="margin-top:0"><div class="panelhead"><div><div class="eyebrow">NUEVO GASTO</div><h3>Cargar gasto</h3></div><span class="badge">Hoy: ${m(todayTotal)}</span></div><form class="grid" onsubmit="saveExpenseForm(event)"><div class="field short"><label>Fecha</label><input id="expenseDate" type="date" value="${today}" readonly></div><div class="field"><label>Monto *</label><input id="expenseAmount" type="text" inputmode="decimal" required autofocus></div><div class="field"><label>Medio de pago *</label><select id="expensePayment" onchange="expensePaymentChanged()">${EXPENSE_PAYMENTS.map(x=>`<option>${e(x)}</option>`).join('')}</select><button id="openMercadoPagoBtn" type="button" class="btn secondary small" style="display:none;margin-top:8px" onclick="openMercadoPago()">Abrir Mercado Pago</button></div><div class="field"><label>Tipo de gasto *</label><select id="expenseCategory" onchange="expenseCategoryChanged()">${EXPENSE_CATEGORIES.map(x=>`<option>${e(x)}</option>`).join('')}</select></div><div class="field full" id="expenseOrderField" style="display:none"><label>Orden de trabajo *</label><input id="expenseOrderSearch" list="expenseOrderOptions"><datalist id="expenseOrderOptions"></datalist><div id="expenseOrderConfirm" class="muted" style="margin-top:6px">Buscá por OT o cliente.</div></div><div class="field full"><label>Observación <span id="expenseObsRequired" class="muted">(opcional)</span></label><input id="expenseObs"></div><div class="actions full"><button class="btn primary" type="submit">Guardar gasto</button></div></form></section><section class="panel"><div class="panelhead"><div><div class="eyebrow">HISTORIAL</div><h3>${window.isAdmin()?'Gastos registrados':'Mis gastos'}</h3></div><span class="badge">${visible.length}</span></div>${sorted.length?`<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>OT</th><th>Medio</th><th>Observación</th><th>Monto</th><th></th></tr></thead><tbody>${sorted.slice(0,150).map(x=>`<tr><td>${dateLabel(x.fecha)}</td><td><strong>${e(x.categoria)}</strong></td><td>${x.orderNumero?'<strong>OT '+fmtOrder(x.orderNumero)+'</strong><div class="muted">'+e(x.orderCliente||'')+'</div>':'-'}</td><td>${e(x.medioPago)}</td><td>${e(x.observacion||'-')}</td><td><strong>${m(x.monto)}</strong></td><td class="right"><button class="btn secondary small" onclick="editExpense('${e(x.id)}')">Editar</button> <button class="btn danger small" onclick="deleteExpense('${e(x.id)}')">Eliminar</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Todavía no cargaste gastos.</div>'}</section>`;
     window.expenseCategoryChanged();
     window.expensePaymentChanged();
   };
-  window.expensePaymentChanged=function(openNow=false){
+  window.expensePaymentChanged=function(){
+    // Nunca navegar fuera de NQN Service al seleccionar un medio de pago.
+    // En móviles eso puede destruir el formulario antes de presionar Guardar.
     const pay=document.getElementById('expensePayment')?.value||'',btn=document.getElementById('openMercadoPagoBtn');
     if(btn)btn.style.display=pay==='Mercado Pago'?'inline-flex':'none';
-    if(openNow&&pay==='Mercado Pago')window.openMercadoPago();
   };
   window.openMercadoPago=function(){
     let left=false;
@@ -2304,17 +2305,65 @@ window.__nqnLegacyBoot=boot;
     input.oninput=update;input.onchange=update;update();
   };
   window.saveExpenseForm=function(ev){
-    ev.preventDefault();const inlineOrderId=String(document.getElementById("orderExpenseInlineForm")?.dataset?.orderId||"");const op=session();if(!op)return renderLoginOrSetup();const parsedMonto=parseMoneyAR(document.getElementById('expenseAmount')?.value||'');const monto=Number.isFinite(parsedMonto)?Math.max(0,parsedMonto):0,categoria=document.getElementById('expenseCategory')?.value||'',medioPago=document.getElementById('expensePayment')?.value||'',observacion=String(document.getElementById('expenseObs')?.value||'').trim(),fecha=document.getElementById('expenseDate')?.value||localDay();
-    if(!monto){alert('Ingresá el monto del gasto.');return}if(categoria==='Otro'&&!observacion){alert('En “Otro” escribí una observación para saber qué gasto fue.');return}
+    ev.preventDefault();
+    const form=ev.currentTarget;
+    if(form?.dataset?.saving==='1')return;
+    const inlineOrderId=String(form?.dataset?.orderId||'');
+    const op=session();if(!op)return renderLoginOrSetup();
+    const parsedMonto=parseMoneyAR(document.getElementById('expenseAmount')?.value||'');
+    const monto=Number.isFinite(parsedMonto)?Math.max(0,parsedMonto):0;
+    const categoria=document.getElementById('expenseCategory')?.value||'';
+    const medioPago=document.getElementById('expensePayment')?.value||'';
+    const observacion=String(document.getElementById('expenseObs')?.value||'').trim();
+    const fecha=document.getElementById('expenseDate')?.value||localDay();
+    if(!monto){alert('Ingresá el monto del gasto.');return}
+    if(!EXPENSE_PAYMENTS.includes(medioPago)){alert('Seleccioná un medio de pago válido.');return}
+    if(categoria==='Otro'&&!observacion){alert('En “Otro” escribí una observación para saber qué gasto fue.');return}
     let linkedOrder=null;
     if(categoria==='Repuestos'){
       const oid=inlineOrderId||document.getElementById('expenseOrderSearch')?.dataset?.orderId||'';
       linkedOrder=load().find(r=>String(r.id)===String(oid));
       if(!linkedOrder){alert('Seleccioná una OT válida para este repuesto.');return}
     }
-    const ts=now();let cash=window.loadCashClosings(),c=todaysCashForOperator(cash,op,fecha);if(!c){c=normalizeCashClosing({id:uid('caja'),fecha,operadorId:op.id,operador:op.nombre,efectivo:0,mercadoPago:0,tarjetas:0,notaCredito:0,gastos:0,observaciones:'',creado:ts,actualizado:ts});cash.push(c)}
-    const obj=normalizeExpense({id:uid('gasto'),fecha,operadorId:op.id,operador:op.nombre,monto,medioPago,categoria,observacion,cajaId:c.id,orderId:linkedOrder?.id||'',orderNumero:linkedOrder?.numero||0,orderCliente:linkedOrder?.cliente||'',orderEquipo:linkedOrder?((linkedOrder.tipo||'')+' '+(linkedOrder.marcaModelo||'')).trim():'',creado:ts,actualizado:ts});let expenses=window.loadExpenses();expenses.push(obj);window.saveExpenses(expenses);queueCloudOp('upsertExpense',obj.id,obj,obj.actualizado);
-    c.gastos=Math.max(0,Number(c.gastos||0)+monto);c.actualizado=ts;const ci=cash.findIndex(x=>String(x.id)===String(c.id));if(ci>=0)cash[ci]=c;window.saveCashClosings(cash);queueCloudOp('upsertCash',c.id,c,c.actualizado);toast('Gasto guardado · '+m(monto));if(inlineOrderId)editOrder(inlineOrderId);else window.renderExpenses();
+    const button=form?.querySelector('button[type="submit"]');
+    if(form)form.dataset.saving='1';
+    if(button)button.disabled=true;
+    let stored=false;
+    try{
+      const ts=now(),cash=window.loadCashClosings();
+      let c=todaysCashForOperator(cash,op,fecha);
+      if(!c){
+        c=normalizeCashClosing({id:uid('caja'),fecha,operadorId:op.id,operador:op.nombre,efectivo:0,mercadoPago:0,tarjetas:0,notaCredito:0,gastos:0,observaciones:'',creado:ts,actualizado:ts});
+        cash.push(c);
+      }
+      const obj=normalizeExpense({
+        id:uid('gasto'),fecha,operadorId:op.id,operador:op.nombre,monto,medioPago,categoria,observacion,cajaId:c.id,
+        orderId:linkedOrder?.id||'',orderNumero:linkedOrder?.numero||0,orderCliente:linkedOrder?.cliente||'',
+        orderEquipo:linkedOrder?((linkedOrder.tipo||'')+' '+(linkedOrder.marcaModelo||'')).trim():'',
+        creado:ts,actualizado:ts
+      });
+      const expenses=window.loadExpenses();
+      window.saveExpenses([...expenses,obj]);
+      stored=window.loadExpenses().some(x=>String(x.id)===String(obj.id)&&Number(x.monto)===monto);
+      if(!stored)throw new Error('El gasto no se pudo verificar en el almacenamiento local');
+      queueCloudOp('upsertExpense',obj.id,obj,obj.actualizado);
+      c.gastos=Math.max(0,Number(c.gastos||0)+monto);
+      c.actualizado=ts;
+      const ci=cash.findIndex(x=>String(x.id)===String(c.id));
+      if(ci>=0)cash[ci]=c;
+      window.saveCashClosings(cash);
+      queueCloudOp('upsertCash',c.id,c,c.actualizado);
+      toast('Gasto guardado · '+m(monto));
+      if(inlineOrderId)editOrder(inlineOrderId);else window.renderExpenses();
+    }catch(err){
+      console.error('No se pudo completar el gasto',err);
+      alert(stored
+        ?'El gasto figura guardado, pero falló un paso de caja o sincronización. Revisá Gastos antes de repetirlo para evitar duplicados.'
+        :'No se pudo confirmar el guardado del gasto. Revisá Gastos antes de intentarlo otra vez.');
+    }finally{
+      if(form)delete form.dataset.saving;
+      if(button&&button.isConnected)button.disabled=false;
+    }
   };
   window.editExpense=function(id){
     const op=session();if(!op)return renderLoginOrSetup();let expenses=window.loadExpenses(),x=expenses.find(r=>String(r.id)===String(id));if(!x)return;

@@ -1,8 +1,9 @@
-const NQN_ACCESS_TOKEN = "NQN--jhsACAfN5LPuj-ncaYiiqlLZyjfNnhE";
-const NQN_SCHEMA_VERSION = 4;
+const NQN_ACCESS_TOKEN = ''; // Configurar SYNC_KEY solo en Propiedades de Apps Script.
+const NQN_SCHEMA_VERSION = 5;
 const ORDER_HEADERS = ['ID','N° Orden','N° Cliente','Fecha ingreso','Fecha entrega','Cliente','Teléfono','Marca / Modelo','Tipo','Falla / diagnóstico','Accesorios','Observaciones','Estado','Monto','Pagado','Medio de pago','Creado','Actualizado','JSON'];
 const EVENT_HEADERS = ['ID','Fecha','Evento','Monto','Medio de pago','Observaciones','Creado','Actualizado','JSON'];
 const CASH_HEADERS = ['ID','Fecha','Operador','Efectivo','Mercado Pago / Transferencias','Tarjetas','Nota de crédito','Gastos','Total cobrado','Neto','Observaciones','Creado','Actualizado','JSON'];
+const EXPENSE_HEADERS = ['ID','Fecha','Operador','Categoría','Medio de pago','Monto','OT','Detalle','Creado','Actualizado','JSON'];
 const OPERATOR_HEADERS = ['ID','Nombre','Rol','Activo','PIN hash','Creado','Actualizado','JSON'];
 const TURNO_HEADERS = ['ID','Fecha','Hora','Cliente','Teléfono','Motivo / servicio','Estado','Observaciones','Creado','Actualizado','JSON'];
 
@@ -104,6 +105,8 @@ function ensureSheets_(ss) {
   if (!events) events = ss.insertSheet('CLERIS');
   let cash = ss.getSheetByName('CAJA');
   if (!cash) cash = ss.insertSheet('CAJA');
+  let expenses = ss.getSheetByName('GASTOS');
+  if (!expenses) expenses = ss.insertSheet('GASTOS');
   let operators = ss.getSheetByName('OPERADORES');
   if (!operators) operators = ss.insertSheet('OPERADORES');
   let turnos = ss.getSheetByName('TURNOS');
@@ -123,6 +126,10 @@ function ensureSheets_(ss) {
     cash.getRange(1,1,1,CASH_HEADERS.length).setValues([CASH_HEADERS]);
     cash.setFrozenRows(1);
   }
+  if (expenses.getLastRow() === 0) {
+    expenses.getRange(1,1,1,EXPENSE_HEADERS.length).setValues([EXPENSE_HEADERS]);
+    expenses.setFrozenRows(1);
+  }
   if (operators.getLastRow() === 0) {
     operators.getRange(1,1,1,OPERATOR_HEADERS.length).setValues([OPERATOR_HEADERS]);
     operators.setFrozenRows(1);
@@ -135,12 +142,12 @@ function ensureSheets_(ss) {
   info.getRange('A1:B5').setValues([
     ['NQN SERVICE','Base central sincronizada'],
     ['Versión de esquema',NQN_SCHEMA_VERSION],
-    ['Uso','Base de consulta. No editar manualmente las hojas ORDENES, CLERIS, CAJA, OPERADORES ni TURNOS'],
+    ['Uso','Base de consulta. No editar manualmente las hojas ORDENES, CLERIS, CAJA, GASTOS, OPERADORES ni TURNOS'],
     ['Backups','Carpeta BACKUPS AUTOMÁTICOS en Drive'],
     ['Última actualización',new Date()]
   ]);
   info.autoResizeColumns(1,2);
-  return {orders, events, cash, operators, turnos, info};
+  return {orders, events, cash, expenses, operators, turnos, info};
 }
 
 function readState_() {
@@ -149,6 +156,7 @@ function readState_() {
   const orders = readJsonRows_(sh.orders, ORDER_HEADERS.length);
   const events = readJsonRows_(sh.events, EVENT_HEADERS.length);
   const cash = readJsonRows_(sh.cash, CASH_HEADERS.length);
+  const expenses = readJsonRows_(sh.expenses, EXPENSE_HEADERS.length);
   const operators = readJsonRows_(sh.operators, OPERATOR_HEADERS.length);
   const turnos = readJsonRows_(sh.turnos, TURNO_HEADERS.length);
   return {
@@ -158,6 +166,7 @@ function readState_() {
     ordenes: orders.sort((a,b)=>(Number(a.numero)||0)-(Number(b.numero)||0)),
     cleriseventos: events.sort((a,b)=>String(a.fecha||'').localeCompare(String(b.fecha||''))),
     cierrescaja: cash.sort((a,b)=>String(a.fecha||'').localeCompare(String(b.fecha||''))),
+    gastos: expenses.sort((a,b)=>String(a.fecha||'').localeCompare(String(b.fecha||''))),
     operadores: operators.sort((a,b)=>String(a.nombre||'').localeCompare(String(b.nombre||''),'es')),
     turnos: turnos.sort((a,b)=>String(a.fecha||'').localeCompare(String(b.fecha||'')) || String(a.hora||'').localeCompare(String(b.hora||''))),
     meta: {
@@ -193,11 +202,13 @@ function applyOperations_(ops, device) {
     let orders = readJsonRows_(sh.orders, ORDER_HEADERS.length);
     let events = readJsonRows_(sh.events, EVENT_HEADERS.length);
     let cash = readJsonRows_(sh.cash, CASH_HEADERS.length);
+    let expenses = readJsonRows_(sh.expenses, EXPENSE_HEADERS.length);
     let operators = readJsonRows_(sh.operators, OPERATOR_HEADERS.length);
     let turnos = readJsonRows_(sh.turnos, TURNO_HEADERS.length);
     const orderMap = new Map(orders.map(x=>[String(x.id),x]));
     const eventMap = new Map(events.map(x=>[String(x.id),x]));
     const cashMap = new Map(cash.map(x=>[String(x.id),x]));
+    const expenseMap = new Map(expenses.map(x=>[String(x.id),x]));
     const operatorMap = new Map(operators.map(x=>[String(x.id),x]));
     const turnoMap = new Map(turnos.map(x=>[String(x.id),x]));
 
@@ -209,6 +220,8 @@ function applyOperations_(ops, device) {
       else if (op.type === 'deleteEvent') deleteEvent_(eventMap, op.id, op.at);
       else if (op.type === 'upsertCash' && op.data) upsertCash_(cashMap, op.data);
       else if (op.type === 'deleteCash') deleteCash_(cashMap, op.id, op.at);
+       else if (op.type === 'upsertExpense' && op.data) upsertExpense_(expenseMap, op.data);
+       else if (op.type === 'deleteExpense') deleteExpense_(expenseMap, op.id, op.at);
       else if (op.type === 'upsertOperator' && op.data) upsertOperator_(operatorMap, op.data);
       else if (op.type === 'deleteOperator') deleteOperator_(operatorMap, op.id, op.at);
       else if (op.type === 'upsertTurno' && op.data) upsertTurno_(turnoMap, op.data);
@@ -218,18 +231,20 @@ function applyOperations_(ops, device) {
     orders = Array.from(orderMap.values());
     events = Array.from(eventMap.values());
     cash = Array.from(cashMap.values());
+    expenses = Array.from(expenseMap.values());
     operators = Array.from(operatorMap.values());
     turnos = Array.from(turnoMap.values());
     canonicalizeOrders_(orders);
     writeOrders_(sh.orders, orders);
     writeEvents_(sh.events, events);
     writeCash_(sh.cash, cash);
+    writeExpenses_(sh.expenses, expenses);
     writeOperators_(sh.operators, operators);
     writeTurnos_(sh.turnos, turnos);
     sh.info.getRange('B5').setValue(new Date());
-    maybeDailyBackup_(ctx, orders, events, cash, operators, turnos, device);
+    maybeDailyBackup_(ctx, orders, events, cash, expenses, operators, turnos, device);
 
-    return {ok:true,applied:ops.length,orders:orders.length,events:events.length,cash:cash.length,operators:operators.length,turnos:turnos.length};
+    return {ok:true,applied:ops.length,orders:orders.length,events:events.length,cash:cash.length,expenses:expenses.length,operators:operators.length,turnos:turnos.length};
   } finally {
     lock.releaseLock();
   }
@@ -309,6 +324,36 @@ function upsertCash_(map, incoming) {
 }
 
 function deleteCash_(map, id, at) {
+  const old = map.get(String(id));
+  if (!old) return;
+  const deleteAt = new Date(at || 0).getTime();
+  const oldAt = new Date(old.actualizado || old.creado || 0).getTime();
+  if (!deleteAt || !oldAt || deleteAt >= oldAt) map.delete(String(id));
+}
+
+function upsertExpense_(map, incoming) {
+  const id = String(incoming.id || '');
+  if (!id) return;
+  const old = map.get(id);
+  if (old && !newerOrEqual_(incoming, old)) return;
+  const x = Object.assign({}, old || {}, incoming);
+  x.id = id;
+  x.fecha = String(x.fecha || '').slice(0,10);
+  x.operadorId = String(x.operadorId || '');
+  x.operador = String(x.operador || '').trim();
+  x.monto = Math.max(0, Number(x.monto) || 0);
+  x.medioPago = String(x.medioPago || '');
+  x.categoria = String(x.categoria || '');
+  x.observacion = String(x.observacion || '').trim();
+  x.cajaId = String(x.cajaId || '');
+  x.orderId = String(x.orderId || '');
+  x.orderNumero = Number(x.orderNumero) || 0;
+  x.actualizado = x.actualizado || x.creado || new Date().toISOString();
+  x.creado = x.creado || x.actualizado;
+  if (x.fecha && x.monto > 0) map.set(id, x);
+}
+
+function deleteExpense_(map, id, at) {
   const old = map.get(String(id));
   if (!old) return;
   const deleteAt = new Date(at || 0).getTime();
@@ -442,6 +487,21 @@ function writeCash_(sheet, rows) {
   sheet.getRange('D:J').setNumberFormat('$#,##0');
 }
 
+function writeExpenses_(sheet, rows) {
+  rows.sort((a,b)=>String(a.fecha||'').localeCompare(String(b.fecha||'')));
+  sheet.clearContents();
+  sheet.getRange(1,1,1,EXPENSE_HEADERS.length).setValues([EXPENSE_HEADERS]);
+  if (rows.length) {
+    const data = rows.map(x=>[
+      x.id,x.fecha||'',x.operador||'',x.categoria||'',x.medioPago||'',Number(x.monto)||0,
+      Number(x.orderNumero)||0,x.observacion||'',x.creado||'',x.actualizado||'',JSON.stringify(x)
+    ]);
+    sheet.getRange(2,1,data.length,EXPENSE_HEADERS.length).setValues(data);
+  }
+  sheet.setFrozenRows(1);
+  sheet.getRange('F:F').setNumberFormat('$#,##0');
+}
+
 function writeOperators_(sheet, rows) {
   rows.sort((a,b)=>String(a.nombre||'').localeCompare(String(b.nombre||''),'es'));
   sheet.clearContents();
@@ -469,7 +529,7 @@ function writeTurnos_(sheet, rows) {
   sheet.setFrozenRows(1);
 }
 
-function maybeDailyBackup_(ctx, orders, events, cash, operators, turnos, device) {
+function maybeDailyBackup_(ctx, orders, events, cash, expenses, operators, turnos, device) {
   const props = PropertiesService.getScriptProperties();
   const tz = Session.getScriptTimeZone() || 'America/Argentina/Buenos_Aires';
   const day = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
@@ -484,6 +544,7 @@ function maybeDailyBackup_(ctx, orders, events, cash, operators, turnos, device)
     ordenes:orders,
     cleriseventos:events,
     cierrescaja:cash,
+    gastos:expenses,
     operadores:operators,
     turnos:turnos
   };
