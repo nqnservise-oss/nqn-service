@@ -12,6 +12,8 @@
   function admin(){return typeof window.isAdmin==='function'&&window.isAdmin();}
   function today(){var p=new Intl.DateTimeFormat('es-AR',{timeZone:TZ,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()),get=function(k){return p.find(function(x){return x.type===k;}).value;};return get('year')+'-'+get('month')+'-'+get('day');}
   function minute(h){var a=String(h||'').split(':');return Number(a[0])*60+Number(a[1]);}
+  // Conservar los minutos originales; convertir solo para la presentación.
+  function duration(value){var n=Math.max(0,Math.floor(Number(value)||0)),h=Math.floor(n/60),m=n%60;if(!h)return n+' '+(n===1?'minuto':'minutos');if(!m)return h+' '+(h===1?'hora':'horas');return h+' '+(h===1?'hora':'horas')+' y '+m+' '+(m===1?'minuto':'minutos');}
   function hhmm(x){return /^\d{2}:\d{2}$/.test(String(x||''))?x:'--:--';}
   function getKey(){try{return localStorage.getItem(KEY)||'';}catch(_){return '';}}
   function configured(){var c=typeof window.cloudConfig==='function'?window.cloudConfig():null;return c&&c.enabled&&c.url&&c.token?c:null;}
@@ -130,9 +132,9 @@
       if(admin())html+='<div class="field"><label>Empleado</label><select id="attEmployee" onchange="attChangeEmployee(this.value)">'+data.ops.map(function(r){return '<option value="'+esc(r.id)+'" '+(r.id===data.id?'selected':'')+'>'+esc(r.nombre)+'</option>';}).join('')+'</select></div>';
       html+='</div>';
       var t=data.report.total;
-      html+='<div class="sidecard" style="margin:15px 0"><strong>'+esc(data.employee.nombre)+'</strong><p>Llegadas tarde: '+t.tardanzas+' · '+t.minutosTarde+' min</p><p>Salidas anticipadas: '+t.salidasAntes+' · '+t.minutosSalida+' min</p><p><strong>Total a revisar: '+(t.minutosTarde+t.minutosSalida)+' minutos</strong></p><p>Sin registro de entrada: '+t.sinIngreso+' días · Sin registro de salida: '+t.sinSalida+' días (no se consideran ausencias automáticamente).</p></div>';
-      html+='<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Ingreso</th><th>Salida</th><th>Min. tarde</th><th>Min. salida anticipada</th></tr></thead><tbody>';
-      html+=data.report.rows.map(function(r){return '<tr><td>'+esc(r.fecha)+'</td><td>'+esc(hhmm(r.entrada))+'</td><td>'+esc(hhmm(r.salida))+'</td><td>'+r.tarde+'</td><td>'+r.anticipada+'</td></tr>';}).join('');
+      html+='<div class="sidecard" style="margin:15px 0"><strong>'+esc(data.employee.nombre)+'</strong><p>Llegadas tarde: '+t.tardanzas+' · '+duration(t.minutosTarde)+'</p><p>Salidas anticipadas: '+t.salidasAntes+' · '+duration(t.minutosSalida)+'</p><p><strong>Total a revisar: '+duration(t.minutosTarde+t.minutosSalida)+'</strong></p><p>Sin registro de entrada: '+t.sinIngreso+' días · Sin registro de salida: '+t.sinSalida+' días (no se consideran ausencias automáticamente).</p></div>';
+      html+='<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Ingreso</th><th>Salida</th><th>Tiempo de tardanza</th><th>Salida anticipada</th></tr></thead><tbody>';
+      html+=data.report.rows.map(function(r){return '<tr><td>'+esc(r.fecha)+'</td><td>'+esc(hhmm(r.entrada))+'</td><td>'+esc(hhmm(r.salida))+'</td><td>'+duration(r.tarde)+'</td><td>'+duration(r.anticipada)+'</td></tr>';}).join('');
       html+='</tbody></table></div><div class="actions"><button type="button" class="btn secondary" onclick="attPrint()">Imprimir / Guardar PDF</button></div></section>';
     }
     if(admin()&&computer()&&configured()&&getKey()){
@@ -192,9 +194,9 @@
   window.attPrint=function(){
     var d=selectData();if(!d)return;
     var t=d.report.total;
-    var rows=d.report.rows.map(function(r){return '<tr><td>'+esc(r.fecha)+'</td><td>'+esc(hhmm(r.entrada))+'</td><td>'+esc(hhmm(r.salida))+'</td><td>'+r.tarde+'</td><td>'+r.anticipada+'</td></tr>';}).join('');
+    var rows=d.report.rows.map(function(r){return '<tr><td>'+esc(r.fecha)+'</td><td>'+esc(hhmm(r.entrada))+'</td><td>'+esc(hhmm(r.salida))+'</td><td>'+duration(r.tarde)+'</td><td>'+duration(r.anticipada)+'</td></tr>';}).join('');
     var w=window.open('','_blank');if(!w){alert('Permití ventanas emergentes para exportar el reporte.');return;}
-    var doc='<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Asistencia '+esc(d.employee.nombre)+'</title><style>body{font:14px Arial,sans-serif;color:#17243a;margin:35px}table{width:100%;border-collapse:collapse;margin-top:22px}th,td{border:1px solid #ccc;padding:8px;text-align:left}th{background:#eef2f6}h1{color:#0d5bd8}@media print{button{display:none}}</style></head><body><h1>NQN Service · Asistencia</h1><p><b>Empleado:</b> '+esc(d.employee.nombre)+' · <b>Mes:</b> '+esc(selectedMonth)+'</p><p><b>Tardanzas:</b> '+t.tardanzas+' ('+t.minutosTarde+' min) · <b>Salidas anticipadas:</b> '+t.salidasAntes+' ('+t.minutosSalida+' min)</p><p><b>Total a revisar:</b> '+(t.minutosTarde+t.minutosSalida)+' minutos · <b>Sin entrada:</b> '+t.sinIngreso+' · <b>Sin salida:</b> '+t.sinSalida+'</p><p>Los días sin fichaje requieren revisión; no constituyen ausencias confirmadas.</p><table><thead><tr><th>Fecha</th><th>Ingreso</th><th>Salida</th><th>Min. tarde</th><th>Min. salida anticipada</th></tr></thead><tbody>'+rows+'</tbody></table><p>Reporte de consulta, sin descuento salarial automático.</p><button onclick="window.print()">Imprimir / Guardar PDF</button></body></html>';
+    var doc='<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Asistencia '+esc(d.employee.nombre)+'</title><style>body{font:14px Arial,sans-serif;color:#17243a;margin:35px}table{width:100%;border-collapse:collapse;margin-top:22px}th,td{border:1px solid #ccc;padding:8px;text-align:left}th{background:#eef2f6}h1{color:#0d5bd8}@media print{button{display:none}}</style></head><body><h1>NQN Service · Asistencia</h1><p><b>Empleado:</b> '+esc(d.employee.nombre)+' · <b>Mes:</b> '+esc(selectedMonth)+'</p><p><b>Tardanzas:</b> '+t.tardanzas+' ('+duration(t.minutosTarde)+') · <b>Salidas anticipadas:</b> '+t.salidasAntes+' ('+duration(t.minutosSalida)+')</p><p><b>Total a revisar:</b> '+duration(t.minutosTarde+t.minutosSalida)+' · <b>Sin entrada:</b> '+t.sinIngreso+' · <b>Sin salida:</b> '+t.sinSalida+'</p><p>Los días sin fichaje requieren revisión; no constituyen ausencias confirmadas.</p><table><thead><tr><th>Fecha</th><th>Ingreso</th><th>Salida</th><th>Tiempo de tardanza</th><th>Salida anticipada</th></tr></thead><tbody>'+rows+'</tbody></table><p>Reporte de consulta, sin descuento salarial automático.</p><button onclick="window.print()">Imprimir / Guardar PDF</button></body></html>';
     w.document.write(doc);w.document.close();
   };
   function show(){
