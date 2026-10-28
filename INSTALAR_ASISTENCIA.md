@@ -1,14 +1,16 @@
 # Control de asistencia - NQN Service
 
-Estado: **implementado en la rama de revisión; todavía NO publicado ni activado en el servidor**.
+Estado: **cambios de asistencia en revisión; no se confirma que estén publicados ni activados en el servidor**.
 
 ## Reglas confirmadas
 
-- Jornada de lunes a viernes: 09:00 a 17:00 (días sin fichaje = pendientes de revisión, no ausencias automáticas).
-- Tolerancia de ingreso hasta 09:15 inclusive.
-- A partir de las 09:16, la tardanza cuenta desde las 09:00: 09:20 = 20 minutos.
-- Salida anterior a las 17:00: todos los minutos anticipados.
-- Sumatoria mensual por empleado; reporte imprimible / Guardar como PDF.
+- Jornada de lunes a viernes. Hasta el 27/10/2026 se respeta el horario anterior, 09:00 a 17:00, con tolerancia de ingreso hasta 09:15.
+- Desde el **28/10/2026**, horario de verano **08:30 a 16:30**; tolerancia de entrada hasta **08:45 inclusive**.
+- A partir de las 08:46, la tardanza cuenta completa desde las 08:30: 08:46 = 16 minutos. Las entradas dentro de la tolerancia no generan tardanza.
+- Salida anterior a las 16:30: se registran todos los minutos anticipados, sin compensar automáticamente con ingreso temprano.
+- La vista del empleado muestra por fecha el horario, la hora de ingreso, un estado «Llegada tarde» **en rojo** si corresponde, y la duración de la tardanza o salida anticipada.
+- El resumen de todo el mes aparece **debajo de los registros diarios**, separando llegadas tarde, salidas anticipadas y fichajes sin registro, y permite imprimir / Guardar como PDF.
+- Los días sin fichaje quedan pendientes de revisión; nunca se interpretan como ausencias automáticas. El cambio de horario no reinterpreta los días previos.
 - Sólo PC vinculada al taller, con PIN personal al fichar; la hora la asigna Apps Script.
 - Una entrada y una salida por día; ajustes sólo administrador con PIN y motivo; ningún ajuste borra los eventos originales.
 - Sin internet no es posible fichar; jamás se simula que un fichaje fue confirmado.
@@ -45,12 +47,15 @@ El reporte considera lunes a viernes; **feriados, licencias, vacaciones y turnos
 
 | Caso | Resultado esperado |
 | --- | --- |
-| Entrada 09:00 | 0 min de tardanza |
-| Entrada 09:15 | 0 min de tardanza |
-| Entrada 09:16 | 16 min de tardanza |
-| Entrada 09:20 | 20 min de tardanza |
-| Salida 16:40 | 20 min anticipados |
-| Salida 17:00 | 0 min anticipados |
+| Entrada 27/10 a las 09:20 | 20 min tarde con horario anterior |
+| Entrada 28/10 a las 08:30 | 0 min de tardanza |
+| Entrada 28/10 a las 08:39 | 0 min de tardanza |
+| Entrada 28/10 a las 08:45 | 0 min de tardanza |
+| Entrada 28/10 a las 08:46 | 16 min de tardanza, etiqueta roja |
+| Salida 28/10 a las 16:01 | 29 min anticipados |
+| Salida 28/10 a las 16:30 | 0 min anticipados |
+| Mes con entrada 08:39 y salida 16:01 el 28/10 | 0 tardanzas; 29 min de salida anticipada, sólo en su fecha |
+| Final de tabla de historial | Resumen mensual debajo, totales independientes |
 | Segunda entrada mismo día | Rechazada por servidor |
 | Salida sin ingreso | Rechazada por servidor |
 | Celular o PC no autorizada | Sin fichaje |
