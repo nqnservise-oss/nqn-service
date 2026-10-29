@@ -11,6 +11,7 @@ Estado: **cambios de asistencia en revisión; no se confirma que estén publicad
 - **Horas extras:** desde el 28/10/2026 se computa el tiempo trabajado después de las 16:30 (para fechas anteriores, después de las 17:00). Requiere entrada y salida; si la entrada es posterior al horario de salida, se cuenta desde la entrada real. No se compensa con tardanzas.
 - **Jornadas registradas:** se suma sólo un día que tenga entrada y salida en orden. No reemplaza la revisión de ausencias, licencias o feriados.
 - La vista del empleado muestra por fecha el horario, la hora de ingreso, un estado «Llegada tarde» **en rojo** si corresponde, y la duración de la tardanza o salida anticipada.
+- Para evitar exportar un PDF con fichajes vacíos o no actualizados, primero se requiere una respuesta correcta del servidor al presionar **Actualizar**. Si la actualización falla, el reporte permanece bloqueado.
 - El resumen del mes aparece **debajo de los registros diarios** en pantalla, y **encima de la tabla diaria** en la impresión / Guardar como PDF. Ambos muestran jornadas registradas, cantidad y duración de tardanzas, salidas anticipadas y horas extras, además de fichajes faltantes; las horas extras se detallan por fecha.
 - Los días sin fichaje quedan pendientes de revisión; nunca se interpretan como ausencias automáticas. El cambio de horario no reinterpreta los días previos.
 - Sólo PC vinculada al taller, con PIN personal al fichar; la hora la asigna Apps Script.
