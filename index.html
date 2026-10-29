@@ -231,8 +231,8 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredIns
 window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;updateInstallButton();toast('NQN Service instalada')});
 function updateInstallButton(){let b=document.getElementById('installPwaBtn');if(b)b.classList.toggle('show',!!deferredInstallPrompt)}
 async function installPwa(){if(!deferredInstallPrompt){alert('Si Chrome no muestra la instalación todavía, recargá la página una vez y volvé a intentar.');return}deferredInstallPrompt.prompt();try{await deferredInstallPrompt.userChoice}catch(e){}deferredInstallPrompt=null;updateInstallButton()}
-const OFFLINE_CACHE='nqn-service-v950-asistencia-horas-extra';
-const OFFLINE_ASSETS=['./','./index.html','./NQN_SERVICE_ESTABLE.html','./manifest.webmanifest','./turnos.js','./asistencia.js?v=3','./icons/icon-192.png','./icons/icon-512.png'];
+const OFFLINE_CACHE='nqn-service-v951-retiros-efectivo';
+const OFFLINE_ASSETS=['./','./index.html','./NQN_SERVICE_ESTABLE.html','./manifest.webmanifest','./turnos.js','./retiros-efectivo.js?v=1','./asistencia.js?v=3','./icons/icon-192.png','./icons/icon-512.png'];
 let swReloading=false;
 async function ensureOfflineReady(){
   if(!('serviceWorker' in navigator)||!location.protocol.startsWith('http'))return false;
@@ -1949,7 +1949,7 @@ window.__nqnLegacyBoot=boot;
   window.bootstrapCloudQueue=function(){
     let s=getSettings();let q=cloudQueue(),seen=new Set(q.map(x=>x.entity+':'+x.id));
     const seedCore=!s.cloudEverSynced;
-    if(!seedCore&&s.expensesCloudSeeded)return;
+    if(!seedCore&&s.expensesCloudSeeded&&s.transfersCloudSeededV2)return;
     if(seedCore){
       load().forEach(r=>{let k='order:'+r.id;if(!seen.has(k)){q.push({opId:'boot-o-'+r.id,type:'upsertOrder',entity:'order',id:String(r.id),at:r.actualizado||r.creado||now(),data:r});seen.add(k)}});
       loadEvents().forEach(r=>{let k='event:'+r.id;if(!seen.has(k)){q.push({opId:'boot-e-'+r.id,type:'upsertEvent',entity:'event',id:String(r.id),at:r.actualizado||r.creado||now(),data:r});seen.add(k)}});
@@ -1957,7 +1957,8 @@ window.__nqnLegacyBoot=boot;
       window.loadOperators().forEach(r=>{let k='operator:'+r.id;if(!seen.has(k)){q.push({opId:'boot-p-'+r.id,type:'upsertOperator',entity:'operator',id:String(r.id),at:r.actualizado||r.creado||now(),data:r});seen.add(k)}});
     }
     window.loadExpenses().forEach(r=>{let k='expense:'+r.id;if(!seen.has(k)){q.push({opId:'boot-x-'+r.id,type:'upsertExpense',entity:'expense',id:String(r.id),at:r.actualizado||r.creado||now(),data:r});seen.add(k)}});
-    s.expensesCloudSeeded=true;setSettings(s);setCloudQueue(q);
+    readArray(KEY_TRANSFERS).forEach(r=>{let k='cash:'+r.id;if(r?.id&&!seen.has(k)){q.push({opId:'boot-t-'+r.id,type:'upsertCash',entity:'cash',id:String(r.id),at:r.actualizado||r.creado||now(),data:r});seen.add(k)}});
+    s.expensesCloudSeeded=true;s.transfersCloudSeededV2=true;setSettings(s);setCloudQueue(q);
   };
   window.opReflected=function(op,state){
     let rows=null;
@@ -1998,10 +1999,19 @@ window.__nqnLegacyBoot=boot;
       saveEvents(re);
     }
     if(Array.isArray(state?.cierrescaja)){
-      let rc=state.cierrescaja.map(normalizeCashClosing);
+      let transfersRemotos=state.cierrescaja.filter(x=>x&&x.tipo==='transferencia');
+      let rc=state.cierrescaja.filter(x=>x&&x.tipo!=='transferencia').map(normalizeCashClosing);
       if(dCash.size)rc=rc.filter(x=>!dCash.has(String(x.id)));
       if(pCash.size){let map=new Map(rc.map(x=>[String(x.id),x]));window.loadCashClosings().forEach(x=>{if(pCash.has(String(x.id))&&!dCash.has(String(x.id)))map.set(String(x.id),x)});rc=[...map.values()]}
       window.saveCashClosings(rc);
+      const transferPendientes=pending.filter(x=>x.entity==='cash'&&x.data?.tipo==='transferencia');
+      if(transferPendientes.length){
+        const mapa=new Map(transfersRemotos.map(x=>[String(x.id),x]));
+        const locales=readArray(KEY_TRANSFERS);
+        for(const item of transferPendientes){const local=locales.find(x=>String(x.id)===String(item.id));if(local)mapa.set(String(item.id),local)}
+        transfersRemotos=[...mapa.values()];
+      }
+      try{localStorage.setItem(KEY_TRANSFERS,JSON.stringify(transfersRemotos))}catch(err){console.warn('No se pudieron actualizar transferencias',err)}
     }
     if(Array.isArray(state?.gastos)){
       let rx=state.gastos.map(normalizeExpense);
@@ -2077,6 +2087,12 @@ window.__nqnLegacyBoot=boot;
     const mpReal=latest?Number(latest.mp)+rawMP-Number(latest.rawMP):rawMP;
     return {ingresos:ingresosCaja,ingresosNQN:ingresos+visitasIngresos,ingresosVisitas:visitasIngresos,ingresosCleris:clerisIngresos,gastos:gastos+ajusteGastos,notas:notas+ajusteNotas,ajustesEfectivo,ajustesMP,ajustesTotal,efectivo:cobros.efectivo,gastosEfectivo,cajaFisica:cajaReal,mercadoPago:mpReal,neto:ingresosCaja-notas-gastos+ajustesEfectivo+ajustesMP+ajustesTotal};
   }
+
+  window.nqnSaldoEfectivoDisponible=function(){
+    const op=session();
+    if(!op||op.rol!=='admin')return null;
+    return monthBalance(localDay(),{id:op.id,nombre:op.nombre}).cajaFisica;
+  };
 
   function paintMonthBalance(value){
     const box=document.getElementById('cashMonthBox'),el=document.getElementById('cashMonthNet');
@@ -2378,6 +2394,7 @@ window.__nqnLegacyBoot=boot;
 
   </script>
   <script src="libro-movimientos.js?v=1"></script>
+  <script src="retiros-efectivo.js?v=1"></script>
   <script src="asistencia.js?v=3"></script>
 </body>
 </html>
