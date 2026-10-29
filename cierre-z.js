@@ -214,6 +214,17 @@
       });
     });
 
+    // Retiro a resguardo: salida de efectivo, no gasto ni menor ingreso.
+    let transferencias=[];
+    try{transferencias=JSON.parse(localStorage.getItem('nqn_service_cash_transfers_v1')||'[]')}catch(_){transferencias=[]}
+    if(Array.isArray(transferencias))transferencias.forEach(x=>{
+      if(x?.subtipo!=='retiro_efectivo'||String(x.fecha||'')!==String(fecha||''))return;
+      const monto=Math.max(0,Number(x.monto||0));if(!monto)return;
+      rows.push({tipo:'retiro',ts:zStamp(x.creado||x.actualizado,fecha),hora:zTime(x.creado||x.actualizado,fecha),
+        ot:0,concepto:'Retiro a resguardo'+(x.observacion?' · '+x.observacion:''),medio:'Efectivo',monto,
+        operador:String(x.operador||'').trim()||'Sin registrar',efectivo:0,tarjeta:0});
+    });
+
     safeArray(()=>typeof window.loadCashClosings==='function'?window.loadCashClosings():[]).forEach(x=>{
       if(String(x.fecha||'')!==String(fecha||'')) return;
       const monto=Math.max(0,Number(x.notaCredito||0)); if(!monto) return;
@@ -234,10 +245,11 @@
   }
 
   function totals(rows){
-    const t={efectivo:0,mp:0,debito:0,credito:0,tarjetaLegacy:0,gastos:0,notas:0};
+    const t={efectivo:0,mp:0,debito:0,credito:0,tarjetaLegacy:0,gastos:0,notas:0,retiros:0};
     rows.forEach(x=>{
       if(x.tipo==='gasto'){ t.gastos+=x.monto; return; }
       if(x.tipo==='nota'){ t.notas+=x.monto; return; }
+      if(x.tipo==='retiro'){ t.retiros+=x.monto; return; }
       if(x.tipo!=='cobro') return;
 
       const medio=String(x.medio||'').toLowerCase();
@@ -291,7 +303,7 @@
     const egresos=Number(tot.gastos||0)+Number(tot.notas||0);
     const neto=ingresos-egresos;
     const gastosEfectivo=rows.filter(x=>x.tipo==='gasto' && String(x.medio||'').toLowerCase()==='efectivo').reduce((a,x)=>a+Number(x.monto||0),0);
-    const efectivoEsperado=Number(tot.efectivo||0)-gastosEfectivo;
+    const efectivoEsperado=Number(tot.efectivo||0)-gastosEfectivo-Number(tot.retiros||0);
 
     const cierres=safeArray(()=>typeof window.loadCashClosings==='function'?window.loadCashClosings():[])
       .filter(x=>String(x.fecha||'')===fecha && x?.tipo!=='cierre_z');
@@ -301,8 +313,8 @@
       ? new Date(cierreTs).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})
       : 'Sin cierre guardado';
 
-    const icon=x=>x.tipo==='gasto'?'−':x.tipo==='nota'?'↩':'+';
-    const typeLabel=x=>x.tipo==='gasto'?'Gasto':x.tipo==='nota'?'Nota de crédito':'Cobro';
+    const icon=x=>x.tipo==='gasto'||x.tipo==='retiro'?'−':x.tipo==='nota'?'↩':'+';
+    const typeLabel=x=>x.tipo==='gasto'?'Gasto':x.tipo==='retiro'?'Retiro de efectivo':x.tipo==='nota'?'Nota de crédito':'Cobro';
 
     const lineas=rows.map(x=>`
       <div class="nqn-z-row">
@@ -381,7 +393,7 @@
           <div class="eyebrow">TOTALES DEL PERÍODO ABIERTO</div>
           <div class="nqn-z-stats">
             <div class="stat"><div class="statlabel">Efectivo cobrado</div><div class="statvalue smallmoney">${m(tot.efectivo)}</div></div>
-            <div class="stat"><div class="statlabel">Efectivo real en caja</div><div class="statvalue smallmoney">${m(Number(tot.efectivo||0)-Number(tot.gastos||0))}</div></div>
+            <div class="stat"><div class="statlabel">Efectivo esperado en caja</div><div class="statvalue smallmoney">${m(efectivoEsperado)}</div></div><div class="stat"><div class="statlabel">Retiros de efectivo</div><div class="statvalue smallmoney">${m(tot.retiros)}</div></div>
             <div class="stat"><div class="statlabel">Mercado Pago</div><div class="statvalue smallmoney">${m(tot.mp)}</div></div>
             <div class="stat"><div class="statlabel">Débito</div><div class="statvalue smallmoney">${m(tot.debito)}</div></div>
             <div class="stat"><div class="statlabel">Crédito</div><div class="statvalue smallmoney">${m(tot.credito)}</div></div>
@@ -468,6 +480,7 @@
             efectivoContado:Number(control.efectivoContado||0),
             diferencia:Number(control.diferencia||0),
             efectivoCobrado:Number(tot.efectivo||0),
+             retirosEfectivo:Number(tot.retiros||0),
             mercadoPago:Number(tot.mp||0),
             debito:Number(tot.debito||0),
             credito:Number(tot.credito||0),

@@ -44,8 +44,8 @@
       if(day<from||day>to||monto<=0)return;
       const origen=String(x.origen||'');
       const destino=String(x.destino||'');
-      rows.push({tipo:'transferencia',fecha:day,ts:stampFor(x.creado,day),hora:timeFrom(x.creado,day),
-        concepto:'Transferencia entre cajas'+(x.observacion?' · '+x.observacion:''),
+      rows.push({tipo:'transferencia',subtipo:x.subtipo||'',fecha:day,ts:stampFor(x.creado,day),hora:timeFrom(x.creado,day),
+        concepto:(x.subtipo==='retiro_efectivo'?'Retiro a resguardo':'Transferencia entre cajas')+(x.observacion?' · '+x.observacion:''),
         medio:origen+' → '+destino,origen,destino,monto,operador:x.operador||'Sin registrar'});
     });
     if(typeof window.loadCashClosings==='function')window.loadCashClosings().forEach(x=>{
@@ -124,7 +124,7 @@
     if(x.tipo==='ajuste')return moneySigned(num(x.delta));
     return moneySigned(num(x.monto)*(x.tipo==='gasto'||x.tipo==='nota'?-1:1));
   }
-  const titleFor=x=>x.tipo==='cobro'?'Cobro':x.tipo==='gasto'?'Gasto':x.tipo==='nota'?'Nota de crédito':x.tipo==='transferencia'?'Transferencia':x.tipo==='ajuste'?'Ajuste de saldo':'Ajuste contable';
+  const titleFor=x=>x.tipo==='cobro'?'Cobro':x.tipo==='gasto'?'Gasto':x.tipo==='nota'?'Nota de crédito':x.tipo==='transferencia'?(x.subtipo==='retiro_efectivo'?'Retiro de efectivo':'Transferencia'):x.tipo==='ajuste'?'Ajuste de saldo':'Ajuste contable';
 
   function run(){
     const from=$('libroDesde')?.value||'';

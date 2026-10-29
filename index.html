@@ -231,8 +231,8 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredIns
 window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;updateInstallButton();toast('NQN Service instalada')});
 function updateInstallButton(){let b=document.getElementById('installPwaBtn');if(b)b.classList.toggle('show',!!deferredInstallPrompt)}
 async function installPwa(){if(!deferredInstallPrompt){alert('Si Chrome no muestra la instalación todavía, recargá la página una vez y volvé a intentar.');return}deferredInstallPrompt.prompt();try{await deferredInstallPrompt.userChoice}catch(e){}deferredInstallPrompt=null;updateInstallButton()}
-const OFFLINE_CACHE='nqn-service-v950-asistencia-horas-extra';
-const OFFLINE_ASSETS=['./','./index.html','./NQN_SERVICE_ESTABLE.html','./manifest.webmanifest','./turnos.js','./asistencia.js?v=3','./icons/icon-192.png','./icons/icon-512.png'];
+const OFFLINE_CACHE='nqn-service-v951-retiros-efectivo';
+const OFFLINE_ASSETS=['./','./index.html','./NQN_SERVICE_ESTABLE.html','./manifest.webmanifest','./turnos.js','./retiros-efectivo.js?v=1','./asistencia.js?v=3','./icons/icon-192.png','./icons/icon-512.png'];
 let swReloading=false;
 async function ensureOfflineReady(){
   if(!('serviceWorker' in navigator)||!location.protocol.startsWith('http'))return false;
@@ -1949,7 +1949,7 @@ window.__nqnLegacyBoot=boot;
   window.bootstrapCloudQueue=function(){
     let s=getSettings();let q=cloudQueue(),seen=new Set(q.map(x=>x.entity+':'+x.id));
     const seedCore=!s.cloudEverSynced;
-    if(!seedCore&&s.expensesCloudSeeded)return;
+    if(!seedCore&&s.expensesCloudSeeded&&s.transfersCloudSeededV2)return;
     if(seedCore){
       load().forEach(r=>{let k='order:'+r.id;if(!seen.has(k)){q.push({opId:'boot-o-'+r.id,type:'upsertOrder',entity:'order',id:String(r.id),at:r.actualizado||r.creado||now(),data:r});seen.add(k)}});
       loadEvents().forEach(r=>{let k='event:'+r.id;if(!seen.has(k)){q.push({opId:'boot-e-'+r.id,type:'upsertEvent',entity:'event',id:String(r.id),at:r.actualizado||r.creado||now(),data:r});seen.add(k)}});
@@ -1957,7 +1957,8 @@ window.__nqnLegacyBoot=boot;
       window.loadOperators().forEach(r=>{let k='operator:'+r.id;if(!seen.has(k)){q.push({opId:'boot-p-'+r.id,type:'upsertOperator',entity:'operator',id:String(r.id),at:r.actualizado||r.creado||now(),data:r});seen.add(k)}});
     }
     window.loadExpenses().forEach(r=>{let k='expense:'+r.id;if(!seen.has(k)){q.push({opId:'boot-x-'+r.id,type:'upsertExpense',entity:'expense',id:String(r.id),at:r.actualizado||r.creado||now(),data:r});seen.add(k)}});
-    s.expensesCloudSeeded=true;setSettings(s);setCloudQueue(q);
+    readArray(KEY_TRANSFERS).forEach(r=>{let k='cash:'+r.id;if(r?.id&&!seen.has(k)){q.push({opId:'boot-t-'+r.id,type:'upsertCash',entity:'cash',id:String(r.id),at:r.actualizado||r.creado||now(),data:r});seen.add(k)}});
+    s.expensesCloudSeeded=true;s.transfersCloudSeededV2=true;setSettings(s);setCloudQueue(q);
   };
   window.opReflected=function(op,state){
     let rows=null;
@@ -1998,10 +1999,19 @@ window.__nqnLegacyBoot=boot;
       saveEvents(re);
     }
     if(Array.isArray(state?.cierrescaja)){
-      let rc=state.cierrescaja.map(normalizeCashClosing);
+      let transfersRemotos=state.cierrescaja.filter(x=>x&&x.tipo==='transferencia');
+      let rc=state.cierrescaja.filter(x=>x&&x.tipo!=='transferencia').map(normalizeCashClosing);
       if(dCash.size)rc=rc.filter(x=>!dCash.has(String(x.id)));
       if(pCash.size){let map=new Map(rc.map(x=>[String(x.id),x]));window.loadCashClosings().forEach(x=>{if(pCash.has(String(x.id))&&!dCash.has(String(x.id)))map.set(String(x.id),x)});rc=[...map.values()]}
       window.saveCashClosings(rc);
+      const transferPendientes=pending.filter(x=>x.entity==='cash'&&x.data?.tipo==='transferencia');
+      if(transferPendientes.length){
+        const mapa=new Map(transfersRemotos.map(x=>[String(x.id),x]));
+        const locales=readArray(KEY_TRANSFERS);
+        for(const item of transferPendientes){const local=locales.find(x=>String(x.id)===String(item.id));if(local)mapa.set(String(item.id),local)}
+        transfersRemotos=[...mapa.values()];
+      }
+      try{localStorage.setItem(KEY_TRANSFERS,JSON.stringify(transfersRemotos))}catch(err){console.warn('No se pudieron actualizar transferencias',err)}
     }
     if(Array.isArray(state?.gastos)){
       let rx=state.gastos.map(normalizeExpense);
@@ -2077,6 +2087,12 @@ window.__nqnLegacyBoot=boot;
     const mpReal=latest?Number(latest.mp)+rawMP-Number(latest.rawMP):rawMP;
     return {ingresos:ingresosCaja,ingresosNQN:ingresos+visitasIngresos,ingresosVisitas:visitasIngresos,ingresosCleris:clerisIngresos,gastos:gastos+ajusteGastos,notas:notas+ajusteNotas,ajustesEfectivo,ajustesMP,ajustesTotal,efectivo:cobros.efectivo,gastosEfectivo,cajaFisica:cajaReal,mercadoPago:mpReal,neto:ingresosCaja-notas-gastos+ajustesEfectivo+ajustesMP+ajustesTotal};
   }
+
+  window.nqnSaldoEfectivoDisponible=function(){
+    const op=session();
+    if(!op||op.rol!=='admin')return null;
+    return monthBalance(localDay(),{id:op.id,nombre:op.nombre}).cajaFisica;
+  };
 
   function paintMonthBalance(value){
     const box=document.getElementById('cashMonthBox'),el=document.getElementById('cashMonthNet');
@@ -2355,11 +2371,11 @@ window.__nqnLegacyBoot=boot;
   window.deleteOperator=function(id){let rows=window.loadOperators(),x=rows.find(r=>String(r.id)===String(id));if(!x)return;const current=session();if(current&&String(current.id)===String(id)){alert('No podés eliminar el usuario con el que estás trabajando.');return}if(x.rol==='admin'&&x.activo&&activeAdmins(rows).length<=1){alert('Tiene que quedar al menos un administrador activo.');return}const used=window.loadCashClosings().some(c=>String(c.operadorId||'')===String(x.id)||(!c.operadorId&&String(c.operador||'').toLowerCase()===x.nombre.toLowerCase()));if(used){alert('Este operador tiene historial de caja. No se elimina: desactivalo para conservar el registro.');return}if(!confirm('¿Eliminar definitivamente a '+x.nombre+'?'))return;window.saveOperators(rows.filter(r=>String(r.id)!==String(id)));queueCloudOp('deleteOperator',id,null,now());toast('Operador eliminado');window.renderOperators()};
 
   window.exportData=function(){
-    const payload={app:'NQN Service',version:9,edicion:'completa-caja-operadores',exportado:now(),ordenes:load(),cleriseventos:loadEvents(),cierrescaja:window.loadCashClosings(),gastos:window.loadExpenses(),stock:window.loadStock(),operadores:window.loadOperators(),settings:{lastSave:getSettings().lastSave||null}};
+    const payload={app:'NQN Service',version:9,edicion:'completa-caja-operadores',exportado:now(),ordenes:load(),cleriseventos:loadEvents(),cierrescaja:window.loadCashClosings(),transferencias:readArray(KEY_TRANSFERS),gastos:window.loadExpenses(),stock:window.loadStock(),operadores:window.loadOperators(),settings:{lastSave:getSettings().lastSave||null}};
     const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='NQN_SERVICE_BACKUP_'+localDay()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);let s=getSettings();s.lastExternalBackup=now();setSettings(s);toast('Copia externa descargada');setTimeout(()=>window.renderBackup(),300)
   };
   window.importData=function(){
-    const f=document.getElementById('importFile')?.files?.[0];if(!f){alert('Elegí un archivo de copia primero.');return}const reader=new FileReader();reader.onload=()=>{try{const x=JSON.parse(reader.result),source=Array.isArray(x)?x:x.ordenes;if(!Array.isArray(source))throw new Error();if(!confirm('¿Reemplazar los datos actuales por esta copia?'))return;save(ensureClientNumbers(source.map(normalizeOrder)),'Antes de importar copia');if(Array.isArray(x.cleriseventos))saveEvents(x.cleriseventos);if(Array.isArray(x.cierrescaja))window.saveCashClosings(x.cierrescaja);if(Array.isArray(x.gastos))window.saveExpenses(x.gastos);if(Array.isArray(x.operadores))window.saveOperators(x.operadores);let s=getSettings();s.cloudEverSynced=false;setSettings(s);setCloudQueue([]);clearSession();toast('Copia restaurada');cloudAutoSyncSoon();renderLoginOrSetup()}catch(err){alert('El archivo no parece ser una copia válida de NQN Service.')}};reader.readAsText(f)
+    const f=document.getElementById('importFile')?.files?.[0];if(!f){alert('Elegí un archivo de copia primero.');return}const reader=new FileReader();reader.onload=()=>{try{const x=JSON.parse(reader.result),source=Array.isArray(x)?x:x.ordenes;if(!Array.isArray(source))throw new Error();if(!confirm('¿Reemplazar los datos actuales por esta copia?'))return;save(ensureClientNumbers(source.map(normalizeOrder)),'Antes de importar copia');if(Array.isArray(x.cleriseventos))saveEvents(x.cleriseventos);if(Array.isArray(x.cierrescaja))window.saveCashClosings(x.cierrescaja);if(Array.isArray(x.transferencias))localStorage.setItem(KEY_TRANSFERS,JSON.stringify(x.transferencias));if(Array.isArray(x.gastos))window.saveExpenses(x.gastos);if(Array.isArray(x.operadores))window.saveOperators(x.operadores);let s=getSettings();s.cloudEverSynced=false;s.cloudTransfersBootstrappedV1=false;s.transfersCloudSeededV2=false;setSettings(s);setCloudQueue([]);clearSession();toast('Copia restaurada');cloudAutoSyncSoon();renderLoginOrSetup()}catch(err){alert('El archivo no parece ser una copia válida de NQN Service.')}};reader.readAsText(f)
   };
   window.runHealthCheck=function(){
     const problems=[];if(!storageSelfTest())problems.push('El navegador no permite almacenamiento local.');const primary=readRowsKey(KEY),mirror=readRowsKey(KEY_MIRROR);if(!validRows(primary))problems.push('La copia principal de órdenes no es válida.');if(!validRows(mirror))problems.push('La copia espejo de órdenes no es válida.');if(validRows(primary)&&validRows(mirror)&&primary.length!==mirror.length)problems.push('Principal y espejo de órdenes tienen distinta cantidad.');if(loadEventsKey(KEY_EVENTS).length!==loadEventsKey(KEY_EVENTS_MIRROR).length)problems.push('Las copias de Cleris no coinciden.');if(readArray(KEY_CASH).length!==readArray(KEY_CASH_MIRROR).length)problems.push('Las copias de caja no coinciden.');if(readArray(KEY_EXPENSES).length!==readArray(KEY_EXPENSES_MIRROR).length)problems.push('Las copias de gastos no coinciden.');if(readArray(KEY_STOCK).length!==readArray(KEY_STOCK_MIRROR).length)problems.push('Las copias de stock no coinciden.');if(readArray(KEY_OPERATORS).length!==readArray(KEY_OPERATORS_MIRROR).length)problems.push('Las copias de operadores no coinciden.');if(!activeAdmins(window.loadOperators()).length)problems.push('No hay administrador activo.');if(problems.length){alert('Revisión del sistema\n\n'+problems.join('\n'));return false}alert('Sistema OK.\n\nÓrdenes: '+load().length+'\nCleris: '+loadEvents().length+'\nCierres de caja: '+window.loadCashClosings().length+'\nGastos locales: '+window.loadExpenses().length+'\nStock local: '+window.loadStock().length+'\nOperadores: '+window.loadOperators().length+'\nAdministrador activo: OK\n\nGastos: sincronización entre dispositivos habilitada mediante Google Drive. Stock continúa local en esta versión.');return true
@@ -2378,6 +2394,7 @@ window.__nqnLegacyBoot=boot;
 
   </script>
   <script src="libro-movimientos.js?v=1"></script>
+  <script src="retiros-efectivo.js?v=1"></script>
   <script src="asistencia.js?v=3"></script>
 </body>
 </html>
