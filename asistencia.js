@@ -16,7 +16,7 @@
   }
   function delayCell(n){return n?'<strong style="color:#b42318">'+duration(n)+'</strong>':'—';}
   function extraCell(n){return n?'<strong style="color:#177245">'+duration(n)+'</strong>':'—';}
-  var events=[], loading=false, selectedMonth='', selectedOperator='', errorText='';
+  var events=[], loading=false, synced=false, selectedMonth='', selectedOperator='', errorText='';
   function esc(x){return String(x==null?'':x).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c];});}
   function op(){return typeof window.currentOperator==='function'?window.currentOperator():null;}
   function admin(){return typeof window.isAdmin==='function'&&window.isAdmin();}
@@ -66,7 +66,7 @@
     });
   }
   async function pull(){
-    var data=await request();events=Array.isArray(data.events)?data.events:[];
+    var data=await request();events=Array.isArray(data.events)?data.events:[];synced=true;
     return events;
   }
   async function post(body){
@@ -152,11 +152,14 @@
       html+='<div class="grid"><div class="field"><label>Mes</label><input id="attMonth" type="month" value="'+esc(selectedMonth)+'" onchange="attChangeMonth(this.value)"></div>';
       if(admin())html+='<div class="field"><label>Empleado</label><select id="attEmployee" onchange="attChangeEmployee(this.value)">'+data.ops.map(function(r){return '<option value="'+esc(r.id)+'" '+(r.id===data.id?'selected':'')+'>'+esc(r.nombre)+'</option>';}).join('')+'</select></div>';
       html+='</div>';
+      if(!synced){html+='<p class="sectionnote" style="color:#b42318">El informe todavía no se actualizó desde el servidor. Tocá Actualizar antes de consultar o guardar el PDF.</p>';}else{
       var t=data.report.total;
       var monthlySummary='<div class="sidecard" style="margin:15px 0"><strong>Resumen del mes · '+esc(data.employee.nombre)+'</strong><p>Jornadas con entrada y salida registradas: '+t.jornadasCompletas+'</p><p>Llegadas tarde: '+t.tardanzas+' · '+duration(t.minutosTarde)+'</p><p>Salidas anticipadas: '+t.salidasAntes+' · '+duration(t.minutosSalida)+'</p><p><strong>Horas extras: '+t.diasExtra+' días · '+duration(t.minutosExtra)+'</strong></p><p>Tiempo a revisar (tardanzas + salidas anticipadas): '+duration(t.minutosTarde+t.minutosSalida)+'</p><p>Sin registro de entrada: '+t.sinIngreso+' días · Sin registro de salida: '+t.sinSalida+' días (no se consideran ausencias automáticamente).</p><p>Las horas extras se calculan después del horario de salida, sólo con entrada y salida registradas; no se compensan automáticamente con tardanzas.</p></div>';
       html+='<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Horario</th><th>Ingreso</th><th>Estado de llegada</th><th>Salida</th><th>Tiempo de tardanza</th><th>Salida anticipada</th><th>Horas extras</th></tr></thead><tbody>';
       html+=data.report.rows.map(function(r){return '<tr><td>'+esc(r.fecha)+'</td><td>'+esc(r.horario)+'</td><td>'+esc(hhmm(r.entrada))+'</td><td>'+statusCell(r)+'</td><td>'+esc(hhmm(r.salida))+'</td><td>'+delayCell(r.tarde)+'</td><td>'+delayCell(r.anticipada)+'</td><td>'+extraCell(r.extra)+'</td></tr>';}).join('');
-      html+='</tbody></table></div>'+monthlySummary+'<div class="actions"><button type="button" class="btn secondary" onclick="attPrint()">Imprimir / Guardar PDF</button></div></section>';
+      html+='</tbody></table></div>'+monthlySummary+'<div class="actions"><button type="button" class="btn secondary" onclick="attPrint()">Imprimir / Guardar PDF</button></div>';
+      }
+      html+='</section>';
     }
     if(admin()&&computer()&&configured()&&getKey()){
       html+='<section class="panel"><div class="panelhead"><div><div class="eyebrow">ADMINISTRACIÓN</div><h3>Corregir fichaje con motivo</h3></div></div>';
@@ -182,7 +185,7 @@
   window.attChangeEmployee=function(v){if(admin()){selectedOperator=v;errorText='';render();}};
   window.attRefresh=async function(){
     if(loading)return;
-    loading=true;try{await pull();errorText='Datos actualizados desde el servidor.';}catch(e){updateError(e);}finally{loading=false;render();}
+    loading=true;synced=false;try{await pull();errorText='Datos actualizados desde el servidor.';}catch(e){updateError(e);}finally{loading=false;render();}
   };
   window.attMark=async function(kind){
     var user=op(),pin=document.getElementById('attPin')?.value||'';
@@ -213,6 +216,7 @@
     }catch(e){updateError(e);}finally{loading=false;render();}
   };
   window.attPrint=function(){
+    if(!synced){notify('Actualizá los datos desde el servidor antes de imprimir o guardar el informe.');return;}
     var d=selectData();if(!d)return;
     var t=d.report.total;
     var rows=d.report.rows.map(function(r){return '<tr><td>'+esc(r.fecha)+'</td><td>'+esc(r.horario)+'</td><td>'+esc(hhmm(r.entrada))+'</td><td>'+statusCell(r)+'</td><td>'+esc(hhmm(r.salida))+'</td><td>'+delayCell(r.tarde)+'</td><td>'+delayCell(r.anticipada)+'</td><td>'+extraCell(r.extra)+'</td></tr>';}).join('');
@@ -224,7 +228,7 @@
     addMenu();selectedMonth=selectedMonth||today().slice(0,7);
     var user=op();if(!user)return;
     selectedOperator=admin()?(selectedOperator||user.id):user.id;
-    events=[];errorText='';
+    events=[];synced=false;errorText='';
     render();
     if(configured()&&getKey()&&computer())window.attRefresh();
   }
