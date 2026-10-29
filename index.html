@@ -231,7 +231,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredIns
 window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;updateInstallButton();toast('NQN Service instalada')});
 function updateInstallButton(){let b=document.getElementById('installPwaBtn');if(b)b.classList.toggle('show',!!deferredInstallPrompt)}
 async function installPwa(){if(!deferredInstallPrompt){alert('Si Chrome no muestra la instalación todavía, recargá la página una vez y volvé a intentar.');return}deferredInstallPrompt.prompt();try{await deferredInstallPrompt.userChoice}catch(e){}deferredInstallPrompt=null;updateInstallButton()}
-const OFFLINE_CACHE='nqn-service-v950-asistencia-horas-extra';
+const OFFLINE_CACHE='nqn-service-v951-buscador-gastos';
 const OFFLINE_ASSETS=['./','./index.html','./NQN_SERVICE_ESTABLE.html','./manifest.webmanifest','./turnos.js','./asistencia.js?v=3','./icons/icon-192.png','./icons/icon-512.png'];
 let swReloading=false;
 async function ensureOfflineReady(){
@@ -2268,39 +2268,59 @@ window.__nqnLegacyBoot=boot;
     const all=window.loadExpenses(),visible=window.isAdmin()?all:all.filter(x=>operatorOwns(x,op));
     const sorted=[...visible].sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha))||String(b.creado).localeCompare(String(a.creado)));
     window._expenseHistoryData=sorted;
+    window._expenseHistoryPage=0;
     const today=localDay(),todayRows=visible.filter(x=>x.fecha===today),todayTotal=todayRows.reduce((a,x)=>a+Number(x.monto||0),0);
-    document.getElementById('view').innerHTML=`<section class="panel" style="margin-top:0"><div class="panelhead"><div><div class="eyebrow">NUEVO GASTO</div><h3>Cargar gasto</h3></div><span class="badge">Hoy: ${m(todayTotal)}</span></div><form class="grid" onsubmit="saveExpenseForm(event)"><div class="field short"><label>Fecha</label><input id="expenseDate" type="date" value="${today}" readonly></div><div class="field"><label>Monto *</label><input id="expenseAmount" type="text" inputmode="decimal" required autofocus></div><div class="field"><label>Medio de pago *</label><select id="expensePayment" onchange="expensePaymentChanged(true)">${EXPENSE_PAYMENTS.map(x=>`<option>${e(x)}</option>`).join('')}</select><button id="openMercadoPagoBtn" type="button" class="btn secondary small" style="display:none;margin-top:8px" onclick="openMercadoPago()">Abrir Mercado Pago</button></div><div class="field"><label>Tipo de gasto *</label><select id="expenseCategory" onchange="expenseCategoryChanged()">${EXPENSE_CATEGORIES.map(x=>`<option>${e(x)}</option>`).join('')}</select></div><div class="field full" id="expenseOrderField" style="display:none"><label>Orden de trabajo *</label><input id="expenseOrderSearch" list="expenseOrderOptions"><datalist id="expenseOrderOptions"></datalist><div id="expenseOrderConfirm" class="muted" style="margin-top:6px">Buscá por OT o cliente.</div></div><div class="field full"><label>Observación <span id="expenseObsRequired" class="muted">(opcional)</span></label><input id="expenseObs"></div><div class="actions full"><button class="btn primary" type="submit">Guardar gasto</button></div></form></section><section class="panel"><div class="panelhead"><div><div class="eyebrow">HISTORIAL</div><h3>${window.isAdmin()?'Gastos registrados':'Mis gastos'}</h3></div><span class="badge">${visible.length}</span></div><div class="grid" style="margin:12px 0"><div class="field full"><label for="expenseHistoryQuery">Buscar gastos</label><input type="search" id="expenseHistoryQuery" placeholder="Alquiler, repuesto, OT 036, importe..." oninput="filterExpenseHistory()"></div><div class="field"><label for="expenseHistoryFrom">Desde</label><input type="date" id="expenseHistoryFrom" onchange="filterExpenseHistory()"></div><div class="field"><label for="expenseHistoryTo">Hasta</label><input type="date" id="expenseHistoryTo" onchange="filterExpenseHistory()"></div><div class="field"><label for="expenseHistoryPayment">Medio de pago</label><select id="expenseHistoryPayment" onchange="filterExpenseHistory()"><option value="">Todos</option>${EXPENSE_PAYMENTS.map(x=>`<option value="${e(x)}">${e(x)}</option>`).join('')}</select></div><div class="actions"><button type="button" class="btn secondary small" onclick="clearExpenseHistoryFilters()">Limpiar filtros</button></div></div><div id="expenseHistorySummary" class="muted" style="margin:8px 0"></div><div class="tablewrap" id="expenseHistoryWrap"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>OT</th><th>Medio</th><th>Observación</th><th>Monto</th><th></th></tr></thead><tbody id="expenseHistoryRows"></tbody></table></div><div class="empty" id="expenseHistoryEmpty" style="display:none"></div></section>`;
+    document.getElementById('view').innerHTML=`<section class="panel" style="margin-top:0"><div class="panelhead"><div><div class="eyebrow">NUEVO GASTO</div><h3>Cargar gasto</h3></div><span class="badge">Hoy: ${m(todayTotal)}</span></div><form class="grid" onsubmit="saveExpenseForm(event)"><div class="field short"><label>Fecha</label><input id="expenseDate" type="date" value="${today}" readonly></div><div class="field"><label>Monto *</label><input id="expenseAmount" type="text" inputmode="decimal" required autofocus></div><div class="field"><label>Medio de pago *</label><select id="expensePayment" onchange="expensePaymentChanged(true)">${EXPENSE_PAYMENTS.map(x=>`<option>${e(x)}</option>`).join('')}</select><button id="openMercadoPagoBtn" type="button" class="btn secondary small" style="display:none;margin-top:8px" onclick="openMercadoPago()">Abrir Mercado Pago</button></div><div class="field"><label>Tipo de gasto *</label><select id="expenseCategory" onchange="expenseCategoryChanged()">${EXPENSE_CATEGORIES.map(x=>`<option>${e(x)}</option>`).join('')}</select></div><div class="field full" id="expenseOrderField" style="display:none"><label>Orden de trabajo *</label><input id="expenseOrderSearch" list="expenseOrderOptions"><datalist id="expenseOrderOptions"></datalist><div id="expenseOrderConfirm" class="muted" style="margin-top:6px">Buscá por OT o cliente.</div></div><div class="field full"><label>Observación <span id="expenseObsRequired" class="muted">(opcional)</span></label><input id="expenseObs"></div><div class="actions full"><button class="btn primary" type="submit">Guardar gasto</button></div></form></section><section class="panel"><div class="panelhead"><div><div class="eyebrow">HISTORIAL</div><h3>${window.isAdmin()?'Gastos registrados':'Mis gastos'}</h3></div><span class="badge">${visible.length}</span></div><div class="grid" style="margin:12px 0"><div class="field full"><label for="expenseHistoryQuery">Buscar gastos</label><input type="search" id="expenseHistoryQuery" placeholder="Alquiler, repuesto, OT 036, importe..." oninput="filterExpenseHistory()"></div><div class="field"><label for="expenseHistoryFrom">Desde</label><input type="date" id="expenseHistoryFrom" onchange="filterExpenseHistory()"></div><div class="field"><label for="expenseHistoryTo">Hasta</label><input type="date" id="expenseHistoryTo" onchange="filterExpenseHistory()"></div><div class="field"><label for="expenseHistoryCategory">Categoría</label><select id="expenseHistoryCategory" onchange="filterExpenseHistory()"><option value="">Todas</option>${[...new Set(visible.map(x=>String(x.categoria||"Otro")))].sort((a,b)=>a.localeCompare(b,"es")).map(x=>`<option value="${e(x)}">${e(x)}</option>`).join("")}</select></div><div class="field"><label for="expenseHistoryPayment">Medio de pago</label><select id="expenseHistoryPayment" onchange="filterExpenseHistory()"><option value="">Todos</option>${EXPENSE_PAYMENTS.map(x=>`<option value="${e(x)}">${e(x)}</option>`).join('')}</select></div><div class="actions"><button type="button" class="btn secondary small" onclick="clearExpenseHistoryFilters()">Limpiar filtros</button></div></div><div id="expenseHistorySummary" class="muted" style="margin:8px 0"></div><div class="tablewrap" id="expenseHistoryWrap"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>OT</th><th>Medio</th><th>Observación</th><th>Monto</th><th></th></tr></thead><tbody id="expenseHistoryRows"></tbody></table></div><div class="empty" id="expenseHistoryEmpty" style="display:none"></div><div id="expenseHistoryPager" class="actions" style="margin-top:12px"></div></section>`;
     window.expenseCategoryChanged();
     window.expensePaymentChanged();
     window.filterExpenseHistory();
   };
-  window.filterExpenseHistory=function(){
+  window.filterExpenseHistory=function(keepPage=false){
+    if(!keepPage)window._expenseHistoryPage=0;
     const all=Array.isArray(window._expenseHistoryData)?window._expenseHistoryData:[];
     const normal=v=>String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
     const words=normal(document.getElementById('expenseHistoryQuery')?.value||'').trim().split(/\s+/).filter(Boolean);
     const from=document.getElementById('expenseHistoryFrom')?.value||'',to=document.getElementById('expenseHistoryTo')?.value||'';
     const payment=document.getElementById('expenseHistoryPayment')?.value||'';
-    const matches=all.filter(x=>{
+    const category=document.getElementById('expenseHistoryCategory')?.value||'';
+    const invalidDates=!!from&&!!to&&from>to;
+    const matches=invalidDates?[]:all.filter(x=>{
       const date=String(x.fecha||'').slice(0,10);
       if(from&&date<from)return false;
       if(to&&date>to)return false;
       if(payment&&String(x.medioPago||'')!==payment)return false;
-      const searchable=normal([date,dateLabel(x.fecha),x.categoria,x.medioPago,x.observacion,x.orderCliente,
+      if(category&&String(x.categoria||'Otro')!==category)return false;
+      const searchable=normal([date,dateLabel(x.fecha),x.categoria,x.medioPago,x.observacion,x.orderCliente,x.orderEquipo,x.operador,
         x.orderNumero?'OT '+fmtOrder(x.orderNumero):'',x.orderNumero||'',x.monto||'',m(x.monto)].join(' '));
       return words.every(w=>searchable.includes(w));
     });
-    const limit=150,shown=matches.slice(0,limit);
+    const pageSize=50,pageCount=Math.max(1,Math.ceil(matches.length/pageSize));
+    const page=Math.max(0,Math.min(pageCount-1,Number(window._expenseHistoryPage)||0));
+    window._expenseHistoryPage=page;
+    const start=page*pageSize,shown=matches.slice(start,start+pageSize);
     const tbody=document.getElementById('expenseHistoryRows');if(!tbody)return;
-    tbody.innerHTML=shown.map(x=>`<tr><td>${dateLabel(x.fecha)}</td><td><strong>${e(x.categoria)}</strong></td><td>${x.orderNumero?'<strong>OT '+fmtOrder(x.orderNumero)+'</strong><div class="muted">'+e(x.orderCliente||'')+'</div>':'-'}</td><td>${e(x.medioPago)}</td><td>${e(x.observacion||'-')}</td><td><strong>${m(x.monto)}</strong></td><td class="right"><button class="btn secondary small" onclick="editExpense('${e(x.id)}')">Editar</button> <button class="btn danger small" onclick="deleteExpense('${e(x.id)}')">Eliminar</button></td></tr>`).join('');
+    tbody.innerHTML=shown.map(x=>`<tr><td>${e(dateLabel(x.fecha))}</td><td><strong>${e(x.categoria)}</strong></td><td>${x.orderNumero?'<strong>OT '+fmtOrder(x.orderNumero)+'</strong><div class="muted">'+e(x.orderCliente||'')+'</div>':'-'}</td><td>${e(x.medioPago)}</td><td>${e(x.observacion||'-')}</td><td><strong>${m(x.monto)}</strong></td><td class="right nowrap"><button type="button" class="btn secondary small" data-gasto-accion="editar" data-gasto-id="${e(x.id)}">Editar</button> <button type="button" class="btn danger small" data-gasto-accion="eliminar" data-gasto-id="${e(x.id)}">Eliminar</button></td></tr>`).join('');
+    tbody.onclick=event=>{
+      const button=event.target.closest('button[data-gasto-accion]');
+      if(!button||!tbody.contains(button))return;
+      if(button.dataset.gastoAccion==='editar')window.editExpense(button.dataset.gastoId);
+      else if(button.dataset.gastoAccion==='eliminar')window.deleteExpense(button.dataset.gastoId);
+    };
     const total=matches.reduce((sum,x)=>sum+Number(x.monto||0),0);
     const summary=document.getElementById('expenseHistorySummary');
-    if(summary)summary.textContent=`${matches.length} gasto${matches.length===1?'':'s'} encontrado${matches.length===1?'':'s'} · Total filtrado: ${m(total)}${matches.length>limit?' · Mostrando los primeros '+limit:''}`;
+    if(summary)summary.textContent=`${matches.length} gasto${matches.length===1?'':'s'} encontrado${matches.length===1?'':'s'} · Total filtrado: ${m(total)}${matches.length?' · Mostrando '+(start+1)+'–'+(start+shown.length):''}`;
     const table=document.getElementById('expenseHistoryWrap'),empty=document.getElementById('expenseHistoryEmpty');
     if(table)table.style.display=matches.length?'':'none';
-    if(empty){empty.style.display=matches.length?'none':'';empty.textContent=all.length?'No hay gastos que coincidan con los filtros.':'Todavía no cargaste gastos.';}
+    if(empty){empty.style.display=matches.length?'none':'';empty.textContent=invalidDates?'La fecha «Desde» no puede ser posterior a «Hasta».':all.length?'No hay gastos que coincidan con los filtros.':'Todavía no cargaste gastos.';}
+    const pager=document.getElementById('expenseHistoryPager');
+    if(pager)pager.innerHTML=matches.length>pageSize?`<button type="button" class="btn secondary small" onclick="changeExpenseHistoryPage(-1)" ${page===0?'disabled':''}>← Anterior</button><span class="muted" style="align-self:center">Página ${page+1} de ${pageCount}</span><button type="button" class="btn secondary small" onclick="changeExpenseHistoryPage(1)" ${page===pageCount-1?'disabled':''}>Siguiente →</button>`:'';
+  };
+  window.changeExpenseHistoryPage=function(delta){
+    window._expenseHistoryPage=(Number(window._expenseHistoryPage)||0)+Number(delta||0);
+    window.filterExpenseHistory(true);
   };
   window.clearExpenseHistoryFilters=function(){
-    for(const id of ['expenseHistoryQuery','expenseHistoryFrom','expenseHistoryTo','expenseHistoryPayment']){const el=document.getElementById(id);if(el)el.value='';}
+    for(const id of ['expenseHistoryQuery','expenseHistoryFrom','expenseHistoryTo','expenseHistoryCategory','expenseHistoryPayment']){const el=document.getElementById(id);if(el)el.value='';}
     window.filterExpenseHistory();
   };
   window.expensePaymentChanged=function(openNow=false){
