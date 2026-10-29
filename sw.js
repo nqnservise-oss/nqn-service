@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nqn-service-v949-asistencia-duraciones';
+const CACHE_NAME = 'nqn-service-v950-asistencia-horas-extra';
 const APP_SHELL = [
   './',
   './index.html',
@@ -7,7 +7,7 @@ const APP_SHELL = [
   './turnos.js',
   './cierre-z.js?v=942',
   './libro-movimientos.js?v=1',
-  './asistencia.js?v=2',
+  './asistencia.js?v=3',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-maskable-512.png'
