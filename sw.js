@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nqn-service-v950-asistencia-horas-extra';
+const CACHE_NAME = 'nqn-service-v951-buscador-gastos';
 const APP_SHELL = [
   './',
   './index.html',
