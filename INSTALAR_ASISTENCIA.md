@@ -1,14 +1,19 @@
 # Control de asistencia - NQN Service
 
-Estado: **implementado en la rama de revisión; todavía NO publicado ni activado en el servidor**.
+Estado: **cambios de asistencia en revisión; no se confirma que estén publicados ni activados en el servidor**.
 
 ## Reglas confirmadas
 
-- Jornada de lunes a viernes: 09:00 a 17:00 (días sin fichaje = pendientes de revisión, no ausencias automáticas).
-- Tolerancia de ingreso hasta 09:15 inclusive.
-- A partir de las 09:16, la tardanza cuenta desde las 09:00: 09:20 = 20 minutos.
-- Salida anterior a las 17:00: todos los minutos anticipados.
-- Sumatoria mensual por empleado; reporte imprimible / Guardar como PDF.
+- Jornada de lunes a viernes. Hasta el 27/10/2026 se respeta el horario anterior, 09:00 a 17:00, con tolerancia de ingreso hasta 09:15.
+- Desde el **28/10/2026**, horario de verano **08:30 a 16:30**; tolerancia de entrada hasta **08:45 inclusive**.
+- A partir de las 08:46, la tardanza cuenta completa desde las 08:30: 08:46 = 16 minutos. Las entradas dentro de la tolerancia no generan tardanza.
+- Salida anterior a las 16:30: se registran todos los minutos anticipados, sin compensar automáticamente con ingreso temprano.
+- **Horas extras:** desde el 28/10/2026 se computa el tiempo trabajado después de las 16:30 (para fechas anteriores, después de las 17:00). Requiere entrada y salida; si la entrada es posterior al horario de salida, se cuenta desde la entrada real. No se compensa con tardanzas.
+- **Jornadas registradas:** se suma sólo un día que tenga entrada y salida en orden. No reemplaza la revisión de ausencias, licencias o feriados.
+- La vista del empleado muestra por fecha el horario, la hora de ingreso, un estado «Llegada tarde» **en rojo** si corresponde, y la duración de la tardanza o salida anticipada.
+- Para evitar exportar un PDF con fichajes vacíos o no actualizados, primero se requiere una respuesta correcta del servidor al presionar **Actualizar**. Si la actualización falla, el reporte permanece bloqueado.
+- El resumen del mes aparece **debajo de los registros diarios** en pantalla, y **encima de la tabla diaria** en la impresión / Guardar como PDF. Ambos muestran jornadas registradas, cantidad y duración de tardanzas, salidas anticipadas y horas extras, además de fichajes faltantes; las horas extras se detallan por fecha.
+- Los días sin fichaje quedan pendientes de revisión; nunca se interpretan como ausencias automáticas. El cambio de horario no reinterpreta los días previos.
 - Sólo PC vinculada al taller, con PIN personal al fichar; la hora la asigna Apps Script.
 - Una entrada y una salida por día; ajustes sólo administrador con PIN y motivo; ningún ajuste borra los eventos originales.
 - Sin internet no es posible fichar; jamás se simula que un fichaje fue confirmado.
@@ -45,16 +50,25 @@ El reporte considera lunes a viernes; **feriados, licencias, vacaciones y turnos
 
 | Caso | Resultado esperado |
 | --- | --- |
-| Entrada 09:00 | 0 min de tardanza |
-| Entrada 09:15 | 0 min de tardanza |
-| Entrada 09:16 | 16 min de tardanza |
-| Entrada 09:20 | 20 min de tardanza |
-| Salida 16:40 | 20 min anticipados |
-| Salida 17:00 | 0 min anticipados |
+| Entrada 27/10 a las 09:20 | 20 min tarde con horario anterior |
+| Entrada 28/10 a las 08:30 | 0 min de tardanza |
+| Entrada 28/10 a las 08:39 | 0 min de tardanza |
+| Entrada 28/10 a las 08:45 | 0 min de tardanza |
+| Entrada 28/10 a las 08:46 | 16 min de tardanza, etiqueta roja |
+| Salida 28/10 a las 16:01 | 29 min anticipados |
+| Salida 28/10 a las 16:30 | 0 min anticipados |
+| Ingreso 08:30, salida 17:15 el 28/10 | 45 min extra; 0 min anticipados |
+| Ingreso 09:00, salida 17:15 el 28/10 | 30 min tarde y 45 min extra, sin compensación |
+| Ingreso 16:45, salida 17:15 el 28/10 | 30 min extra, tiempo real trabajado |
+| Sólo salida 17:15 sin ingreso registrado | 0 min extra; fichaje incompleto |
+| Ingreso 08:30 sin salida registrada | 0 min extra; fichaje incompleto |
+| Mes con entrada 08:39 y salida 16:01 el 28/10 | 0 tardanzas; 29 min de salida anticipada, sólo en su fecha |
+| Final de tabla de historial | Resumen mensual debajo, totales independientes |
 | Segunda entrada mismo día | Rechazada por servidor |
 | Salida sin ingreso | Rechazada por servidor |
 | Celular o PC no autorizada | Sin fichaje |
 | Sin conexión de red | Sin fichaje, sin confirmación falsa |
 | Corrección con admin PIN y motivo | Fichaje original conservado + ajuste auditable |
 | Empleado consulta reporte | Sólo su ficha visible en interfaz |
-| Cierre de mes | Total tardanzas y retiros anticipados por separado y total general |
+| Cierre de mes | Total tardanzas, retiros anticipados y horas extras por separado (cantidad de días y tiempo total) |
+| Exportación del reporte | Resumen al inicio, detalle diario con columna Horas extras, opción Guardar como PDF y orientación horizontal A4 |

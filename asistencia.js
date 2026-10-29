@@ -6,12 +6,29 @@
   'use strict';
   var KEY='nqn_asistencia_puesto_v1';
   var TZ='America/Argentina/Buenos_Aires';
-  var events=[], loading=false, selectedMonth='', selectedOperator='', errorText='';
+  // Regla de verano vigente desde el 28/10/2026. La historia anterior no se recalcula.
+  function schedule(date){return date>='2026-10-28'?{start:510,end:990,grace:15}:{start:540,end:1020,grace:15};}
+  function clock(n){return String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0');}
+  function statusCell(r){
+    if(!r.entrada)return '<span style="color:#64748b">Sin ingreso registrado</span>';
+    if(r.tarde)return '<strong style="color:#b42318">Llegada tarde</strong>';
+    return '<span style="color:#177245">A horario</span>';
+  }
+  function delayCell(n){return n?'<strong style="color:#b42318">'+duration(n)+'</strong>':'—';}
+  function extraCell(n){return n?'<strong style="color:#177245">'+duration(n)+'</strong>':'—';}
+  var events=[], loading=false, synced=false, selectedMonth='', selectedOperator='', errorText='';
   function esc(x){return String(x==null?'':x).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c];});}
   function op(){return typeof window.currentOperator==='function'?window.currentOperator():null;}
   function admin(){return typeof window.isAdmin==='function'&&window.isAdmin();}
   function today(){var p=new Intl.DateTimeFormat('es-AR',{timeZone:TZ,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()),get=function(k){return p.find(function(x){return x.type===k;}).value;};return get('year')+'-'+get('month')+'-'+get('day');}
   function minute(h){var a=String(h||'').split(':');return Number(a[0])*60+Number(a[1]);}
+  // El tiempo extra empieza al fin del turno o al ingreso real, el que sea posterior.
+  function extraMinutes(entrada,salida,shiftEnd){
+    if(!entrada||!salida)return 0;
+    var start=minute(entrada),end=minute(salida);
+    if(!Number.isFinite(start)||!Number.isFinite(end)||end<start)return 0;
+    return Math.max(0,end-Math.max(shiftEnd,start));
+  }
   // Conservar los minutos originales; convertir solo para la presentación.
   function duration(value){var n=Math.max(0,Math.floor(Number(value)||0)),h=Math.floor(n/60),m=n%60;if(!h)return n+' '+(n===1?'minuto':'minutos');if(!m)return h+' '+(h===1?'hora':'horas');return h+' '+(h===1?'hora':'horas')+' y '+m+' '+(m===1?'minuto':'minutos');}
   function hhmm(x){return /^\d{2}:\d{2}$/.test(String(x||''))?x:'--:--';}
@@ -49,7 +66,7 @@
     });
   }
   async function pull(){
-    var data=await request();events=Array.isArray(data.events)?data.events:[];
+    var data=await request();events=Array.isArray(data.events)?data.events:[];synced=true;
     return events;
   }
   async function post(body){
@@ -84,15 +101,19 @@
     }return res;
   }
   function report(id,ym){
-    var rows=[],tot={tardanzas:0,minutosTarde:0,salidasAntes:0,minutosSalida:0,sinIngreso:0,sinSalida:0};
+    var rows=[],tot={jornadasCompletas:0,tardanzas:0,minutosTarde:0,salidasAntes:0,minutosSalida:0,diasExtra:0,minutosExtra:0,sinIngreso:0,sinSalida:0};
     monthDays(ym).forEach(function(date){
-      var s=effective(id,date),late=s.entrada&&minute(s.entrada)>555?minute(s.entrada)-540:0;
-      var early=s.salida&&minute(s.salida)<1020?1020-minute(s.salida):0;
+      var s=effective(id,date),shift=schedule(date);
+      var late=s.entrada&&minute(s.entrada)>shift.start+shift.grace?minute(s.entrada)-shift.start:0;
+      var early=s.salida&&minute(s.salida)<shift.end?shift.end-minute(s.salida):0;
+      var extra=extraMinutes(s.entrada,s.salida,shift.end);
+      if(s.entrada&&s.salida&&minute(s.salida)>=minute(s.entrada))tot.jornadasCompletas++;
       if(late){tot.tardanzas++;tot.minutosTarde+=late;}
       if(early){tot.salidasAntes++;tot.minutosSalida+=early;}
+      if(extra){tot.diasExtra++;tot.minutosExtra+=extra;}
       if(!s.entrada)tot.sinIngreso++;
       if(!s.salida)tot.sinSalida++;
-      rows.push({fecha:date,entrada:s.entrada||'',salida:s.salida||'',tarde:late,anticipada:early});
+      rows.push({fecha:date,horario:clock(shift.start)+'–'+clock(shift.end),entrada:s.entrada||'',salida:s.salida||'',tarde:late,anticipada:early,extra:extra});
     });
     return {rows:rows,total:tot};
   }
@@ -117,8 +138,8 @@
     var date=today();if(!selectedMonth)selectedMonth=date.slice(0,7);
     var data=selectData(),todayState=effective(user.id,date);
     var badge=todayState.salida?'Jornada cerrada':todayState.entrada?'Ingreso registrado':'Sin ingreso registrado';
-    var html='<section class="panel"><div class="panelhead"><div><div class="eyebrow">PERSONAL · 09:00 A 17:00</div><h3>Control de asistencia</h3></div><span class="badge">'+esc(badge)+'</span></div>';
-    html+='<p class="sectionnote">Tolerancia hasta 09:15 inclusive. Si se supera, se cuentan todos los minutos desde las 09:00. El servidor fija la hora oficial del registro.</p>';
+    var shift=schedule(date);var html='<section class="panel"><div class="panelhead"><div><div class="eyebrow">PERSONAL · '+esc(clock(shift.start))+' A '+esc(clock(shift.end))+'</div><h3>Control de asistencia</h3></div><span class="badge">'+esc(badge)+'</span></div>';
+    html+='<p class="sectionnote">Tolerancia hasta '+esc(clock(shift.start+shift.grace))+' inclusive. Si se supera, se cuentan todos los minutos desde las '+esc(clock(shift.start))+'. El servidor fija la hora oficial del registro.</p>';
     if(!computer())html+='<div class="alert red"><strong>Sólo computadora del taller</strong><span>Los fichajes no están habilitados en celulares.</span></div>';
     else if(!configured())html+='<div class="alert red"><strong>Sin conexión a la nube</strong><span>Configurá Google Drive en Copias antes de usar asistencia. No hay fichajes offline.</span></div>';
     else if(!getKey())html+='<div class="alert red"><strong>Esta PC no está vinculada</strong><span>El administrador debe ingresar la clave de puesto asignada en Apps Script.</span></div>';
@@ -131,11 +152,14 @@
       html+='<div class="grid"><div class="field"><label>Mes</label><input id="attMonth" type="month" value="'+esc(selectedMonth)+'" onchange="attChangeMonth(this.value)"></div>';
       if(admin())html+='<div class="field"><label>Empleado</label><select id="attEmployee" onchange="attChangeEmployee(this.value)">'+data.ops.map(function(r){return '<option value="'+esc(r.id)+'" '+(r.id===data.id?'selected':'')+'>'+esc(r.nombre)+'</option>';}).join('')+'</select></div>';
       html+='</div>';
+      if(!synced){html+='<p class="sectionnote" style="color:#b42318">El informe todavía no se actualizó desde el servidor. Tocá Actualizar antes de consultar o guardar el PDF.</p>';}else{
       var t=data.report.total;
-      html+='<div class="sidecard" style="margin:15px 0"><strong>'+esc(data.employee.nombre)+'</strong><p>Llegadas tarde: '+t.tardanzas+' · '+duration(t.minutosTarde)+'</p><p>Salidas anticipadas: '+t.salidasAntes+' · '+duration(t.minutosSalida)+'</p><p><strong>Total a revisar: '+duration(t.minutosTarde+t.minutosSalida)+'</strong></p><p>Sin registro de entrada: '+t.sinIngreso+' días · Sin registro de salida: '+t.sinSalida+' días (no se consideran ausencias automáticamente).</p></div>';
-      html+='<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Ingreso</th><th>Salida</th><th>Tiempo de tardanza</th><th>Salida anticipada</th></tr></thead><tbody>';
-      html+=data.report.rows.map(function(r){return '<tr><td>'+esc(r.fecha)+'</td><td>'+esc(hhmm(r.entrada))+'</td><td>'+esc(hhmm(r.salida))+'</td><td>'+duration(r.tarde)+'</td><td>'+duration(r.anticipada)+'</td></tr>';}).join('');
-      html+='</tbody></table></div><div class="actions"><button type="button" class="btn secondary" onclick="attPrint()">Imprimir / Guardar PDF</button></div></section>';
+      var monthlySummary='<div class="sidecard" style="margin:15px 0"><strong>Resumen del mes · '+esc(data.employee.nombre)+'</strong><p>Jornadas con entrada y salida registradas: '+t.jornadasCompletas+'</p><p>Llegadas tarde: '+t.tardanzas+' · '+duration(t.minutosTarde)+'</p><p>Salidas anticipadas: '+t.salidasAntes+' · '+duration(t.minutosSalida)+'</p><p><strong>Horas extras: '+t.diasExtra+' días · '+duration(t.minutosExtra)+'</strong></p><p>Tiempo a revisar (tardanzas + salidas anticipadas): '+duration(t.minutosTarde+t.minutosSalida)+'</p><p>Sin registro de entrada: '+t.sinIngreso+' días · Sin registro de salida: '+t.sinSalida+' días (no se consideran ausencias automáticamente).</p><p>Las horas extras se calculan después del horario de salida, sólo con entrada y salida registradas; no se compensan automáticamente con tardanzas.</p></div>';
+      html+='<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Horario</th><th>Ingreso</th><th>Estado de llegada</th><th>Salida</th><th>Tiempo de tardanza</th><th>Salida anticipada</th><th>Horas extras</th></tr></thead><tbody>';
+      html+=data.report.rows.map(function(r){return '<tr><td>'+esc(r.fecha)+'</td><td>'+esc(r.horario)+'</td><td>'+esc(hhmm(r.entrada))+'</td><td>'+statusCell(r)+'</td><td>'+esc(hhmm(r.salida))+'</td><td>'+delayCell(r.tarde)+'</td><td>'+delayCell(r.anticipada)+'</td><td>'+extraCell(r.extra)+'</td></tr>';}).join('');
+      html+='</tbody></table></div>'+monthlySummary+'<div class="actions"><button type="button" class="btn secondary" onclick="attPrint()">Imprimir / Guardar PDF</button></div>';
+      }
+      html+='</section>';
     }
     if(admin()&&computer()&&configured()&&getKey()){
       html+='<section class="panel"><div class="panelhead"><div><div class="eyebrow">ADMINISTRACIÓN</div><h3>Corregir fichaje con motivo</h3></div></div>';
@@ -161,7 +185,7 @@
   window.attChangeEmployee=function(v){if(admin()){selectedOperator=v;errorText='';render();}};
   window.attRefresh=async function(){
     if(loading)return;
-    loading=true;try{await pull();errorText='Datos actualizados desde el servidor.';}catch(e){updateError(e);}finally{loading=false;render();}
+    loading=true;synced=false;try{await pull();errorText='Datos actualizados desde el servidor.';}catch(e){updateError(e);}finally{loading=false;render();}
   };
   window.attMark=async function(kind){
     var user=op(),pin=document.getElementById('attPin')?.value||'';
@@ -192,18 +216,19 @@
     }catch(e){updateError(e);}finally{loading=false;render();}
   };
   window.attPrint=function(){
+    if(!synced){notify('Actualizá los datos desde el servidor antes de imprimir o guardar el informe.');return;}
     var d=selectData();if(!d)return;
     var t=d.report.total;
-    var rows=d.report.rows.map(function(r){return '<tr><td>'+esc(r.fecha)+'</td><td>'+esc(hhmm(r.entrada))+'</td><td>'+esc(hhmm(r.salida))+'</td><td>'+duration(r.tarde)+'</td><td>'+duration(r.anticipada)+'</td></tr>';}).join('');
+    var rows=d.report.rows.map(function(r){return '<tr><td>'+esc(r.fecha)+'</td><td>'+esc(r.horario)+'</td><td>'+esc(hhmm(r.entrada))+'</td><td>'+statusCell(r)+'</td><td>'+esc(hhmm(r.salida))+'</td><td>'+delayCell(r.tarde)+'</td><td>'+delayCell(r.anticipada)+'</td><td>'+extraCell(r.extra)+'</td></tr>';}).join('');
     var w=window.open('','_blank');if(!w){alert('Permití ventanas emergentes para exportar el reporte.');return;}
-    var doc='<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Asistencia '+esc(d.employee.nombre)+'</title><style>body{font:14px Arial,sans-serif;color:#17243a;margin:35px}table{width:100%;border-collapse:collapse;margin-top:22px}th,td{border:1px solid #ccc;padding:8px;text-align:left}th{background:#eef2f6}h1{color:#0d5bd8}@media print{button{display:none}}</style></head><body><h1>NQN Service · Asistencia</h1><p><b>Empleado:</b> '+esc(d.employee.nombre)+' · <b>Mes:</b> '+esc(selectedMonth)+'</p><p><b>Tardanzas:</b> '+t.tardanzas+' ('+duration(t.minutosTarde)+') · <b>Salidas anticipadas:</b> '+t.salidasAntes+' ('+duration(t.minutosSalida)+')</p><p><b>Total a revisar:</b> '+duration(t.minutosTarde+t.minutosSalida)+' · <b>Sin entrada:</b> '+t.sinIngreso+' · <b>Sin salida:</b> '+t.sinSalida+'</p><p>Los días sin fichaje requieren revisión; no constituyen ausencias confirmadas.</p><table><thead><tr><th>Fecha</th><th>Ingreso</th><th>Salida</th><th>Tiempo de tardanza</th><th>Salida anticipada</th></tr></thead><tbody>'+rows+'</tbody></table><p>Reporte de consulta, sin descuento salarial automático.</p><button onclick="window.print()">Imprimir / Guardar PDF</button></body></html>';
+    var doc='<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Asistencia '+esc(d.employee.nombre)+'</title><style>body{font:14px Arial,sans-serif;color:#17243a;margin:35px}@page{size:A4 landscape;margin:12mm}table{width:100%;border-collapse:collapse;margin-top:15px;font-size:11px}th,td{border:1px solid #ccc;padding:5px;text-align:left}thead{display:table-header-group}tr{break-inside:avoid}th{background:#eef2f6}h1{color:#0d5bd8}@media print{button{display:none}}</style></head><body><h1>NQN Service · Asistencia</h1><p><b>Empleado:</b> '+esc(d.employee.nombre)+' · <b>Mes:</b> '+esc(selectedMonth)+'</p><p><b>Jornadas con entrada y salida registradas:</b> '+t.jornadasCompletas+'</p><p><b>Tardanzas:</b> '+t.tardanzas+' ('+duration(t.minutosTarde)+') · <b>Salidas anticipadas:</b> '+t.salidasAntes+' ('+duration(t.minutosSalida)+')</p><p><b>Horas extras:</b> '+t.diasExtra+' días ('+duration(t.minutosExtra)+')</p><p><b>Tiempo a revisar (tardanzas + salidas anticipadas):</b> '+duration(t.minutosTarde+t.minutosSalida)+' · <b>Sin entrada:</b> '+t.sinIngreso+' · <b>Sin salida:</b> '+t.sinSalida+'</p><p>Los días sin fichaje requieren revisión; no constituyen ausencias confirmadas. Horas extras: sólo el tiempo trabajado después del horario de salida, con entrada y salida registradas; no se compensan automáticamente con tardanzas.</p><table><thead><tr><th>Fecha</th><th>Horario</th><th>Ingreso</th><th>Estado de llegada</th><th>Salida</th><th>Tiempo de tardanza</th><th>Salida anticipada</th><th>Horas extras</th></tr></thead><tbody>'+rows+'</tbody></table><p>Reporte de consulta, sin descuento salarial automático.</p><button onclick="window.print()">Imprimir / Guardar PDF</button></body></html>';
     w.document.write(doc);w.document.close();
   };
   function show(){
     addMenu();selectedMonth=selectedMonth||today().slice(0,7);
     var user=op();if(!user)return;
     selectedOperator=admin()?(selectedOperator||user.id):user.id;
-    events=[];errorText='';
+    events=[];synced=false;errorText='';
     render();
     if(configured()&&getKey()&&computer())window.attRefresh();
   }
