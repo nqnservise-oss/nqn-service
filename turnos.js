@@ -47,7 +47,7 @@
       return data&&typeof data==='object'&&!Array.isArray(data)?data:{};
     }catch(e){return {}}
   }
-  function saveTurnos(data){localStorage.setItem(TURNOS_KEY,JSON.stringify(data||{}))}
+  function saveTurnos(data){localStorage.setItem(TURNOS_KEY,JSON.stringify(data||{}));actualizarAvisoTurnosHoy()}
   function dayData(date){return loadTurnos()[date]||{}}
   function normalizeRemoteTurn(t){
     const fecha=String(t?.fecha||'').slice(0,10);
@@ -129,6 +129,57 @@
   function prettyDate(value){
     try{return parseLocalDate(value).toLocaleDateString('es-AR',{weekday:'long',day:'2-digit',month:'long'})}catch(e){return value}
   }
+
+
+  // Aviso visible al abrir el Dashboard; no altera ni registra turnos.
+  function injectDashboardTurnosStyles(){
+    if(document.getElementById('turnosHoyStyles'))return;
+    const style=document.createElement('style');
+    style.id='turnosHoyStyles';
+    style.textContent=`
+      .turnos-hoy-alerta[hidden]{display:none!important}
+      .turnos-hoy-alerta{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;
+        gap:16px;padding:20px 22px;margin-bottom:17px;border:3px solid #9e2615;border-radius:16px;
+        color:#fff;background:#c93416;box-shadow:0 0 0 5px rgba(222,68,26,.17);
+        animation:nqnTurnosHoyPulse 1.4s ease-in-out infinite alternate}
+      .turnos-hoy-copy{display:flex;flex-direction:column;gap:7px;min-width:0}
+      .turnos-hoy-title{font-size:clamp(20px,3vw,28px);font-weight:950;line-height:1.2;letter-spacing:.1px}
+      .turnos-hoy-detail{font-size:14px;font-weight:750;line-height:1.5}
+      .turnos-hoy-button{border:2px solid #fff;background:#fff;color:#84200d;border-radius:12px;
+        font-weight:950;font-size:15px;padding:13px 18px;cursor:pointer;min-height:48px;white-space:nowrap}
+      .turnos-hoy-button:hover,.turnos-hoy-button:focus-visible{background:#fff1d5;outline:3px solid #4f1409}
+      @keyframes nqnTurnosHoyPulse{
+        from{background:#bb2914;border-color:#8d1c0f;box-shadow:0 0 0 3px rgba(222,68,26,.12)}
+        to{background:#f06413;border-color:#ffc15c;box-shadow:0 0 0 8px rgba(222,68,26,.28)}
+      }
+      @media(prefers-reduced-motion:reduce){.turnos-hoy-alerta{animation:none;background:#c93416}}
+    `;
+    document.head.appendChild(style);
+  }
+  function actualizarAvisoTurnosHoy(){
+    const box=document.getElementById('turnosHoyAviso');
+    if(!box)return;
+    injectDashboardTurnosStyles();
+    const day=dayData(localISODate(new Date()));
+    const pendientes=SLOTS.map(hora=>({hora,turno:day[hora]}))
+      .filter(x=>x.turno&&!['cancelado','realizado','completado'].includes(String(x.turno.estado||'pendiente').toLowerCase()));
+    if(!pendientes.length){box.hidden=true;box.innerHTML='';return}
+    const horarios=pendientes.map(x=>esc(x.hora)+' · '+esc(x.turno.tipo||'Turno')).join(' &nbsp; · &nbsp; ');
+    const n=pendientes.length;
+    box.innerHTML=`
+      <div class="turnos-hoy-copy">
+        <strong class="turnos-hoy-title">🔔 ¡TENÉS ${n} ${n===1?'TURNO':'TURNOS'} HOY!</strong>
+        <span class="turnos-hoy-detail">${horarios}</span>
+      </div>
+      <button type="button" class="turnos-hoy-button" onclick="abrirTurnosDeHoy()">VER TURNOS →</button>`;
+    box.hidden=false;
+  }
+  window.actualizarAvisoTurnosHoy=actualizarAvisoTurnosHoy;
+  window.abrirTurnosDeHoy=function(){
+    selectedDate=localISODate(new Date());
+    editingSlot=null;
+    window.showView('turnos');
+  };
 
   function injectStyles(){
     if(document.getElementById('turnosStyles'))return;
@@ -319,12 +370,15 @@
     }
   }
   function install(){
-    injectStyles();addNavButton();installCloudHooks();
+    injectStyles();injectDashboardTurnosStyles();addNavButton();installCloudHooks();actualizarAvisoTurnosHoy();
     const original=window.showView;
     if(typeof original==='function'&&!original.__turnosWrapped){
       const wrapped=function(name){if(name==='turnos')return renderTurnos();editingSlot=null;return original.apply(this,arguments)};wrapped.__turnosWrapped=true;window.showView=wrapped;
     }
     if(typeof window.cloudConfigured==='function'&&window.cloudConfigured()&&navigator.onLine&&typeof window.cloudSync==='function')setTimeout(()=>window.cloudSync(true),700);
   }
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')actualizarAvisoTurnosHoy()});
+  window.addEventListener('focus',actualizarAvisoTurnosHoy);
+  setInterval(actualizarAvisoTurnosHoy,60000);
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install);else install();
 })();

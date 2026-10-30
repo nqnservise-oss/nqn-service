@@ -1,10 +1,10 @@
-const CACHE_NAME = 'nqn-service-v952-gastos-por-mes';
+const CACHE_NAME = 'nqn-service-v953-alerta-turnos';
 const APP_SHELL = [
   './',
   './index.html',
   './NQN_SERVICE_ESTABLE.html',
   './manifest.webmanifest',
-  './turnos.js',
+  './turnos.js?v=20261030',
   './cierre-z.js?v=942',
   './libro-movimientos.js?v=1',
   './asistencia.js?v=3',
