@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nqn-service-v951-buscador-gastos';
+const CACHE_NAME = 'nqn-service-v952-gastos-por-mes';
 const APP_SHELL = [
   './',
   './index.html',
