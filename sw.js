@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nqn-service-v953-alerta-turnos';
+const CACHE_NAME = 'nqn-service-v954-recepcion-whatsapp';
 const APP_SHELL = [
   './',
   './index.html',
