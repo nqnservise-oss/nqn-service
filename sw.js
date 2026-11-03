@@ -1,7 +1,8 @@
-const CACHE_NAME = 'nqn-service-v954-recepcion-whatsapp';
+const CACHE_NAME = 'nqn-service-v955-stock-sync';
 const APP_SHELL = [
   './',
   './index.html',
+  './stock-sync.js?v=1',
   './NQN_SERVICE_ESTABLE.html',
   './manifest.webmanifest',
   './turnos.js?v=20261030',

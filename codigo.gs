@@ -1,5 +1,6 @@
 const NQN_ACCESS_TOKEN = "NQN--jhsACAfN5LPuj-ncaYiiqlLZyjfNnhE";
-const NQN_SCHEMA_VERSION = 4;
+const NQN_SCHEMA_VERSION = 5;
+const STOCK_HEADERS = ['ID','Repuesto','Cantidad','JSON'];
 const ORDER_HEADERS = ['ID','N° Orden','N° Cliente','Fecha ingreso','Fecha entrega','Cliente','Teléfono','Marca / Modelo','Tipo','Falla / diagnóstico','Accesorios','Observaciones','Estado','Monto','Pagado','Medio de pago','Creado','Actualizado','JSON'];
 const EVENT_HEADERS = ['ID','Fecha','Evento','Monto','Medio de pago','Observaciones','Creado','Actualizado','JSON'];
 const CASH_HEADERS = ['ID','Fecha','Operador','Efectivo','Mercado Pago / Transferencias','Tarjetas','Nota de crédito','Gastos','Total cobrado','Neto','Observaciones','Creado','Actualizado','JSON'];
@@ -108,6 +109,12 @@ function ensureSheets_(ss) {
   if (!operators) operators = ss.insertSheet('OPERADORES');
   let turnos = ss.getSheetByName('TURNOS');
   if (!turnos) turnos = ss.insertSheet('TURNOS');
+  let stock = ss.getSheetByName('STOCK');
+  if (!stock) stock = ss.insertSheet('STOCK');
+  if (stock.getLastRow() === 0) {
+    stock.getRange(1,1,1,STOCK_HEADERS.length).setValues([STOCK_HEADERS]);
+    stock.setFrozenRows(1);
+  }
   let info = ss.getSheetByName('INFO');
   if (!info) info = ss.insertSheet('INFO');
 
@@ -140,7 +147,7 @@ function ensureSheets_(ss) {
     ['Última actualización',new Date()]
   ]);
   info.autoResizeColumns(1,2);
-  return {orders, events, cash, operators, turnos, info};
+  return {orders, events, cash, operators, turnos, stock, info};
 }
 
 function readState_() {
@@ -154,6 +161,7 @@ function readState_() {
   return {
     ok: true,
     schema: NQN_SCHEMA_VERSION,
+    stock: readJsonRows_(sh.stock, STOCK_HEADERS.length),
     syncAt: new Date().toISOString(),
     ordenes: orders.sort((a,b)=>(Number(a.numero)||0)-(Number(b.numero)||0)),
     cleriseventos: events.sort((a,b)=>String(a.fecha||'').localeCompare(String(b.fecha||''))),
@@ -195,6 +203,7 @@ function applyOperations_(ops, device) {
     let cash = readJsonRows_(sh.cash, CASH_HEADERS.length);
     let operators = readJsonRows_(sh.operators, OPERATOR_HEADERS.length);
     let turnos = readJsonRows_(sh.turnos, TURNO_HEADERS.length);
+    const stockMap = new Map(readJsonRows_(sh.stock, STOCK_HEADERS.length).map(x=>[String(x.id),x]));
     const orderMap = new Map(orders.map(x=>[String(x.id),x]));
     const eventMap = new Map(events.map(x=>[String(x.id),x]));
     const cashMap = new Map(cash.map(x=>[String(x.id),x]));
@@ -203,7 +212,8 @@ function applyOperations_(ops, device) {
 
     ops.forEach(op => {
       if (!op || !op.type || !op.id) return;
-      if (op.type === 'upsertOrder' && op.data) upsertOrder_(orderMap, op.data);
+      if (op.type === 'stockChange' && op.data) applyStockChange_(stockMap, op);
+      else if (op.type === 'upsertOrder' && op.data) upsertOrder_(orderMap, op.data);
       else if (op.type === 'deleteOrder') deleteOrder_(orderMap, op.id, op.at);
       else if (op.type === 'upsertEvent' && op.data) upsertEvent_(eventMap, op.data);
       else if (op.type === 'deleteEvent') deleteEvent_(eventMap, op.id, op.at);
@@ -221,13 +231,14 @@ function applyOperations_(ops, device) {
     operators = Array.from(operatorMap.values());
     turnos = Array.from(turnoMap.values());
     canonicalizeOrders_(orders);
+    writeStock_(sh.stock, Array.from(stockMap.values()));
     writeOrders_(sh.orders, orders);
     writeEvents_(sh.events, events);
     writeCash_(sh.cash, cash);
     writeOperators_(sh.operators, operators);
     writeTurnos_(sh.turnos, turnos);
     sh.info.getRange('B5').setValue(new Date());
-    maybeDailyBackup_(ctx, orders, events, cash, operators, turnos, device);
+    maybeDailyBackup_(ctx, orders, events, cash, operators, turnos, device, Array.from(stockMap.values()));
 
     return {ok:true,applied:ops.length,orders:orders.length,events:events.length,cash:cash.length,operators:operators.length,turnos:turnos.length};
   } finally {
@@ -469,7 +480,7 @@ function writeTurnos_(sheet, rows) {
   sheet.setFrozenRows(1);
 }
 
-function maybeDailyBackup_(ctx, orders, events, cash, operators, turnos, device) {
+function maybeDailyBackup_(ctx, orders, events, cash, operators, turnos, device, stock) {
   const props = PropertiesService.getScriptProperties();
   const tz = Session.getScriptTimeZone() || 'America/Argentina/Buenos_Aires';
   const day = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
@@ -485,7 +496,8 @@ function maybeDailyBackup_(ctx, orders, events, cash, operators, turnos, device)
     cleriseventos:events,
     cierrescaja:cash,
     operadores:operators,
-    turnos:turnos
+    turnos:turnos,
+    stock:stock||[]
   };
   ctx.backupFolder.createFile('NQN_SERVICE_BACKUP_'+stamp+'.json', JSON.stringify(payload,null,2), MimeType.PLAIN_TEXT);
   props.setProperty('NQN_LAST_BACKUP_DAY', day);
@@ -514,4 +526,36 @@ function jsonp_(callback, obj) {
     return ContentService.createTextOutput(cb+'('+json+');').setMimeType(ContentService.MimeType.JAVASCRIPT);
   }
   return json_(obj);
+}
+
+// Quantity changes are deltas, deduplicated by operation ID under the script lock.
+// Seed imports never overwrite an existing item, including a deletion tombstone.
+function applyStockChange_(map, op) {
+  const id=String(op.id||''), d=op.data, old=map.get(id);
+  if (!id || !op.opId || !d) throw new Error('Movimiento de stock inválido');
+  const applied=old && Array.isArray(old.stockOps) ? old.stockOps : [];
+  if (applied.includes(String(op.opId))) return;
+  let x;
+  if (d.seed) {
+    x=old ? Object.assign({},old) : Object.assign({},d.item,{id:id});
+  } else {
+    if (old && old.deleted && !d.deleted) throw new Error('Repuesto eliminado: revisar el movimiento pendiente');
+    const delta=Number(d.delta||0);
+    if (!Number.isFinite(delta)) throw new Error('Cantidad de stock inválida');
+    x=Object.assign({},old||d.item,{id:id});
+    const qty=Number(old ? old.cantidad : 0)+delta;
+    if (!Number.isFinite(qty) || qty<0) throw new Error('Stock insuficiente: revisar movimientos pendientes');
+    x.cantidad=qty;
+    if (!old || newerOrEqual_(d.item,old)) {
+      ['nombre','minimo','costo','actualizado','creado'].forEach(k=>{if(d.item && d.item[k]!==undefined)x[k]=d.item[k]});
+    }
+    if (d.deleted) x.deleted=true;
+  }
+  if (!String(x.nombre||'').trim() || !Number.isFinite(Number(x.cantidad)) || Number(x.cantidad)<0) throw new Error('Repuesto inválido');
+  x.stockOps=applied.concat(String(op.opId));
+  map.set(id,x);
+}
+function writeStock_(sheet, rows) {
+  if(sheet.getLastRow()>1)sheet.getRange(2,1,sheet.getLastRow()-1,STOCK_HEADERS.length).clearContent();
+  if(rows.length)sheet.getRange(2,1,rows.length,STOCK_HEADERS.length).setValues(rows.map(x=>[x.id,x.nombre||'',Number(x.cantidad)||0,JSON.stringify(x)]));
 }
