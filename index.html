@@ -1164,6 +1164,36 @@ function renderClients(){
 }
 function showClientOrders(phone,clientNumber){let rows=load().filter(r=>(phone&&normPhone(r.telefono)===phone)||(!phone&&r.clienteNumero===clientNumber)).sort((a,b)=>b.numero-a.numero);if(!rows.length)return;title(rows[0].cliente+' · C'+fmtClient(rows[0].clienteNumero));document.getElementById('view').innerHTML=`<section class="panel" style="margin-top:0"><div class="panelhead"><div><div class="eyebrow">HISTORIAL DEL CLIENTE</div><h3>${rows.length} órdenes</h3></div><button class="btn primary" onclick="newOrderSameClient('${esc(rows[0].id)}')">＋ Nueva orden</button></div>${orderTable(rows)}</section>`}
 
+
+function rankingRepuestosMes(orders,mk){
+  const byName=new Map();
+  (Array.isArray(orders)?orders:[]).forEach(order=>{
+    (Array.isArray(order.repuestosUsados)?order.repuestosUsados:[]).forEach(uso=>{
+      if(String(uso.fecha||'').slice(0,7)!==mk)return;
+      const nombre=String(uso.nombre||'').trim().replace(/\s+/g,' ');
+      const cantidad=Math.floor(Number(uso.cantidad));
+      if(!nombre||!Number.isFinite(cantidad)||cantidad<=0)return;
+      const clave=nombre.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('es-AR');
+      const actual=byName.get(clave)||{nombre,cantidad:0};
+      actual.cantidad+=cantidad;
+      byName.set(clave,actual);
+    });
+  });
+  return [...byName.values()].sort((a,b)=>b.cantidad-a.cantidad||a.nombre.localeCompare(b.nombre,'es'));
+}
+function renderKpiRankingRepuestos(orders,mk,monthTitle){
+  const ranking=rankingRepuestosMes(orders,mk);
+  const total=ranking.reduce((sum,item)=>sum+item.cantidad,0);
+  const filas=ranking.map((item,i)=>'<tr><td class="mono">'+(i+1)+'</td><td><strong>'+esc(item.nombre)+'</strong></td><td><strong>'+item.cantidad+'</strong></td></tr>').join('');
+  return '<section class="kpi-box" style="margin-top:20px" aria-label="Ranking mensual de repuestos más usados">'+
+    '<h3 class="kpi-boxtitle">Ranking mensual de repuestos más usados</h3>'+
+    '<div class="kpi-boxsub">'+esc(monthTitle)+' · '+total+' unidad'+(total===1?'':'es')+' registrada'+(total===1?'':'s')+' en órdenes de trabajo</div>'+
+    (ranking.length?
+      '<div class="tablewrap" style="margin-top:14px"><table><thead><tr><th>Puesto</th><th>Repuesto</th><th>Unidades usadas</th></tr></thead><tbody>'+filas+'</tbody></table></div>':
+      '<div class="empty" style="margin-top:12px">No hay repuestos usados registrados en órdenes durante este mes.</div>')+
+    '</section>';
+}
+
 function renderKPIs(){
   title('KPIs del taller');setNav('kpis');
   const rows=load();
@@ -1350,6 +1380,8 @@ function renderKPIs(){
       <div class="kpi-small danger"><div class="kpi-cardhead"><span class="kpi-icon">▣</span><span>Días en cero</span></div><div class="kpi-big">${enCero}</div><div class="kpi-note">de ${transcurridos.length} días hábiles</div></div>
       <div class="kpi-small"><div class="kpi-cardhead"><span class="kpi-icon">▥</span><span>Promedio por día hábil</span></div><div class="kpi-big">${fmtM(promedioHabiles)}</div><div class="kpi-note">Incluye días en cero</div></div>
     </section>
+
+    ${renderKpiRankingRepuestos(rows,mk,monthTitle)}
 
     <section class="kpi-charts">
       <div class="kpi-box">
