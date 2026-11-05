@@ -1,11 +1,11 @@
-const CACHE_NAME = 'nqn-service-v955-historial-z';
+const CACHE_NAME = 'nqn-service-v956-arqueo-z';
 const APP_SHELL = [
   './',
   './index.html',
   './NQN_SERVICE_ESTABLE.html',
   './manifest.webmanifest',
   './turnos.js?v=20261030',
-  './cierre-z.js?v=955',
+  './cierre-z.js?v=956',
   './libro-movimientos.js?v=1',
   './asistencia.js?v=3',
   './icons/icon-192.png',
