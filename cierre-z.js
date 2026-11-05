@@ -262,7 +262,7 @@
     if(b) b.classList.add('active');
   }
 
-  function render(fecha='',modo='dia'){
+  function render(fecha='',modo='pendiente'){
     const op=currentOperator();
     if(!op && typeof window.showView==='function'){
       try{ window.showView('dashboard'); }catch(_){}
@@ -367,10 +367,10 @@
         </div>
 
         <div class="nqn-z-totals">
-          <div style="${modo==='pendiente'?'':'display:none'}"><div class="eyebrow">CONTROL DE CAJA DEL PERÍODO PENDIENTE</div>
+          <div style="${modo==='pendiente'?'':'display:none'}"><div class="eyebrow">CONTROL DE CAJA DEL PERÍODO PENDIENTE</div><p class="muted" style="margin:7px 0 8px">Compará el efectivo esperado según los movimientos del período con los billetes que contaste. Guardá el control para habilitar el Cierre Z.</p>
           <div class="grid" style="grid-template-columns:repeat(2,minmax(180px,260px));margin:10px 0 10px">
-            <div class="stat"><div class="statlabel">Según sistema</div><div class="statvalue smallmoney">${m(efectivoEsperado)}</div></div>
-            <div class="field"><label>Efectivo contado</label><input id="zEfectivoContado" type="number" min="0" step="0.01" value="${controlGuardado.efectivoContado??''}" placeholder="Contá los billetes de caja"></div>
+            <div class="stat"><div class="statlabel">Efectivo esperado según sistema</div><div class="statvalue smallmoney">${m(efectivoEsperado)}</div></div>
+            <div class="field"><label>Efectivo físico contado</label><input id="zEfectivoContado" type="number" min="0" step="0.01" value="${controlGuardado.efectivoContado??''}" placeholder="Contá los billetes de caja"></div>
             <div class="stat"><div class="statlabel">Diferencia</div><div id="zDiferenciaEfectivo" class="statvalue smallmoney">${controlGuardado.efectivoContado!=null?m(Number(controlGuardado.efectivoContado)-efectivoEsperado):'—'}</div></div>
           </div>
           <button id="zGuardarControl" class="primary" type="button">Comprobar y guardar caja</button>
@@ -383,7 +383,7 @@
           </div><div class="eyebrow">${modo==='pendiente'?'TOTALES DEL PERÍODO ABIERTO':'TOTALES DEL DÍA COMPLETO'}</div>
           <div class="nqn-z-stats">
             <div class="stat"><div class="statlabel">Efectivo cobrado</div><div class="statvalue smallmoney">${m(tot.efectivo)}</div></div>
-            <div class="stat"><div class="statlabel">Efectivo real en caja</div><div class="statvalue smallmoney">${m(efectivoEsperado)}</div></div>
+            <div class="stat"><div class="statlabel">Efectivo esperado del período</div><div class="statvalue smallmoney">${m(efectivoEsperado)}</div></div>
             <div class="stat"><div class="statlabel">Mercado Pago / transferencias</div><div class="statvalue smallmoney">${m(tot.mp)}</div></div>
             <div class="stat"><div class="statlabel">Débito</div><div class="statvalue smallmoney">${m(tot.debito)}</div></div>
             <div class="stat"><div class="statlabel">Crédito</div><div class="statvalue smallmoney">${m(tot.credito)}</div></div>
@@ -399,7 +399,7 @@
       </section>`;
 
     const input=document.getElementById('zFecha');
-    if(input) input.addEventListener('change',()=>render(input.value,'dia'));
+    if(input) input.addEventListener('change',()=>render(input.value,'pendiente'));
     document.getElementById('zModo')?.addEventListener('change',ev=>render(fecha,ev.target.value));
     const historial=document.createElement('section');historial.className='panel';
     historial.innerHTML='<h3>Cierres guardados de este día</h3>'+ (cierresZ.length?cierresZ.map(z=>{
@@ -503,7 +503,7 @@
           if(typeof window.queueCloudOp==='function') window.queueCloudOp('upsertCash',cierre.id,cierre,cierre.actualizado);
           try{ localStorage.removeItem(controlKey); }catch(_){}
           if(typeof window.toast==='function') window.toast('Cierre Z ejecutado · período bloqueado');
-          render(fecha);
+          render(fecha,'pendiente');
         }catch(err){
           console.error('No se pudo ejecutar Cierre Z',err);
           if(cierreEstado) cierreEstado.textContent='No se pudo ejecutar el cierre. Los datos no fueron bloqueados.';
