@@ -1071,7 +1071,7 @@ function orderExpensePanel(r){
         <div class="field short"><label>Fecha</label><input id="expenseDate" type="date" value="${localISODate()}" readonly></div>
         <div class="field"><label>Monto del repuesto *</label><input id="expenseAmount" type="text" inputmode="decimal" required></div>
         <div class="field"><label>Medio de pago *</label><select id="expensePayment" onchange="expensePaymentChanged(true)"><option>Efectivo</option><option>Mercado Pago</option></select><button id="openMercadoPagoBtn" type="button" class="btn secondary small" style="display:none;margin-top:8px" onclick="openMercadoPago()">Abrir Mercado Pago</button></div>
-        <div class="field full"><label>Detalle del repuesto / proveedor</label><input id="expenseObs" placeholder="Ej.: Bomba Drean · proveedor"></div>
+        <div class="field full"><label>Detalle del repuesto / proveedor *</label><input id="expenseObs" required placeholder="Ej.: Brida y tornillo · proveedor"></div>
         <div class="actions full"><button type="submit" class="btn primary">Guardar gasto</button><button type="button" class="btn secondary" onclick="toggleOrderExpenseForm()">Cancelar</button></div>
       </form>
     </div>
@@ -1831,7 +1831,7 @@ window.__nqnLegacyBoot=boot;
       operadorId:String(r?.operadorId||''),operador:String(r?.operador||'').trim(),
       monto:Math.max(0,Number(r?.monto||0)),medioPago:EXPENSE_PAYMENTS.includes(String(r?.medioPago||''))?String(r.medioPago):'Efectivo',
       categoria:EXPENSE_CATEGORIES_VALID.includes(String(r?.categoria||''))?String(r.categoria):'Otro',
-      observacion:String(r?.observacion||'').trim(),cajaId:String(r?.cajaId||''),
+      observacion:String(r?.observacion||r?.observaciones||r?.detalle||r?.descripcion||'').trim(),cajaId:String(r?.cajaId||''),
       orderId:String(r?.orderId||''),orderNumero:Number(r?.orderNumero||0),orderCliente:String(r?.orderCliente||'').trim(),orderEquipo:String(r?.orderEquipo||'').trim(),
       creado:r?.creado||now(),actualizado:r?.actualizado||r?.creado||now()
     };
@@ -2374,8 +2374,8 @@ window.__nqnLegacyBoot=boot;
   };
   window.expenseCategoryChanged=function(){
     const cat=document.getElementById('expenseCategory')?.value||'',tag=document.getElementById('expenseObsRequired'),obs=document.getElementById('expenseObs'),field=document.getElementById('expenseOrderField');
-    if(tag)tag.textContent=cat==='Otro'?'(obligatoria para Otro)':'(opcional)';
-    if(obs)obs.required=cat==='Otro';
+    if(tag)tag.textContent=cat==='Otro'?'(obligatoria para Otro)':cat==='Repuestos'?'(obligatoria para Repuestos)':'(opcional)';
+    if(obs)obs.required=cat==='Otro'||cat==='Repuestos';
     if(field)field.style.display=cat==='Repuestos'?'block':'none';
     if(cat==='Repuestos')window.prepareExpenseOrders();
   };
@@ -2392,11 +2392,22 @@ window.__nqnLegacyBoot=boot;
     input.oninput=update;input.onchange=update;update();
   };
   window.saveExpenseForm=function(ev){
-    ev.preventDefault();const inlineOrderId=String(document.getElementById("orderExpenseInlineForm")?.dataset?.orderId||"");const op=session();if(!op)return renderLoginOrSetup();const parsedMonto=parseMoneyAR(document.getElementById('expenseAmount')?.value||'');const monto=Number.isFinite(parsedMonto)?Math.max(0,parsedMonto):0,categoria=document.getElementById('expenseCategory')?.value||'',medioPago=document.getElementById('expensePayment')?.value||'',observacion=String(document.getElementById('expenseObs')?.value||'').trim(),fecha=document.getElementById('expenseDate')?.value||localDay();
-    if(!monto){alert('Ingresá el monto del gasto.');return}if(categoria==='Otro'&&!observacion){alert('En “Otro” escribí una observación para saber qué gasto fue.');return}
+    ev.preventDefault();
+     // Leer los valores del formulario que se envió (OT o Gastos), no de otro formulario.
+     const form=ev.currentTarget;
+     const field=id=>form?.querySelector('[id="'+id+'"]')||document.getElementById(id);
+     const inlineOrderId=String(form?.id==='orderExpenseInlineForm'?(form.dataset.orderId||''):'');
+     const op=session();if(!op)return renderLoginOrSetup();
+     const parsedMonto=parseMoneyAR(field('expenseAmount')?.value||'');
+     const monto=Number.isFinite(parsedMonto)?Math.max(0,parsedMonto):0,
+       categoria=field('expenseCategory')?.value||'',
+       medioPago=field('expensePayment')?.value||'',
+       observacion=String(field('expenseObs')?.value||'').trim(),
+       fecha=field('expenseDate')?.value||localDay();
+    if(!monto){alert('Ingresá el monto del gasto.');return}if(categoria==='Otro'&&!observacion){alert('En “Otro” escribí una observación para saber qué gasto fue.');return}if(categoria==='Repuestos'&&!observacion){alert('Escribí el detalle del repuesto para identificar este gasto en el listado.');return}
     let linkedOrder=null;
     if(categoria==='Repuestos'){
-      const oid=inlineOrderId||document.getElementById('expenseOrderSearch')?.dataset?.orderId||'';
+      const oid=inlineOrderId||field('expenseOrderSearch')?.dataset?.orderId||'';
       linkedOrder=load().find(r=>String(r.id)===String(oid));
       if(!linkedOrder){alert('Seleccioná una OT válida para este repuesto.');return}
     }
