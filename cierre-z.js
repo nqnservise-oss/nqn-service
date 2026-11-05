@@ -262,7 +262,7 @@
     if(b) b.classList.add('active');
   }
 
-  function render(fecha=''){
+  function render(fecha='',modo='dia'){
     const op=currentOperator();
     if(!op && typeof window.showView==='function'){
       try{ window.showView('dashboard'); }catch(_){}
@@ -281,7 +281,8 @@
       .sort((a,b)=>String(a.ejecutadoEn||a.actualizado||'').localeCompare(String(b.ejecutadoEn||b.actualizado||'')));
     const ultimoZ=cierresZ[cierresZ.length-1]||null;
     const corteTs=ultimoZ?new Date(ultimoZ.hasta||ultimoZ.ejecutadoEn||ultimoZ.actualizado||0).getTime():0;
-    const rows=allRows.filter(x=>!corteTs||Number(x.ts||0)>corteTs);
+    const pendientes=allRows.filter(x=>!corteTs||Number(x.ts||0)>corteTs);
+    const rows=modo==='pendiente'?pendientes:allRows;
     const tot=totals(rows);
     const controlKey='nqn_cierre_z_control_'+fecha+'_'+String(corteTs||0);
     let controlGuardado={};
@@ -349,7 +350,7 @@
             <div class="eyebrow">INFORME DIARIO</div>
             <h3 style="margin-bottom:4px">CIERRE Z — ${e(dateLabel(fecha))}</h3>
             <div class="muted">Operadores: ${e(ops.length?ops.join(', '):'Sin movimientos')} · Hora de cierre de caja: ${e(cierreHora)}</div>
-            <div class="muted" style="margin-top:4px">${ultimoZ?('Último Cierre Z: '+e(new Date(ultimoZ.ejecutadoEn||ultimoZ.actualizado).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}))+' · mostrando movimientos posteriores'):'Período abierto: todavía no se ejecutó un Cierre Z.'}</div>
+            <div class="muted" style="margin-top:4px">${ultimoZ?('Último Cierre Z: '+e(new Date(ultimoZ.ejecutadoEn||ultimoZ.actualizado).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}))+(modo==='pendiente'?' · mostrando movimientos posteriores':' · mostrando el día completo')):'Período abierto: todavía no se ejecutó un Cierre Z.'}</div>
           </div>
           <div class="field short" style="margin:0">
             <label>Fecha</label>
@@ -357,6 +358,7 @@
           </div>
         </div>
 
+        <div class="field short"><label>Consultar</label><select id="zModo"><option value="dia" ${modo==='dia'?'selected':''}>Día completo</option><option value="pendiente" ${modo==='pendiente'?'selected':''}>Pendiente de cierre</option></select></div>
         <div class="nqn-z-ticket">
           <div class="nqn-z-columns">
             <div>Hora</div><div></div><div>Detalle</div><div>Medio</div><div style="text-align:right">Monto</div>
@@ -365,7 +367,7 @@
         </div>
 
         <div class="nqn-z-totals">
-          <div class="eyebrow">CONTROL DE CAJA</div>
+          <div style="${modo==='pendiente'?'':'display:none'}"><div class="eyebrow">CONTROL DE CAJA DEL PERÍODO PENDIENTE</div>
           <div class="grid" style="grid-template-columns:repeat(2,minmax(180px,260px));margin:10px 0 10px">
             <div class="stat"><div class="statlabel">Según sistema</div><div class="statvalue smallmoney">${m(efectivoEsperado)}</div></div>
             <div class="field"><label>Efectivo contado</label><input id="zEfectivoContado" type="number" min="0" step="0.01" value="${controlGuardado.efectivoContado??''}" placeholder="Contá los billetes de caja"></div>
@@ -378,11 +380,11 @@
             <button id="zEjecutarCierre" class="primary" type="button" ${controlGuardado.guardadoEn?'':'disabled'}>Ejecutar cierre Z</button>
           </div>
           <div id="zCierreEstado" class="muted" style="margin:-8px 0 18px">${ultimoZ?('Último Z cerrado por '+e(ultimoZ.operador||'Sin registrar')):''}</div>
-          <div class="eyebrow">TOTALES DEL PERÍODO ABIERTO</div>
+          </div><div class="eyebrow">${modo==='pendiente'?'TOTALES DEL PERÍODO ABIERTO':'TOTALES DEL DÍA COMPLETO'}</div>
           <div class="nqn-z-stats">
             <div class="stat"><div class="statlabel">Efectivo cobrado</div><div class="statvalue smallmoney">${m(tot.efectivo)}</div></div>
             <div class="stat"><div class="statlabel">Efectivo real en caja</div><div class="statvalue smallmoney">${m(efectivoEsperado)}</div></div>
-            <div class="stat"><div class="statlabel">Mercado Pago</div><div class="statvalue smallmoney">${m(tot.mp)}</div></div>
+            <div class="stat"><div class="statlabel">Mercado Pago / transferencias</div><div class="statvalue smallmoney">${m(tot.mp)}</div></div>
             <div class="stat"><div class="statlabel">Débito</div><div class="statvalue smallmoney">${m(tot.debito)}</div></div>
             <div class="stat"><div class="statlabel">Crédito</div><div class="statvalue smallmoney">${m(tot.credito)}</div></div>
             <div class="stat"><div class="statlabel">Gastos</div><div class="statvalue smallmoney">${m(tot.gastos)}</div></div>
@@ -397,7 +399,17 @@
       </section>`;
 
     const input=document.getElementById('zFecha');
-    if(input) input.addEventListener('change',()=>render(input.value));
+    if(input) input.addEventListener('change',()=>render(input.value,'dia'));
+    document.getElementById('zModo')?.addEventListener('change',ev=>render(fecha,ev.target.value));
+    const historial=document.createElement('section');historial.className='panel';
+    historial.innerHTML='<h3>Cierres guardados de este día</h3>'+ (cierresZ.length?cierresZ.map(z=>{
+      const a=z.snapshot||{};
+      return '<div class="info" style="margin-top:10px"><strong>'+e(z.periodo==='dia'?'Cierre de día':'Cierre de turno')+' · '+e(zTime(z.ejecutadoEn||z.actualizado))+' · '+e(z.operador||'Sin registrar')+'</strong>'+
+        '<p>Ingresos: '+m(a.ingresos)+' · Gastos: '+m(a.gastos)+' · Notas: '+m(a.notas)+' · Neto: '+m(a.neto)+'</p>'+
+        '<p>Efectivo cobrado: '+m(a.efectivoCobrado)+' · Mercado Pago / transferencias: '+m(a.mercadoPago)+' · Débito: '+m(a.debito)+' · Crédito: '+m(a.credito)+'</p>'+
+        '<p>Efectivo contado: '+m(a.efectivoContado)+' · Diferencia: '+m(a.diferencia)+' · Movimientos: '+e(a.movimientos??'Sin dato')+'</p></div>';
+    }).join(''):'<p>No hay cierres Z guardados para esta fecha. El informe superior muestra los movimientos disponibles.</p>');
+    view.appendChild(historial);
     const contado=document.getElementById('zEfectivoContado');
     const diferencia=document.getElementById('zDiferenciaEfectivo');
     if(contado && diferencia){
@@ -435,6 +447,7 @@
     const cierreEstado=document.getElementById('zCierreEstado');
     if(ejecutar){
       ejecutar.addEventListener('click',()=>{
+        if(modo!=='pendiente')return;
         let control={};
         try{ control=JSON.parse(localStorage.getItem(controlKey)||'{}')||{}; }catch(_){}
         if(!control.guardadoEn){

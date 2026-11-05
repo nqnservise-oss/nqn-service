@@ -1,11 +1,11 @@
-const CACHE_NAME = 'nqn-service-v954-recepcion-whatsapp';
+const CACHE_NAME = 'nqn-service-v955-historial-z';
 const APP_SHELL = [
   './',
   './index.html',
   './NQN_SERVICE_ESTABLE.html',
   './manifest.webmanifest',
   './turnos.js?v=20261030',
-  './cierre-z.js?v=942',
+  './cierre-z.js?v=955',
   './libro-movimientos.js?v=1',
   './asistencia.js?v=3',
   './icons/icon-192.png',
