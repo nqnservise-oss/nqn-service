@@ -179,23 +179,6 @@
       });
     });
 
-    safeArray(()=>typeof loadEvents==='function'?loadEvents():[]).forEach(ev=>{
-      if(!ev || String(ev.fecha||'')!==String(fecha||'')) return;
-      const monto=Math.max(0,Number(ev.monto||0)); if(!monto) return;
-      const nombre=String(ev.cliente||ev.nombre||ev.evento||ev.lugar||'Evento').trim();
-      rows.push({
-        tipo:'cobro',
-        ts:zStamp(ev.actualizado||ev.creado,fecha,String(ev.hora||'').slice(0,5)),
-        hora:zTime(ev.actualizado||ev.creado,fecha),
-        ot:0,
-        concepto:'Cleris Eventos · '+nombre,
-        medio:String(ev.medioPago||'').trim()||'Pendiente',
-        monto,
-        operador:String(ev.operador||'Cleris').trim()||'Cleris',
-        efectivo:0,tarjeta:0
-      });
-    });
-
     safeArray(()=>typeof window.loadExpenses==='function'?window.loadExpenses():[]).forEach(x=>{
       if(String(x.fecha||'')!==String(fecha||'')) return;
       const monto=Math.max(0,Number(x.monto||0)); if(!monto) return;
